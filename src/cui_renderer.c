@@ -1,6 +1,8 @@
 static void
 _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect redraw_rect, CuiBitmap *texture, CuiRect tile_bounds)
 {
+    CuiRect initial_clip_rect = cui_rect_get_intersection(tile_bounds, redraw_rect);
+
     for (uint32_t i = 0; i < command_buffer->index_buffer_count; i += 1)
     {
         uint32_t index = command_buffer->index_buffer[i];
@@ -12,7 +14,7 @@ _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect re
             CuiRect rect = textured_rect->rect;
             CuiColor color = textured_rect->color;
             CuiPoint uv = textured_rect->uv;
-            CuiRect clip_rect = redraw_rect;
+            CuiRect clip_rect = initial_clip_rect;
 
             if (textured_rect->clip_rect)
             {
@@ -97,7 +99,7 @@ _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect re
 
             CuiRect rect = solid_rect->rect;
             CuiColor color = solid_rect->color;
-            CuiRect clip_rect = redraw_rect;
+            CuiRect clip_rect = initial_clip_rect;
 
             if (solid_rect->clip_rect)
             {

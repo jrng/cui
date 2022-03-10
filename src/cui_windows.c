@@ -480,14 +480,11 @@ cui_step()
 {
     MSG message;
 
-    do {
-        if (GetMessage(&message, 0, 0, 0))
-        {
-            TranslateMessage(&message);
-            DispatchMessage(&message);
-        }
+    while (PeekMessage(&message, 0, 0, 0, PM_REMOVE))
+    {
+        TranslateMessage(&message);
+        DispatchMessage(&message);
     }
-    while (PeekMessage(&message, 0, 0, 0, 0));
 }
 
 void
@@ -504,13 +501,13 @@ cui_window_request_redraw(CuiWindow *window, CuiRect rect)
         window->redraw_rect = rect;
     }
 
-    RECT update_rect;
-    update_rect.left   = window->redraw_rect.min.x;
-    update_rect.top    = window->redraw_rect.min.y;
-    update_rect.right  = window->redraw_rect.max.x;
-    update_rect.bottom = window->redraw_rect.max.y;
+    // NOTE: This invalidates the whole client rect to compensate for a weird dwm behavior
+    // in windows where the clip rect is not correct. This leads to visual glitches and things not rendering.
+    //
+    // https://social.msdn.microsoft.com/Forums/en-US/7de13a8d-0bcb-4e4b-a975-e2935c226e24/dwm-invalidaterect
+    // https://stackoverflow.com/questions/17277622/dwm-in-win7-8-gdi
 
-    InvalidateRect(window->window_handle, &update_rect, FALSE);
+    InvalidateRect(window->window_handle, 0, FALSE);
 }
 
 bool
