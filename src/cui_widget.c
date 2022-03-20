@@ -629,6 +629,8 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 {
                     result = true;
                 } break;
+
+                default: break;
             }
         } break;
 
@@ -707,6 +709,8 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                         }
                     }
                 } break;
+
+                default: break;
             }
         } break;
 
@@ -840,6 +844,8 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                         }
                     }
                 } break;
+
+                default: break;
             }
         } break;
 
@@ -913,6 +919,8 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                     }
                     result = true;
                 } break;
+
+                default: break;
             }
         } break;
 
@@ -982,6 +990,8 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                     }
                     result = true;
                 } break;
+
+                default: break;
             }
         } break;
     }
