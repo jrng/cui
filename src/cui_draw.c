@@ -463,14 +463,14 @@ cui_draw_fill_string(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiFon
     {
         // TODO: grapheme cluster
         CuiUnicodeResult utf8 = cui_utf8_decode(str, index);
-        glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->font_file, utf8.codepoint);
+        glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->file, utf8.codepoint);
 
         if (index > 0)
         {
-            // x += font->font_scale * cui_font_file_get_glyph_kerning(font->font_file, prev_glyph_index, glyph_index);
+            // x += font->font_scale * cui_font_file_get_glyph_kerning(font->file, prev_glyph_index, glyph_index);
         }
 
-        CuiRect bounding_box = cui_font_file_get_glyph_bounding_box(font->font_file, glyph_index);
+        CuiRect bounding_box = cui_font_file_get_glyph_bounding_box(font->file, glyph_index);
 
         if ((bounding_box.min.x != bounding_box.max.x) && (bounding_box.min.y != bounding_box.max.y))
         {
@@ -520,7 +520,7 @@ cui_draw_fill_string(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiFon
                 transform.m[4] = (offset_x - bound.min.x);
                 transform.m[5] = (offset_y - bound.min.y);
 
-                cui_font_file_get_glyph_outline(font->font_file, &path, glyph_index, transform, temporary_memory);
+                cui_font_file_get_glyph_outline(font->file, &path, glyph_index, transform, temporary_memory);
 
                 CuiEdge *edge_list = 0;
                 cui_array_init(edge_list, 16, temporary_memory);
@@ -544,7 +544,7 @@ cui_draw_fill_string(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiFon
             cui_draw_fill_textured_rect(ctx, rect, uv.min, color);
         }
 
-        x += font->font_scale * cui_font_file_get_glyph_advance(font->font_file, glyph_index);
+        x += font->font_scale * cui_font_file_get_glyph_advance(font->file, glyph_index);
 
         prev_glyph_index = glyph_index;
         index += utf8.byte_count;

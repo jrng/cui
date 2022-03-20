@@ -932,15 +932,15 @@ cui_font_file_init(CuiFontFile *font_file, void *data, int64_t count)
 {
     CuiClearToZero(*font_file);
 
-    font_file->file.count = count;
-    font_file->file.data  = (uint8_t *) data;
+    font_file->contents.count = count;
+    font_file->contents.data  = (uint8_t *) data;
 
     uint8_t *head = 0;
     uint8_t *hhea = 0;
     uint8_t *maxp = 0;
 
     int64_t table_offset = 12;
-    uint16_t table_count = cui_read_u16_be(font_file->file.data, 4);
+    uint16_t table_count = cui_read_u16_be(font_file->contents.data, 4);
 
 #if 0
     printf("cmap = 0x%08X\n", 'cmap');
@@ -954,44 +954,44 @@ cui_font_file_init(CuiFontFile *font_file, void *data, int64_t count)
 
     for (uint16_t table_index = 0; table_index < table_count; table_index += 1)
     {
-        uint32_t tag    = cui_read_u32_be(font_file->file.data, table_offset +  0);
-        uint32_t offset = cui_read_u32_be(font_file->file.data, table_offset +  8);
+        uint32_t tag    = cui_read_u32_be(font_file->contents.data, table_offset +  0);
+        uint32_t offset = cui_read_u32_be(font_file->contents.data, table_offset +  8);
 
         switch (tag)
         {
             case 0x636D6170: // cmap
             {
-                font_file->cmap = font_file->file.data + offset;
+                font_file->cmap = font_file->contents.data + offset;
             } break;
 
             case 0x676C7966: // glyf
             {
-                font_file->glyf = font_file->file.data + offset;
+                font_file->glyf = font_file->contents.data + offset;
             } break;
 
             case 0x68656164: // head
             {
-                head = font_file->file.data + offset;
+                head = font_file->contents.data + offset;
             } break;
 
             case 0x68686561: // hhea
             {
-                hhea = font_file->file.data + offset;
+                hhea = font_file->contents.data + offset;
             } break;
 
             case 0x686D7478: // hmtx
             {
-                font_file->hmtx = font_file->file.data + offset;
+                font_file->hmtx = font_file->contents.data + offset;
             } break;
 
             case 0x6C6F6361: // loca
             {
-                font_file->loca = font_file->file.data + offset;
+                font_file->loca = font_file->contents.data + offset;
             } break;
 
             case 0x6D617870: // maxp
             {
-                maxp = font_file->file.data + offset;
+                maxp = font_file->contents.data + offset;
             } break;
         }
 
@@ -1168,10 +1168,10 @@ cui_font_file_init(CuiFontFile *font_file, void *data, int64_t count)
 void
 cui_font_update_with_size_and_line_height(CuiFont *font, float font_size, float line_height)
 {
-    font->font_scale = cui_font_file_get_scale_for_unit_height(font->font_file, font_size);
+    font->font_scale = cui_font_file_get_scale_for_unit_height(font->file, font_size);
     font->line_height = ceilf(font_size * line_height);
     font->baseline_offset = 0.5f * (font->line_height - font_size) +
-                            (font->font_file->ascent * font->font_scale);
+                            (font->file->ascent * font->font_scale);
 }
 
 float
@@ -1184,18 +1184,18 @@ cui_font_get_string_width(CuiFont *font, CuiString str)
         int64_t index = 0;
 
         CuiUnicodeResult utf8 = cui_utf8_decode(str, index);
-        uint32_t prev_glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->font_file, utf8.codepoint);
+        uint32_t prev_glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->file, utf8.codepoint);
 
-        width += font->font_scale * cui_font_file_get_glyph_advance(font->font_file, prev_glyph_index);
+        width += font->font_scale * cui_font_file_get_glyph_advance(font->file, prev_glyph_index);
         index += utf8.byte_count;
 
         while (index < str.count)
         {
             utf8 = cui_utf8_decode(str, index);
-            uint32_t glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->font_file, utf8.codepoint);
+            uint32_t glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->file, utf8.codepoint);
 
-            width += font->font_scale * (cui_font_file_get_glyph_advance(font->font_file, glyph_index) +
-                                         0 /* cui_font_file_get_glyph_kerning(font->font_file, prev_glyph_index, glyph_index) */);
+            width += font->font_scale * (cui_font_file_get_glyph_advance(font->file, glyph_index) +
+                                         0 /* cui_font_file_get_glyph_kerning(font->file, prev_glyph_index, glyph_index) */);
 
             prev_glyph_index = glyph_index;
             index += utf8.byte_count;

@@ -387,6 +387,13 @@ cui_string_equals(CuiString a, CuiString b)
     return true;
 }
 
+static inline bool
+cui_string_ends_with(CuiString str, CuiString end)
+{
+    if (str.count < end.count) return false;
+    return cui_string_equals(cui_make_string(str.data + (str.count - end.count), end.count), end);
+}
+
 typedef enum CuiPathCommandType
 {
     CUI_PATH_COMMAND_MOVE_TO            = 0,
@@ -430,7 +437,8 @@ typedef struct CuiEdge
 
 typedef struct CuiFontFile
 {
-    CuiString file;
+    CuiString name;
+    CuiString contents;
 
     int16_t ascent;
     int16_t descent;
@@ -453,7 +461,8 @@ typedef struct CuiFont
     float line_height;
     float baseline_offset;
 
-    CuiFontFile *font_file;
+    CuiFontFile *file;
+    struct CuiFont *fallback;
 } CuiFont;
 
 typedef enum CuiShapeType
@@ -618,8 +627,6 @@ void cui_draw_fill_string(CuiArena *temporary_memory, CuiGraphicsContext *ctx, C
 bool cui_init(int arg_count, char **args);
 int cui_main_loop();
 void cui_step();
-
-void cui_set_font(void *data, int64_t size);
 
 void cui_allocate_arena(CuiArena *arena, uint64_t capacity);
 void *cui_alloc(CuiArena *arena, uint64_t size, CuiAllocationParams params);

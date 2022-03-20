@@ -202,7 +202,7 @@ cui_widget_get_preferred_size(CuiWidget *widget)
 
         case CUI_WIDGET_TYPE_ICON_BUTTON:
         {
-            CuiFont *font = &widget->window->base.font;
+            CuiFont *font = widget->window->base.font;
 
             float label_width = cui_font_get_string_width(font, widget->label);
             int32_t padding_x = (int32_t) ceilf(0.5f * (label_width - roundf(widget->ui_scale * 32)));
@@ -213,7 +213,7 @@ cui_widget_get_preferred_size(CuiWidget *widget)
 
         case CUI_WIDGET_TYPE_CHECKBOX:
         {
-            CuiFont *font = &widget->window->base.font;
+            CuiFont *font = widget->window->base.font;
 
             float label_width = cui_font_get_string_width(font, widget->label);
 
@@ -275,7 +275,7 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
 
         case CUI_WIDGET_TYPE_TABS:
         {
-            CuiFont *font = &widget->window->base.font;
+            CuiFont *font = widget->window->base.font;
 
             widget->padding.min.x = lroundf(widget->ui_scale * 12.0f);
             widget->padding.min.y = lroundf(widget->ui_scale * 4.0f);
@@ -381,7 +381,7 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
 
         case CUI_WIDGET_TYPE_ICON_BUTTON:
         {
-            CuiFont *font = &widget->window->base.font;
+            CuiFont *font = widget->window->base.font;
 
             float label_width = cui_font_get_string_width(font, widget->label);
             int32_t padding_x = (int32_t) ceilf(0.5f * (label_width - roundf(widget->ui_scale * 32)));
@@ -415,7 +415,8 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
 
             cui_draw_fill_rect(ctx, widget->rect, cui_make_color(0.1765f, 0.1882f, 0.2157f, 1.0f));
 
-            CuiFont *font = &window->base.font;
+#if 0
+            CuiFont *font = window->base.font;
 
             // cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + 100),
             //                      (float) (widget->rect.max.y - 100), CuiStringLiteral("Hello world! -> good year."),
@@ -426,6 +427,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
             cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.max.x - 300),
                                  (float) (widget->rect.max.y - 200), CuiStringLiteral(">>>><<<<####????"),
                                  cui_make_color(0.8f, 0.8f, 0.8f, 1.0f));
+#endif
 
             cui_draw_set_clip_rect(ctx, prev_clip);
         } break;
@@ -496,7 +498,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
 
                     CuiRect prev_clip = cui_draw_set_clip_rect(ctx, tab_rect);
 
-                    CuiFont *font = &window->base.font;
+                    CuiFont *font = window->base.font;
 
                     if (index == widget->active_index)
                     {
@@ -542,7 +544,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
                 cui_draw_fill_rect(ctx, widget->action_rect, cui_make_color(0.129f, 0.145f, 0.169f, 1.0f));
             }
 
-            CuiFont *font = &widget->window->base.font;
+            CuiFont *font = widget->window->base.font;
 
             float label_width = cui_font_get_string_width(font, widget->label);
             int32_t padding_x = (int32_t) ceilf(0.5f * (label_width - roundf(widget->ui_scale * 32)));
@@ -576,7 +578,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
         {
             CuiRect prev_clip = cui_draw_set_clip_rect(ctx, widget->rect);
 
-            CuiFont *font = &widget->window->base.font;
+            CuiFont *font = widget->window->base.font;
 
             int32_t px16 = (int32_t) ceilf(widget->ui_scale * 16.0f);
             int32_t offset_x = px16 + widget->inline_padding;

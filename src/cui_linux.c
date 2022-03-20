@@ -353,7 +353,7 @@ cui_window_create()
 
     window->base.ui_scale = _cui_context.default_ui_scale;
 
-    cui_font_update_with_size_and_line_height(&window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
+    cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
 
     XSetWindowAttributes window_attr;
     window_attr.event_mask = ButtonPressMask |

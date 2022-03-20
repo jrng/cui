@@ -498,14 +498,187 @@ cui_glyph_cache_allocate_texture(CuiGlyphCache *cache, int32_t width, int32_t he
     return result;
 }
 
+static void
+_cui_font_manager_scan_fonts(CuiArena *temporary_memory, CuiFontManager *font_manager)
+{
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString *scan_paths = 0;
+    cui_array_init(scan_paths, 16, temporary_memory);
+
+    cui_get_font_directories(temporary_memory, &scan_paths, temporary_memory);
+
+    for (int32_t path_index = 0; path_index < cui_array_count(scan_paths); path_index += 1)
+    {
+        CuiString path = scan_paths[path_index];
+
+        CuiFileInfo *file_list = 0;
+        cui_array_init(file_list, 2, temporary_memory);
+
+        cui_get_files(temporary_memory, path, &file_list, temporary_memory);
+
+        for (int32_t i = 0; i < cui_array_count(file_list); i += 1)
+        {
+            CuiFileInfo *file_info = file_list + i;
+
+            if (file_info->attr.flags & CUI_FILE_ATTRIBUTE_IS_DIRECTORY)
+            {
+                if (!cui_string_equals(file_info->name, CuiStringLiteral(".")) &&
+                    !cui_string_equals(file_info->name, CuiStringLiteral("..")))
+                {
+                    CuiString file_path = cui_path_concat(temporary_memory, path, file_info->name);
+                    *cui_array_append(scan_paths) = file_path;
+                }
+            }
+            else
+            {
+                if (cui_string_ends_with(file_info->name, CuiStringLiteral(".ttf")))
+                {
+                    CuiFontRef *font_ref = cui_array_append(font_manager->font_refs);
+
+                    CuiString name = file_info->name;
+                    name.count -= CuiStringLiteral(".ttf").count;
+
+                    font_ref->name = cui_copy_string(&font_manager->arena, name);
+                    font_ref->path = cui_path_concat(&font_manager->arena, path, file_info->name);
+                }
+            }
+        }
+    }
+
+    cui_end_temporary_memory(temp_memory);
+
+    for (int32_t i = 0; i < cui_array_count(font_manager->font_refs); i += 1)
+    {
+        CuiFontRef *ref = font_manager->font_refs + i;
+
+        printf("'%.*s' -> '%.*s'\n", (int32_t) ref->name.count, ref->name.data, (int32_t) ref->path.count, ref->path.data);
+    }
+}
+
+#define _cui_font_manager_find_font(temporary_memory, font_manager, ...) \
+    _cui_font_manager_find_font_n(temporary_memory, font_manager, CuiNArgs(__VA_ARGS__), __VA_ARGS__)
+
+static CuiFont *
+_cui_font_manager_find_font_n(CuiArena *temporary_memory, CuiFontManager *font_manager, const uint32_t n, ...)
+{
+    CuiFont *result = 0;
+    CuiFont *current = 0;
+
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    va_list args;
+    va_start(args, n);
+
+    for (uint32_t i = 0; i < n; i += 1)
+    {
+        CuiString font_name = va_arg(args, CuiString);
+
+        CuiFontFile *font_file = 0;
+
+        for (int32_t i = 0; i < cui_array_count(font_manager->font_files); i += 1)
+        {
+            CuiFontFile *file = font_manager->font_files + i;
+
+            if (cui_string_equals(file->name, font_name))
+            {
+                font_file = file;
+                break;
+            }
+        }
+
+        if (!font_file)
+        {
+            for (int32_t i = 0; i < cui_array_count(font_manager->font_refs); i += 1)
+            {
+                CuiFontRef *font_ref = font_manager->font_refs + i;
+
+                if (cui_string_equals(font_ref->name, font_name))
+                {
+                    font_file = cui_array_append(font_manager->font_files);
+
+                    CuiString font_contents = { 0 };
+
+                    CuiFile *file = cui_file_open(temporary_memory, font_ref->path, CUI_FILE_MODE_READ);
+
+                    if (file)
+                    {
+                        uint64_t file_size = cui_file_get_size(file);
+                        font_contents.data = (uint8_t *) cui_allocate_platform_memory(file_size);
+
+                        if (font_contents.data)
+                        {
+                            font_contents.count = file_size;
+                            cui_file_read(file, font_contents.data, 0, file_size);
+                        }
+
+                        cui_file_close(file);
+                    }
+
+                    if (!cui_font_file_init(font_file, font_contents.data, font_contents.count))
+                    {
+                        _cui_array_header(font_manager->font_files)->count -= 1;
+                        font_file = 0;
+                    }
+                    else
+                    {
+                        font_file->name = font_ref->name;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        if (font_file)
+        {
+            CuiFont *font = cui_alloc_type(&font_manager->arena, CuiFont, cui_make_allocation_params(true, 8));
+
+            font->file = font_file;
+
+            if (current)
+            {
+                current->fallback = font;
+                current = font;
+            }
+            else
+            {
+                result = font;
+                current = font;
+            }
+        }
+    }
+
+    va_end(args);
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
 static CuiContext _cui_context;
 
 static inline bool
 _cui_common_init(int arg_count, char **args)
 {
     cui_allocate_arena(&_cui_context.common.arena, CuiMiB(4));
+    cui_allocate_arena(&_cui_context.common.temporary_memory, CuiMiB(4));
 
     _cui_context.common.window_count = 0;
+
+    cui_allocate_arena(&_cui_context.common.font_manager.arena, CuiMiB(8));
+
+    _cui_context.common.font_manager.font_files = 0;
+    _cui_context.common.font_manager.font_refs = 0;
+
+    cui_array_init(_cui_context.common.font_manager.font_files, 8, &_cui_context.common.font_manager.arena);
+    cui_array_init(_cui_context.common.font_manager.font_refs, 32, &_cui_context.common.font_manager.arena);
+
+    _cui_font_manager_scan_fonts(&_cui_context.common.temporary_memory, &_cui_context.common.font_manager);
+
+    // reset temporary_memory
+    CuiAssert(_cui_context.common.temporary_memory.temporary_memory_count == 0);
+    _cui_context.common.temporary_memory.occupied = 0;
 
     return true;
 }
@@ -530,7 +703,8 @@ _cui_add_window()
         cui_allocate_arena(&window->base.temporary_memory, CuiMiB(2));
         cui_glyph_cache_create(&window->base.glyph_cache);
 
-        window->base.font.font_file = &_cui_context.common.font_file;
+        window->base.font = _cui_font_manager_find_font(&_cui_context.common.temporary_memory, &_cui_context.common.font_manager,
+                                                        CuiStringLiteral("ClearSans-Regular"), CuiStringLiteral("Roboto-Regular"));
 
         cui_widget_box_init(&window->base.root_widget);
     }
@@ -631,12 +805,6 @@ cui_main_loop()
     }
 
     return 0;
-}
-
-void
-cui_set_font(void *data, int64_t size)
-{
-    cui_font_file_init(&_cui_context.common.font_file, data, size);
 }
 
 #include "cui_renderer.c"

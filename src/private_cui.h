@@ -52,6 +52,20 @@ typedef struct CuiStringBuilder
     CuiTextBuffer base_buffer;
 } CuiStringBuilder;
 
+typedef struct CuiFontRef
+{
+    CuiString name;
+    CuiString path;
+} CuiFontRef;
+
+typedef struct CuiFontManager
+{
+    CuiArena arena;
+
+    CuiFontFile *font_files;
+    CuiFontRef  *font_refs;
+} CuiFontManager;
+
 typedef struct CuiGlyphKey
 {
     uint32_t id;
@@ -115,12 +129,12 @@ typedef struct CuiContextCommon
 {
     bool running;
     CuiArena arena;
+    CuiArena temporary_memory;
 
     uint32_t window_count;
     struct CuiWindow *windows[CUI_MAX_WINDOW_COUNT];
 
-    CuiFontFile font_file;
-    CuiFont font;
+    CuiFontManager font_manager;
 
     CuiWorkQueue work_queue;
 } CuiContextCommon;
@@ -129,7 +143,7 @@ typedef struct CuiWindowBase
 {
     float ui_scale;
 
-    CuiFont font;
+    CuiFont *font;
 
     CuiWidget *hovered_widget;
     CuiWidget *pressed_widget;

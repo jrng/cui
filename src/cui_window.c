@@ -162,5 +162,5 @@ cui_window_get_wheel_dx(CuiWindow *window)
 CuiFont *
 cui_window_get_font(CuiWindow *window, CuiFontType font_type)
 {
-    return &window->base.font;
+    return window->base.font;
 }
