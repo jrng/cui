@@ -644,6 +644,7 @@ cui_set_font(void *data, int64_t size)
 #if CUI_PLATFORM_WINDOWS
 #include "cui_windows.c"
 #elif CUI_PLATFORM_LINUX
+#include "cui_unix.c"
 #include "cui_linux.c"
 #endif
 

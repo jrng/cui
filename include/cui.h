@@ -318,6 +318,23 @@ typedef struct CuiString
     uint8_t *data;
 } CuiString;
 
+typedef enum CuiFileAttributeFlags
+{
+    CUI_FILE_ATTRIBUTE_IS_DIRECTORY = (1 << 0),
+} CuiFileAttributeFlags;
+
+typedef struct CuiFileAttributes
+{
+    uint32_t flags;
+    uint64_t size;
+} CuiFileAttributes;
+
+typedef struct CuiFileInfo
+{
+    CuiString name;
+    CuiFileAttributes attr;
+} CuiFileInfo;
+
 #define cui_string_concat(arena, ...) cui_string_concat_n(arena, CuiNArgs(__VA_ARGS__), __VA_ARGS__)
 
 static inline CuiString
@@ -569,6 +586,29 @@ CuiString cui_utf8_to_utf16le(CuiArena *arena, CuiString utf8_str);
 
 void *cui_allocate_platform_memory(uint64_t size);
 void cui_deallocate_platform_memory(void *ptr, uint64_t size);
+
+typedef struct CuiFile CuiFile;
+
+typedef enum CuiFileMode
+{
+    CUI_FILE_MODE_READ  = (1 << 0),
+    CUI_FILE_MODE_WRITE = (1 << 1),
+} CuiFileMode;
+
+CuiFile *cui_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode);
+CuiFileAttributes cui_file_get_attributes(CuiFile *file);
+CuiFileAttributes cui_get_file_attributes(CuiArena *temporary_memory, CuiString filename);
+void cui_file_read(CuiFile *file, void *buffer, uint64_t offset, uint64_t size);
+void cui_file_close(CuiFile *file);
+
+static inline uint64_t
+cui_file_get_size(CuiFile *file)
+{
+    return cui_file_get_attributes(file).size;
+}
+
+void cui_get_files(CuiArena *temporary_memory, CuiString directory, CuiFileInfo **file_list, CuiArena *arena);
+void cui_get_font_directories(CuiArena *temporary_memory, CuiString **font_dirs, CuiArena *arena);
 
 CuiRect cui_draw_set_clip_rect(CuiGraphicsContext *ctx, CuiRect clip_rect);
 void cui_draw_fill_rect(CuiGraphicsContext *ctx, CuiRect rect, CuiColor color);

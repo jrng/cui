@@ -1,4 +1,5 @@
 #include <dlfcn.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <X11/Xutil.h>
@@ -203,6 +204,46 @@ void
 cui_deallocate_platform_memory(void *ptr, uint64_t size)
 {
     munmap(ptr, size);
+}
+
+static inline CuiString
+_cui_get_data_directory(CuiArena *arena)
+{
+    CuiString path = {};
+    CuiString append = {};
+
+    char *data_dir = getenv("XDG_DATA_HOME");
+
+    if (data_dir)
+    {
+        path = cui_copy_string(arena, CuiCString(data_dir));
+        append = CuiStringLiteral("/");
+    }
+    else
+    {
+        data_dir = getenv("HOME");
+
+        if (data_dir)
+        {
+            path = cui_copy_string(arena, CuiCString(data_dir));
+            append = CuiStringLiteral("/.local/share/");
+        }
+        else
+        {
+            path = CuiStringLiteral("./");
+        }
+    }
+
+    return cui_path_concat(arena, path, append);
+}
+
+void
+cui_get_font_directories(CuiArena *temporary_memory, CuiString **font_dirs, CuiArena *arena)
+{
+    CuiString data_dir = _cui_get_data_directory(temporary_memory);
+
+    *cui_array_append(*font_dirs) = cui_path_concat(arena, data_dir, CuiStringLiteral("fonts"));
+    *cui_array_append(*font_dirs) = CuiStringLiteral("/usr/share/fonts");
 }
 
 static void *
