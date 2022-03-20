@@ -410,8 +410,12 @@ cui_window_get_scale(CuiWindow *window)
 void
 cui_window_show(CuiWindow *window)
 {
+    CuiRect rect = cui_make_rect(0, 0, window->backbuffer.width, window->backbuffer.height);
+
     cui_widget_set_window(&window->base.root_widget, window);
     cui_widget_set_ui_scale(&window->base.root_widget, window->base.ui_scale);
+    cui_widget_layout(&window->base.root_widget, rect);
+    cui_window_redraw_all(window);
 
     XMapWindow(_cui_context.x11_display, window->x11_window);
 }
