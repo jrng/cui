@@ -41,3 +41,8 @@ compile "${COMPILER} ${COMPILER_FLAGS} -fPIC -shared -I../include -o libcui.so .
 # static library
 compile "${COMPILER} ${COMPILER_FLAGS} -I../include -c -o cui.o ../src/cui.c"
 compile "ar -rc libcui.a cui.o"
+
+# examples
+
+# interface browser
+compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o interface_browser ../examples/interface_browser.c ${LINKER_FLAGS} -L. -l:libcui.a"
