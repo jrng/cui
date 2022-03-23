@@ -10,4 +10,7 @@ REM static library
 cl %CompilerFlags% -c -I"../include" -Fo"cui.obj" "../src/cui.c"
 lib -nologo "cui.obj"
 
+REM interface browser
+cl %CompilerFlags% -I"../include" -Fe"interface_browser.exe" "../examples/interface_browser.c" /link %LinkerFlags% cui.lib
+
 popd

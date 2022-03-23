@@ -1,5 +1,148 @@
 #include <windowsx.h>
 
+CuiFile *
+cui_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode)
+{
+    CuiFile *result = 0;
+
+    DWORD flags = FILE_ATTRIBUTE_NORMAL;
+    DWORD share_mode = 0;
+    DWORD access_mode = 0;
+
+    if (mode & CUI_FILE_MODE_READ)
+    {
+        share_mode = FILE_SHARE_READ;
+        access_mode = GENERIC_READ;
+    }
+
+    if (mode & CUI_FILE_MODE_WRITE)
+    {
+        flags = FILE_FLAG_WRITE_THROUGH;
+        access_mode |= GENERIC_WRITE;
+    }
+
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, filename);
+    HANDLE file = CreateFile((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string),
+                             access_mode, share_mode, 0, OPEN_EXISTING, flags, 0);
+
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        result = (CuiFile *) file;
+    }
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
+CuiFileAttributes
+cui_file_get_attributes(CuiFile *file)
+{
+    CuiAssert(file);
+
+    CuiFileAttributes result = { 0 };
+    BY_HANDLE_FILE_INFORMATION file_info = { 0 };
+
+    if (GetFileInformationByHandle((HANDLE) file, &file_info))
+    {
+        if (file_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        {
+            result.flags = CUI_FILE_ATTRIBUTE_IS_DIRECTORY;
+        }
+
+        result.size = ((uint64_t) file_info.nFileSizeHigh << 32) | (uint64_t) file_info.nFileSizeLow;
+    }
+
+    return result;
+}
+
+CuiFileAttributes
+cui_get_file_attributes(CuiArena *temporary_memory, CuiString filename)
+{
+    CuiFileAttributes result = { 0 };
+
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, filename);
+    HANDLE file = CreateFile((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string),
+                             GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING,
+                             FILE_ATTRIBUTE_NORMAL, 0);
+
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        result = cui_file_get_attributes((CuiFile *) file);
+    }
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
+void
+cui_file_read(CuiFile *file, void *buffer, uint64_t offset, uint64_t size)
+{
+    CuiAssert(file);
+
+    DWORD bytes_read = 0;
+    LARGE_INTEGER seek_offset;
+    seek_offset.QuadPart = offset;
+    SetFilePointerEx((HANDLE) file, seek_offset, 0, FILE_BEGIN);
+    ReadFile((HANDLE) file, buffer, size, &bytes_read, 0);
+}
+
+void
+cui_file_close(CuiFile *file)
+{
+    CuiAssert(file);
+    CloseHandle((HANDLE) file);
+}
+
+void
+cui_get_files(CuiArena *temporary_memory, CuiString directory, CuiFileInfo **file_list, CuiArena *arena)
+{
+    CuiString search_path = cui_path_concat(temporary_memory, directory, CuiStringLiteral("*"));
+
+    WIN32_FIND_DATA find_data = { 0 };
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, search_path);
+    HANDLE search = FindFirstFile((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string), &find_data);
+
+    if (search != INVALID_HANDLE_VALUE)
+    {
+        for (;;)
+        {
+            CuiFileInfo *file_info = cui_array_append(*file_list);
+
+            CuiString utf16_string = cui_make_string(find_data.cFileName, 2 * wcslen(find_data.cFileName));
+            file_info->name = cui_utf16le_to_utf8(arena, utf16_string);
+
+            if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                file_info->attr.flags = CUI_FILE_ATTRIBUTE_IS_DIRECTORY;
+            }
+            else
+            {
+                file_info->attr.flags = 0;
+            }
+
+            file_info->attr.size = ((uint64_t) find_data.nFileSizeHigh << 32) | (uint64_t) find_data.nFileSizeLow;
+
+            if (!FindNextFile(search, &find_data))
+            {
+                FindClose(search);
+                break;
+            }
+        }
+    }
+}
+
+void
+cui_get_font_directories(CuiArena *temporary_memory, CuiString **font_dirs, CuiArena *arena)
+{
+    *cui_array_append(*font_dirs) = CuiStringLiteral("C:\\Windows\\Fonts");
+}
+
 static void
 _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 {
@@ -46,7 +189,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
             float ui_scale = (float) HIWORD(w_param) / 96.0f;
             window->base.ui_scale = ui_scale;
 
-            cui_font_update_with_size_and_line_height(&window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
+            cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
             cui_glyph_cache_reset(&window->base.glyph_cache);
 
             cui_widget_set_ui_scale(&window->base.root_widget, ui_scale);
@@ -307,7 +450,7 @@ cui_window_create()
         window->base.ui_scale = (float) _cui_context.GetDpiForWindow(window->window_handle) / 96.0f;
     }
 
-    cui_font_update_with_size_and_line_height(&window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
+    cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
 
     return window;
 }
@@ -537,10 +680,17 @@ cui_window_redraw(CuiWindow *window, CuiRect rect)
     ctx.command_buffer = &command_buffer;
     ctx.cache = &window->base.glyph_cache;
 
+    const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
+
+    if (window->base.color_theme)
+    {
+        color_theme = window->base.color_theme;
+    }
+
     cui_draw_set_clip_rect(&ctx, redraw_rect);
 
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-    cui_widget_draw(&window->base.root_widget, &ctx, &window->base.temporary_memory);
+    cui_widget_draw(&window->base.root_widget, &ctx, color_theme, &window->base.temporary_memory);
     cui_end_temporary_memory(temp_memory);
 
     cui_render(&window->backbuffer, &command_buffer, redraw_rect, &window->base.glyph_cache.texture);

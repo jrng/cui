@@ -18,9 +18,18 @@ typedef struct InterfaceBrowser
 
 static InterfaceBrowser app;
 
+
+#if CUI_PLATFORM_WINDOWS
+int CALLBACK wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_line, int show_code)
+#else
 int main(int argc, char **argv)
+#endif
 {
+#if CUI_PLATFORM_WINDOWS
+    if (!cui_init(0, 0))
+#else
     if (!cui_init(argc, argv))
+#endif
     {
         return -1;
     }

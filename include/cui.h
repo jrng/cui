@@ -157,10 +157,18 @@ typedef struct CuiColor
     float a;
 } CuiColor;
 
+#if CUI_PLATFORM_WINDOWS
+#define CuiHexColor(color) { (float) ((color >> 16) & 0xFF) / 255.0f,   \
+                             (float) ((color >>  8) & 0xFF) / 255.0f,   \
+                             (float) ((color >>  0) & 0xFF) / 255.0f,   \
+                             (float) ((color >> 24) & 0xFF) / 255.0f }
+#else
 #define CuiHexColor(color) ((CuiColor) { (float) ((color >> 16) & 0xFF) / 255.0f,   \
                                          (float) ((color >>  8) & 0xFF) / 255.0f,   \
                                          (float) ((color >>  0) & 0xFF) / 255.0f,   \
                                          (float) ((color >> 24) & 0xFF) / 255.0f })
+#endif
+
 
 typedef struct CuiFloatPoint
 {
