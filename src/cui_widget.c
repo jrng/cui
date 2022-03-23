@@ -3,6 +3,7 @@ cui_widget_box_init(CuiWidget *widget)
 {
     widget->type = CUI_WIDGET_TYPE_BOX;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -18,6 +19,7 @@ cui_widget_gravity_box_init(CuiWidget *widget, CuiDirection direction)
 {
     widget->type = CUI_WIDGET_TYPE_GRAVITY_BOX;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -35,6 +37,7 @@ cui_widget_toolbar_init(CuiWidget *widget)
 {
     widget->type = CUI_WIDGET_TYPE_TOOLBAR;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -50,6 +53,7 @@ cui_widget_tabs_init(CuiWidget *widget)
 {
     widget->type = CUI_WIDGET_TYPE_TABS;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -66,6 +70,7 @@ cui_widget_icon_button_init(CuiWidget *widget, CuiString label, CuiIconType icon
 {
     widget->type = CUI_WIDGET_TYPE_ICON_BUTTON;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -84,6 +89,7 @@ cui_widget_checkbox_init(CuiWidget *widget, CuiString label, bool initial_value)
 {
     widget->type = CUI_WIDGET_TYPE_CHECKBOX;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -102,6 +108,7 @@ cui_widget_custom_init(CuiWidget *widget)
 {
     widget->type = CUI_WIDGET_TYPE_CUSTOM;
     widget->flags = 0;
+    widget->state = 0;
     widget->parent = 0;
     widget->window = 0;
     widget->color_theme = 0;
@@ -118,6 +125,18 @@ cui_widget_custom_init(CuiWidget *widget)
     widget->layout = 0;
     widget->draw = 0;
     widget->handle_event = 0;
+}
+
+void
+cui_widget_add_flags(CuiWidget *widget, uint32_t flags)
+{
+    widget->flags |= flags;
+}
+
+void
+cui_widget_remove_flags(CuiWidget *widget, uint32_t flags)
+{
+    widget->flags &= ~flags;
 }
 
 void
@@ -159,10 +178,52 @@ cui_widget_get_preferred_size(CuiWidget *widget)
     {
         case CUI_WIDGET_TYPE_BOX:
         {
+            if (!CuiDListIsEmpty(&widget->children))
+            {
+                CuiAssert(widget->children.next == widget->children.prev);
+                result = cui_widget_get_preferred_size((CuiWidget *) widget->children.next);
+            }
         } break;
 
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
         {
+            int32_t width = 0;
+            int32_t height = 0;
+
+            switch (widget->direction)
+            {
+                case CUI_DIRECTION_NORTH:
+                case CUI_DIRECTION_SOUTH:
+                {
+                    if (!CuiDListIsEmpty(&widget->children))
+                    {
+                        CuiForWidget(child, &widget->children)
+                        {
+                            CuiPoint size = cui_widget_get_preferred_size(child);
+
+                            width = cui_max_int32(width, size.x);
+                            height += size.y;
+                        }
+                    }
+                } break;
+
+                case CUI_DIRECTION_EAST:
+                case CUI_DIRECTION_WEST:
+                {
+                    if (!CuiDListIsEmpty(&widget->children))
+                    {
+                        CuiForWidget(child, &widget->children)
+                        {
+                            CuiPoint size = cui_widget_get_preferred_size(child);
+
+                            width += size.x;
+                            height = cui_max_int32(height, size.y);
+                        }
+                    }
+                } break;
+            }
+
+            result = cui_make_point(width, height);
         } break;
 
         case CUI_WIDGET_TYPE_TOOLBAR:
@@ -255,6 +316,11 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
     {
         case CUI_WIDGET_TYPE_BOX:
         {
+            if (!CuiDListIsEmpty(&widget->children))
+            {
+                CuiAssert(widget->children.next == widget->children.prev);
+                cui_widget_set_ui_scale((CuiWidget *) widget->children.next, ui_scale);
+            }
         } break;
 
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
@@ -318,28 +384,46 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
 
     switch (widget->type)
     {
+        case CUI_WIDGET_TYPE_BOX:
+        {
+            if (!CuiDListIsEmpty(&widget->children))
+            {
+                CuiAssert(widget->children.next == widget->children.prev);
+                cui_widget_layout((CuiWidget *) widget->children.next, rect);
+            }
+        } break;
+
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
         {
-            CuiAssert(!CuiDListIsEmpty(&widget->children));
-            CuiAssert(widget->children.next->next == widget->children.prev);
-
-            CuiWidget *first_child  = (CuiWidget *) widget->children.next;
-            CuiWidget *second_child = (CuiWidget *) first_child->list.next;
-
             switch (widget->direction)
             {
                 case CUI_DIRECTION_NORTH:
                 {
-                    CuiPoint size = cui_widget_get_preferred_size(first_child);
+                    if (!CuiDListIsEmpty(&widget->children))
+                    {
+                        CuiRect child_rect = widget->rect;
 
-                    CuiRect first_rect = rect;
-                    CuiRect second_rect = rect;
+                        CuiForWidget(child, &widget->children)
+                        {
+                            if (child->list.next == &widget->children)
+                            {
+                                child_rect.min.y = cui_min_int32(child_rect.min.y, widget->rect.max.y);
+                                child_rect.max.y = widget->rect.max.y;
 
-                    first_rect.max.y = first_rect.min.y + size.y;
-                    second_rect.min.y = cui_min_int32(first_rect.max.y, second_rect.max.y);
+                                cui_widget_layout(child, child_rect);
+                            }
+                            else
+                            {
+                                CuiPoint size = cui_widget_get_preferred_size(child);
 
-                    cui_widget_layout(first_child, first_rect);
-                    cui_widget_layout(second_child, second_rect);
+                                child_rect.max.y = child_rect.min.y + size.y;
+
+                                cui_widget_layout(child, child_rect);
+
+                                child_rect.min.y = child_rect.max.y;
+                            }
+                        }
+                    }
                 } break;
 
                 case CUI_DIRECTION_EAST:
@@ -354,7 +438,31 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
 
                 case CUI_DIRECTION_WEST:
                 {
-                    CuiAssert(!"Not implemented");
+                    if (!CuiDListIsEmpty(&widget->children))
+                    {
+                        CuiRect child_rect = widget->rect;
+
+                        CuiForWidget(child, &widget->children)
+                        {
+                            if (child->list.next == &widget->children)
+                            {
+                                child_rect.min.x = cui_min_int32(child_rect.min.x, widget->rect.max.x);
+                                child_rect.max.x = widget->rect.max.x;
+
+                                cui_widget_layout(child, child_rect);
+                            }
+                            else
+                            {
+                                CuiPoint size = cui_widget_get_preferred_size(child);
+
+                                child_rect.max.x = child_rect.min.x + size.x;
+
+                                cui_widget_layout(child, child_rect);
+
+                                child_rect.min.x = child_rect.max.x;
+                            }
+                        }
+                    }
                 } break;
             }
         } break;
@@ -425,7 +533,16 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
         {
             CuiRect prev_clip = cui_draw_set_clip_rect(ctx, widget->rect);
 
-            cui_draw_fill_rect(ctx, widget->rect, color_theme->default_bg);
+            if (widget->flags & CUI_WIDGET_FLAG_FILL_BACKGROUND)
+            {
+                cui_draw_fill_rect(ctx, widget->rect, color_theme->default_bg);
+            }
+
+            if (!CuiDListIsEmpty(&widget->children))
+            {
+                CuiAssert(widget->children.next == widget->children.prev);
+                cui_widget_draw((CuiWidget *) widget->children.next, ctx, color_theme, temporary_memory);
+            }
 
             cui_draw_set_clip_rect(ctx, prev_clip);
         } break;
@@ -533,11 +650,11 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
         {
             CuiRect prev_clip = cui_draw_set_clip_rect(ctx, widget->rect);
 
-            if (widget->flags & CUI_WIDGET_FLAG_PRESSED)
+            if (widget->state & CUI_WIDGET_STATE_PRESSED)
             {
                 cui_draw_fill_rect(ctx, widget->action_rect, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
             }
-            else if (widget->flags & CUI_WIDGET_FLAG_HOVERED)
+            else if (widget->state & CUI_WIDGET_STATE_HOVERED)
             {
                 cui_draw_fill_rect(ctx, widget->action_rect, cui_make_color(0.129f, 0.145f, 0.169f, 1.0f));
             }
@@ -621,19 +738,6 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
     switch (widget->type)
     {
         case CUI_WIDGET_TYPE_BOX:
-        {
-            switch (event_type)
-            {
-                case CUI_EVENT_TYPE_ENTER:
-                case CUI_EVENT_TYPE_MOVE:
-                {
-                    result = true;
-                } break;
-
-                default: break;
-            }
-        } break;
-
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
         case CUI_WIDGET_TYPE_TOOLBAR:
         {
@@ -857,7 +961,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 {
                     // if (cui_event_is_inside_rect(window, widget->action_rect))
                     {
-                        widget->flags |= CUI_WIDGET_FLAG_HOVERED;
+                        widget->state |= CUI_WIDGET_STATE_HOVERED;
                         cui_window_request_redraw(window, widget->rect);
                         result = true;
                     }
@@ -870,9 +974,9 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                 case CUI_EVENT_TYPE_LEAVE:
                 {
-                    if (widget->flags & CUI_WIDGET_FLAG_HOVERED)
+                    if (widget->state & CUI_WIDGET_STATE_HOVERED)
                     {
-                        widget->flags &= ~CUI_WIDGET_FLAG_HOVERED;
+                        widget->state &= ~CUI_WIDGET_STATE_HOVERED;
                         cui_window_request_redraw(window, widget->rect);
                         result = true;
                     }
@@ -880,7 +984,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                 case CUI_EVENT_TYPE_PRESS:
                 {
-                    widget->flags |= CUI_WIDGET_FLAG_PRESSED;
+                    widget->state |= CUI_WIDGET_STATE_PRESSED;
                     cui_window_request_redraw(window, widget->rect);
                     result = true;
                 } break;
@@ -889,17 +993,17 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 {
                     if (cui_event_is_inside_widget(window, widget))
                     {
-                        if (!(widget->flags & CUI_WIDGET_FLAG_PRESSED))
+                        if (!(widget->state & CUI_WIDGET_STATE_PRESSED))
                         {
-                            widget->flags |= CUI_WIDGET_FLAG_PRESSED;
+                            widget->state |= CUI_WIDGET_STATE_PRESSED;
                             cui_window_request_redraw(window, widget->rect);
                         }
                     }
                     else
                     {
-                        if (widget->flags & CUI_WIDGET_FLAG_PRESSED)
+                        if (widget->state & CUI_WIDGET_STATE_PRESSED)
                         {
-                            widget->flags &= ~CUI_WIDGET_FLAG_PRESSED;
+                            widget->state &= ~CUI_WIDGET_STATE_PRESSED;
                             cui_window_request_redraw(window, widget->rect);
                         }
                     }
@@ -907,9 +1011,9 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                 case CUI_EVENT_TYPE_RELEASE:
                 {
-                    if (widget->flags & CUI_WIDGET_FLAG_PRESSED)
+                    if (widget->state & CUI_WIDGET_STATE_PRESSED)
                     {
-                        widget->flags &= ~CUI_WIDGET_FLAG_PRESSED;
+                        widget->state &= ~CUI_WIDGET_STATE_PRESSED;
                         cui_window_request_redraw(window, widget->rect);
 
                         if (widget->on_action)
@@ -947,7 +1051,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 {
                     widget->old_value = widget->value;
                     widget->value = !widget->old_value;
-                    widget->flags |= CUI_WIDGET_FLAG_PRESSED;
+                    widget->state |= CUI_WIDGET_STATE_PRESSED;
                     cui_window_request_redraw(window, widget->rect);
                     result = true;
                 } break;
@@ -956,19 +1060,19 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 {
                     if (cui_event_is_inside_widget(window, widget))
                     {
-                        if (!(widget->flags & CUI_WIDGET_FLAG_PRESSED))
+                        if (!(widget->state & CUI_WIDGET_STATE_PRESSED))
                         {
                             widget->value = !widget->old_value;
-                            widget->flags |= CUI_WIDGET_FLAG_PRESSED;
+                            widget->state |= CUI_WIDGET_STATE_PRESSED;
                             cui_window_request_redraw(window, widget->rect);
                         }
                     }
                     else
                     {
-                        if (widget->flags & CUI_WIDGET_FLAG_PRESSED)
+                        if (widget->state & CUI_WIDGET_STATE_PRESSED)
                         {
                             widget->value = widget->old_value;
-                            widget->flags &= ~CUI_WIDGET_FLAG_PRESSED;
+                            widget->state &= ~CUI_WIDGET_STATE_PRESSED;
                             cui_window_request_redraw(window, widget->rect);
                         }
                     }
@@ -977,10 +1081,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                 case CUI_EVENT_TYPE_RELEASE:
                 {
-                    if (widget->flags & CUI_WIDGET_FLAG_PRESSED)
+                    if (widget->state & CUI_WIDGET_STATE_PRESSED)
                     {
                         widget->value = !widget->old_value;
-                        widget->flags &= ~CUI_WIDGET_FLAG_PRESSED;
+                        widget->state &= ~CUI_WIDGET_STATE_PRESSED;
                         cui_window_request_redraw(window, widget->rect);
 
                         if (widget->on_action)

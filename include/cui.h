@@ -518,11 +518,16 @@ typedef enum CuiWidgetType
     CUI_WIDGET_TYPE_CUSTOM      = 100,
 } CuiWidgetType;
 
+typedef enum CuiWidgetState
+{
+    CUI_WIDGET_STATE_HOVERED = (1 << 0),
+    CUI_WIDGET_STATE_PRESSED = (1 << 1),
+    CUI_WIDGET_STATE_FOCUSED = (1 << 2),
+} CuiWidgetState;
+
 typedef enum CuiWidgetFlag
 {
-    CUI_WIDGET_FLAG_HOVERED = (1 << 0),
-    CUI_WIDGET_FLAG_PRESSED = (1 << 1),
-    CUI_WIDGET_FLAG_FOCUSED = (1 << 2),
+    CUI_WIDGET_FLAG_FILL_BACKGROUND = (1 << 0),
 } CuiWidgetFlag;
 
 typedef struct CuiWidgetList
@@ -547,6 +552,7 @@ typedef struct CuiWidget
 
     uint32_t type;
     uint32_t flags;
+    uint32_t state;
 
     uint32_t value;
     uint32_t old_value;
@@ -705,6 +711,9 @@ void cui_widget_tabs_init(CuiWidget *widget);
 void cui_widget_icon_button_init(CuiWidget *widget, CuiString label, CuiIconType icon_type);
 void cui_widget_checkbox_init(CuiWidget *widget, CuiString label, bool initial_value);
 void cui_widget_custom_init(CuiWidget *widget);
+
+void cui_widget_add_flags(CuiWidget *widget, uint32_t flags);
+void cui_widget_remove_flags(CuiWidget *widget, uint32_t flags);
 
 void cui_widget_set_window(CuiWidget *widget, CuiWindow *window);
 void cui_widget_append_child(CuiWidget *widget, CuiWidget *child);
