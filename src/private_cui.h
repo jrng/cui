@@ -149,6 +149,8 @@ typedef struct CuiWindowBase
     CuiWidget *pressed_widget;
     CuiWidget *focused_widget;
 
+    CuiColorTheme *color_theme;
+
     void *user_data;
 
     uint32_t max_push_buffer_size;

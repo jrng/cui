@@ -740,10 +740,17 @@ cui_window_redraw(CuiWindow *window, CuiRect rect)
     ctx.command_buffer = &command_buffer;
     ctx.cache = &window->base.glyph_cache;
 
+    const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
+
+    if (window->base.color_theme)
+    {
+        color_theme = window->base.color_theme;
+    }
+
     cui_draw_set_clip_rect(&ctx, redraw_rect);
 
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-    cui_widget_draw(&window->base.root_widget, &ctx, &window->base.temporary_memory);
+    cui_widget_draw(&window->base.root_widget, &ctx, color_theme, &window->base.temporary_memory);
     cui_end_temporary_memory(temp_memory);
 
     cui_render(&window->backbuffer, &command_buffer, redraw_rect, &window->base.glyph_cache.texture);

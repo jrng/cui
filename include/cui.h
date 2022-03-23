@@ -157,6 +157,11 @@ typedef struct CuiColor
     float a;
 } CuiColor;
 
+#define CuiHexColor(color) ((CuiColor) { (float) ((color >> 16) & 0xFF) / 255.0f,   \
+                                         (float) ((color >>  8) & 0xFF) / 255.0f,   \
+                                         (float) ((color >>  0) & 0xFF) / 255.0f,   \
+                                         (float) ((color >> 24) & 0xFF) / 255.0f })
+
 typedef struct CuiFloatPoint
 {
     float x;
@@ -188,6 +193,27 @@ typedef struct CuiBitmap
     int32_t stride;
     void *pixels;
 } CuiBitmap;
+
+typedef struct CuiColorTheme
+{
+    CuiColor default_bg;
+    CuiColor default_fg;
+    CuiColor tabs_bg;
+    CuiColor tabs_active_tab_bg;
+    CuiColor tabs_active_tab_fg;
+    CuiColor tabs_inactive_tab_bg;
+    CuiColor tabs_inactive_tab_fg;
+} CuiColorTheme;
+
+static const CuiColorTheme cui_color_theme_default_dark = {
+    /* default_bg           */ CuiHexColor(0xFF282C34),
+    /* default_fg           */ CuiHexColor(0xFFD7DAE0),
+    /* tabs_bg              */ CuiHexColor(0xFF21252B),
+    /* tabs_active_tab_bg   */ CuiHexColor(0xFF282C34),
+    /* tabs_active_tab_fg   */ CuiHexColor(0xFFD7DAE0),
+    /* tabs_inactive_tab_bg */ CuiHexColor(0xFF21252B),
+    /* tabs_inactive_tab_fg */ CuiHexColor(0xFF6A717C),
+};
 
 static inline CuiColor
 cui_make_color(float r, float g, float b, float a)
@@ -517,6 +543,8 @@ typedef struct CuiWidget
     struct CuiWidget *parent;
     CuiWindow *window;
 
+    CuiColorTheme *color_theme;
+
     uint32_t type;
     uint32_t flags;
 
@@ -544,7 +572,7 @@ typedef struct CuiWidget
     CuiPoint (*get_preferred_size)(struct CuiWidget *widget);
     void (*set_ui_scale)(struct CuiWidget *widget, float ui_scale);
     void (*layout)(struct CuiWidget *widget, CuiRect rect);
-    void (*draw)(struct CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *temporary_memory);
+    void (*draw)(struct CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme *color_theme, CuiArena *temporary_memory);
     bool (*handle_event)(struct CuiWidget *widget, CuiEventType event_type);
 } CuiWidget;
 
@@ -683,7 +711,7 @@ void cui_widget_append_child(CuiWidget *widget, CuiWidget *child);
 CuiPoint cui_widget_get_preferred_size(CuiWidget *widget);
 void cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale);
 void cui_widget_layout(CuiWidget *widget, CuiRect rect);
-void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *temporary_memory);
+void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme *color_theme, CuiArena *temporary_memory);
 bool cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type);
 bool cui_widget_contains(CuiWidget *widget, CuiWidget *child);
 void cui_widget_set_label(CuiWidget *widget, CuiString label);

@@ -5,6 +5,7 @@ cui_widget_box_init(CuiWidget *widget)
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->label = cui_make_string(0, 0);
 
@@ -19,6 +20,7 @@ cui_widget_gravity_box_init(CuiWidget *widget, CuiDirection direction)
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->label = cui_make_string(0, 0);
 
@@ -35,6 +37,7 @@ cui_widget_toolbar_init(CuiWidget *widget)
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->label = cui_make_string(0, 0);
 
@@ -49,6 +52,7 @@ cui_widget_tabs_init(CuiWidget *widget)
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->active_index = 0;
     widget->label = cui_make_string(0, 0);
@@ -64,6 +68,7 @@ cui_widget_icon_button_init(CuiWidget *widget, CuiString label, CuiIconType icon
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->label = label;
     widget->icon_type = icon_type;
@@ -81,6 +86,7 @@ cui_widget_checkbox_init(CuiWidget *widget, CuiString label, bool initial_value)
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->label = label;
     widget->value = initial_value;
@@ -98,6 +104,7 @@ cui_widget_custom_init(CuiWidget *widget)
     widget->flags = 0;
     widget->parent = 0;
     widget->window = 0;
+    widget->color_theme = 0;
     widget->ui_scale = 0.0f;
     widget->label = cui_make_string(0, 0);
 
@@ -396,11 +403,16 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
     }
 }
 
-void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *temporary_memory)
+void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme *color_theme, CuiArena *temporary_memory)
 {
+    if (widget->color_theme)
+    {
+        color_theme = widget->color_theme;
+    }
+
     if (widget->type >= CUI_WIDGET_TYPE_CUSTOM)
     {
-        widget->draw(widget, ctx, temporary_memory);
+        widget->draw(widget, ctx, color_theme, temporary_memory);
         return;
     }
 
@@ -413,21 +425,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
         {
             CuiRect prev_clip = cui_draw_set_clip_rect(ctx, widget->rect);
 
-            cui_draw_fill_rect(ctx, widget->rect, cui_make_color(0.1765f, 0.1882f, 0.2157f, 1.0f));
-
-#if 0
-            CuiFont *font = window->base.font;
-
-            // cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + 100),
-            //                      (float) (widget->rect.max.y - 100), CuiStringLiteral("Hello world! -> good year."),
-            //                      cui_make_color(0.8f, 0.8f, 0.8f, 1.0f));
-            cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + 100),
-                                 (float) (widget->rect.max.y - 100), CuiStringLiteral(">>>><<<<####????"),
-                                 cui_make_color(0.8f, 0.8f, 0.8f, 1.0f));
-            cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.max.x - 300),
-                                 (float) (widget->rect.max.y - 200), CuiStringLiteral(">>>><<<<####????"),
-                                 cui_make_color(0.8f, 0.8f, 0.8f, 1.0f));
-#endif
+            cui_draw_fill_rect(ctx, widget->rect, color_theme->default_bg);
 
             cui_draw_set_clip_rect(ctx, prev_clip);
         } break;
@@ -438,7 +436,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
             {
                 if (cui_rect_overlaps(child->rect, ctx->redraw_rect))
                 {
-                    cui_widget_draw(child, ctx, temporary_memory);
+                    cui_widget_draw(child, ctx, color_theme, temporary_memory);
                 }
             }
         } break;
@@ -456,7 +454,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
             {
                 if (cui_rect_overlaps(child->rect, ctx->redraw_rect))
                 {
-                    cui_widget_draw(child, ctx, temporary_memory);
+                    cui_widget_draw(child, ctx, color_theme, temporary_memory);
                 }
             }
         } break;
@@ -465,7 +463,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
         {
             if (CuiDListIsEmpty(&widget->children))
             {
-                cui_draw_fill_rect(ctx, widget->rect, cui_make_color(0.129f, 0.145f, 0.169f, 1.0f));
+                cui_draw_fill_rect(ctx, widget->rect, color_theme->tabs_bg);
             }
             else
             {
@@ -474,7 +472,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
 
                 tab_background_rect.max.y = cui_min_int32(tab_background_rect.min.y + widget->tabs_height, tab_background_rect.max.y);
 
-                cui_draw_fill_rect(ctx, tab_background_rect, cui_make_color(0.129f, 0.145f, 0.169f, 1.0f));
+                cui_draw_fill_rect(ctx, tab_background_rect, color_theme->tabs_bg);
 
                 border_rect.min.y = cui_min_int32(border_rect.min.y + widget->tabs_height, border_rect.max.y);
                 border_rect.max.y = cui_min_int32(border_rect.min.y + widget->border_width, border_rect.max.y);
@@ -504,17 +502,17 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
                     {
                         active_child = child;
 
-                        cui_draw_fill_rect(ctx, tab_rect, cui_make_color(0.157f, 0.173f, 0.204f, 1.0f));
+                        cui_draw_fill_rect(ctx, tab_rect, color_theme->tabs_active_tab_bg);
 
                         cui_draw_fill_string(temporary_memory, ctx, font, (float) (tab_rect.min.x + widget->padding.min.x),
                                              (float) (tab_rect.min.y + widget->padding.min.y) + font->baseline_offset,
-                                             child->label, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
+                                             child->label, color_theme->tabs_active_tab_fg);
                     }
                     else
                     {
                         cui_draw_fill_string(temporary_memory, ctx, font, (float) (tab_rect.min.x + widget->padding.min.x),
                                              (float) (tab_rect.min.y + widget->padding.min.y) + font->baseline_offset,
-                                             child->label, cui_make_color(0.416f, 0.443f, 0.486f, 1.0f));
+                                             child->label, color_theme->tabs_inactive_tab_fg);
                     }
 
                     cui_draw_fill_rect(ctx, border_rect, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
@@ -526,7 +524,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, CuiArena *tempo
 
                 if (cui_rect_overlaps(active_child->rect, ctx->redraw_rect))
                 {
-                    cui_widget_draw(active_child, ctx, temporary_memory);
+                    cui_widget_draw(active_child, ctx, color_theme, temporary_memory);
                 }
             }
         } break;
