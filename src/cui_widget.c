@@ -782,12 +782,13 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 } break;
 
                 case CUI_EVENT_TYPE_PRESS:
+                case CUI_EVENT_TYPE_DOUBLE_CLICK:
                 {
                     CuiForWidget(child, &widget->children)
                     {
                         if (cui_event_is_inside_widget(window, child))
                         {
-                            if (cui_widget_handle_event(child, CUI_EVENT_TYPE_PRESS))
+                            if (cui_widget_handle_event(child, event_type))
                             {
                                 if (window->base.pressed_widget && !cui_widget_contains(child, window->base.pressed_widget))
                                 {
@@ -872,6 +873,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 } break;
 
                 case CUI_EVENT_TYPE_PRESS:
+                case CUI_EVENT_TYPE_DOUBLE_CLICK:
                 {
                     CuiRect tab_row_rect = widget->rect;
                     tab_row_rect.max.y = tab_row_rect.min.y + widget->tabs_height;
@@ -922,7 +924,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                         if (active_child && cui_event_is_inside_widget(window, active_child))
                         {
-                            if (cui_widget_handle_event(active_child, CUI_EVENT_TYPE_PRESS))
+                            if (cui_widget_handle_event(active_child, event_type))
                             {
                                 if (window->base.pressed_widget && !cui_widget_contains(active_child, window->base.pressed_widget))
                                 {
@@ -983,6 +985,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 } break;
 
                 case CUI_EVENT_TYPE_PRESS:
+                case CUI_EVENT_TYPE_DOUBLE_CLICK:
                 {
                     widget->state |= CUI_WIDGET_STATE_PRESSED;
                     cui_window_request_redraw(window, widget->rect);
@@ -1048,6 +1051,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 } break;
 
                 case CUI_EVENT_TYPE_PRESS:
+                case CUI_EVENT_TYPE_DOUBLE_CLICK:
                 {
                     widget->old_value = widget->value;
                     widget->value = !widget->old_value;

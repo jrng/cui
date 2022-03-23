@@ -281,13 +281,14 @@ cui_rect_has_area(CuiRect rect)
 
 typedef enum CuiEventType
 {
-    CUI_EVENT_TYPE_ENTER   = 0,
-    CUI_EVENT_TYPE_LEAVE   = 1,
-    CUI_EVENT_TYPE_MOVE    = 2,
-    CUI_EVENT_TYPE_PRESS   = 3,
-    CUI_EVENT_TYPE_DRAG    = 4,
-    CUI_EVENT_TYPE_RELEASE = 5,
-    CUI_EVENT_TYPE_WHEEL   = 6,
+    CUI_EVENT_TYPE_ENTER        = 0,
+    CUI_EVENT_TYPE_LEAVE        = 1,
+    CUI_EVENT_TYPE_MOVE         = 2,
+    CUI_EVENT_TYPE_PRESS        = 3,
+    CUI_EVENT_TYPE_DOUBLE_CLICK = 4,
+    CUI_EVENT_TYPE_DRAG         = 5,
+    CUI_EVENT_TYPE_RELEASE      = 6,
+    CUI_EVENT_TYPE_WHEEL        = 7,
 } CuiEventType;
 
 typedef struct CuiEvent

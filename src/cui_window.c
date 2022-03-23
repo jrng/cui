@@ -93,6 +93,12 @@ cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
             cui_widget_handle_event(&window_base->root_widget, CUI_EVENT_TYPE_PRESS);
         } break;
 
+        case CUI_EVENT_TYPE_DOUBLE_CLICK:
+        {
+            window_base->pressed_widget = &window_base->root_widget;
+            cui_widget_handle_event(&window_base->root_widget, CUI_EVENT_TYPE_DOUBLE_CLICK);
+        } break;
+
         case CUI_EVENT_TYPE_DRAG:
         {
         } break;

@@ -202,6 +202,12 @@ typedef struct CuiContext
 
 #elif CUI_PLATFORM_LINUX
 
+typedef struct CuiX11DesktopSettings
+{
+    float ui_scale;
+    int32_t double_click_time;
+} CuiX11DesktopSettings;
+
 #include <X11/Xlib.h>
 
 typedef int gint;
@@ -286,6 +292,8 @@ struct CuiWindow
 
     Window x11_window;
 
+    int32_t last_left_click_time;
+
     GdkWindow *gdk_window;
     GtkWindow *gtk_window;
 
@@ -301,13 +309,18 @@ typedef struct CuiContext
     CuiContextCommon common;
 
     float default_ui_scale;
+    int32_t double_click_time;
 
     int x11_default_screen;
 
     Display *x11_display;
+
     Window x11_root_window;
+    Window x11_settings_window;
+
     GC x11_default_gc;
 
+    Atom atom_manager;
     Atom atom_utf8_string;
     Atom atom_wm_protocols;
     Atom atom_wm_delete_window;

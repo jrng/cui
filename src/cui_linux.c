@@ -62,9 +62,16 @@ _cui_on_gtk_window_realize(GtkWidget *widget, void *user_data)
     _cui_context.gtk_widget_set_window(widget, (GdkWindow *) user_data);
 }
 
-static void
+static const int32_t _CUI_DEFAULT_DOUBLE_CLICK_TIME = 400; // ms
+
+static CuiX11DesktopSettings
 _cui_parse_desktop_settings(CuiString settings)
 {
+    CuiX11DesktopSettings result;
+
+    result.ui_scale = 1.0f;
+    result.double_click_time = _CUI_DEFAULT_DOUBLE_CLICK_TIME;
+
     bool is_little_endian = !settings.data[0];
 
     cui_string_advance(&settings, 12);
@@ -120,6 +127,13 @@ _cui_parse_desktop_settings(CuiString settings)
                     has_xft_dpi_scaling = true;
                     xft_dpi_scaling = (float) (value / 1024) / 96.0f;
                 }
+                else if (cui_string_equals(name, CuiStringLiteral("Net/DoubleClickTime")))
+                {
+                    if (value > 0)
+                    {
+                        result.double_click_time = value;
+                    }
+                }
             } break;
 
             case 1:
@@ -147,12 +161,14 @@ _cui_parse_desktop_settings(CuiString settings)
 
     if (has_gdk_window_scaling_factor)
     {
-        _cui_context.default_ui_scale = gdk_window_scaling_factor;
+        result.ui_scale = gdk_window_scaling_factor;
     }
     else if (has_xft_dpi_scaling)
     {
-        _cui_context.default_ui_scale = xft_dpi_scaling;
+        result.ui_scale = xft_dpi_scaling;
     }
+
+    return result;
 }
 
 static CuiWindow *
@@ -294,6 +310,7 @@ cui_init(int arg_count, char **args)
     }
 
     _cui_context.default_ui_scale = 1.0f;
+    _cui_context.double_click_time = _CUI_DEFAULT_DOUBLE_CLICK_TIME;
 
     _cui_context.x11_default_screen = DefaultScreen(_cui_context.x11_display);
     _cui_context.x11_root_window = DefaultRootWindow(_cui_context.x11_display);
@@ -311,35 +328,44 @@ cui_init(int arg_count, char **args)
         xsettings_screen_name[12] = '0' + (_cui_context.x11_default_screen / 10);
     }
 
+    _cui_context.atom_manager = XInternAtom(_cui_context.x11_display, "MANAGER", false);
     _cui_context.atom_utf8_string = XInternAtom(_cui_context.x11_display, "UTF8_STRING", false);
     _cui_context.atom_wm_protocols = XInternAtom(_cui_context.x11_display, "WM_PROTOCOLS", false);
     _cui_context.atom_wm_delete_window = XInternAtom(_cui_context.x11_display, "WM_DELETE_WINDOW", false);
     _cui_context.atom_xsettings_screen = XInternAtom(_cui_context.x11_display, xsettings_screen_name, false);
     _cui_context.atom_xsettings_settings = XInternAtom(_cui_context.x11_display, "_XSETTINGS_SETTINGS", false);
 
-    Window settings_owner = XGetSelectionOwner(_cui_context.x11_display, _cui_context.atom_xsettings_screen);
+    XGrabServer(_cui_context.x11_display);
 
-    if (settings_owner != None)
+    _cui_context.x11_settings_window = XGetSelectionOwner(_cui_context.x11_display, _cui_context.atom_xsettings_screen);
+
+    if (_cui_context.x11_settings_window != None)
     {
+        XSelectInput(_cui_context.x11_display, _cui_context.x11_settings_window, StructureNotifyMask | PropertyChangeMask);
+
         Atom type;
         int format;
         unsigned long length, remaining;
         unsigned char *settings_buffer = 0;
 
-        int ret = XGetWindowProperty(_cui_context.x11_display, settings_owner, _cui_context.atom_xsettings_settings,
-                                     0, 2048, false, AnyPropertyType, &type, &format,
-                                     &length, &remaining, &settings_buffer);
+        int ret = XGetWindowProperty(_cui_context.x11_display, _cui_context.x11_settings_window, _cui_context.atom_xsettings_settings,
+                                     0, 2048, false, AnyPropertyType, &type, &format, &length, &remaining, &settings_buffer);
 
         if ((ret == Success) && (length > 0))
         {
             if ((remaining == 0) && (format == 8))
             {
-                _cui_parse_desktop_settings(cui_make_string(settings_buffer, length));
+                CuiX11DesktopSettings desktop_settings = _cui_parse_desktop_settings(cui_make_string(settings_buffer, length));
+
+                _cui_context.default_ui_scale = desktop_settings.ui_scale;
+                _cui_context.double_click_time = desktop_settings.double_click_time;
             }
 
             XFree(settings_buffer);
         }
     }
+
+    XUngrabServer(_cui_context.x11_display);
 
     return true;
 }
@@ -379,6 +405,8 @@ cui_window_create()
                                        0, 0, InputOutput, 0, CWEventMask, &window_attr);
 
     XSetWMProtocols(_cui_context.x11_display, window->x11_window, &_cui_context.atom_wm_delete_window, 1);
+
+    window->last_left_click_time = INT16_MIN;
 
     return window;
 }
@@ -526,6 +554,57 @@ cui_step()
 
         if (XFilterEvent(&ev, x11_window)) continue;
 
+        if (x11_window == _cui_context.x11_settings_window)
+        {
+            if ((ev.type == PropertyNotify) &&
+                (ev.xproperty.window == _cui_context.x11_settings_window) &&
+                (ev.xproperty.state == PropertyNewValue) &&
+                (ev.xproperty.atom == _cui_context.atom_xsettings_settings))
+            {
+                Atom type;
+                int format;
+                unsigned long length, remaining;
+                unsigned char *settings_buffer = 0;
+
+                int ret = XGetWindowProperty(_cui_context.x11_display, _cui_context.x11_settings_window, _cui_context.atom_xsettings_settings,
+                                             0, 2048, false, AnyPropertyType, &type, &format, &length, &remaining, &settings_buffer);
+
+                if ((ret == Success) && (length > 0))
+                {
+                    if ((remaining == 0) && (format == 8))
+                    {
+
+                        CuiX11DesktopSettings desktop_settings = _cui_parse_desktop_settings(cui_make_string(settings_buffer, length));
+
+                        _cui_context.default_ui_scale = desktop_settings.ui_scale;
+                        _cui_context.double_click_time = desktop_settings.double_click_time;
+
+                        for (uint32_t i = 0; i < _cui_context.common.window_count; i += 1)
+                        {
+                            CuiWindow *window = _cui_context.common.windows[i];
+
+                            float inv_ui_scale = 1.0f / window->base.ui_scale;
+                            window->base.ui_scale = _cui_context.default_ui_scale;
+
+                            int32_t new_width  = lroundf((inv_ui_scale * window->backbuffer.width) * window->base.ui_scale);
+                            int32_t new_height = lroundf((inv_ui_scale * window->backbuffer.height) * window->base.ui_scale);
+
+                            cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
+                            cui_glyph_cache_reset(&window->base.glyph_cache);
+
+                            cui_widget_set_ui_scale(&window->base.root_widget, window->base.ui_scale);
+
+                            cui_window_resize(window, new_width, new_height);
+                        }
+                    }
+
+                    XFree(settings_buffer);
+                }
+            }
+
+            continue;
+        }
+
         CuiWindow *window = _cui_window_get_from_x11_window(x11_window);
 
         CuiAssert(window);
@@ -576,10 +655,20 @@ cui_step()
 
             case ClientMessage:
             {
-                if (ev.xclient.message_type == _cui_context.atom_wm_protocols &&
-                    (Atom) ev.xclient.data.l[0] == _cui_context.atom_wm_delete_window)
+                if (ev.xclient.message_type == _cui_context.atom_wm_protocols)
                 {
-                    cui_window_close(window);
+                    if ((Atom) ev.xclient.data.l[0] == _cui_context.atom_wm_delete_window)
+                    {
+                        cui_window_close(window);
+                    }
+                }
+                else if (ev.xclient.message_type == _cui_context.atom_manager)
+                {
+                    if ((Atom) ev.xclient.data.l[1] == _cui_context.atom_xsettings_screen)
+                    {
+                        _cui_context.x11_settings_window = (Window) ev.xclient.data.l[2];
+                        XSelectInput(_cui_context.x11_display, _cui_context.x11_settings_window, StructureNotifyMask | PropertyChangeMask);
+                    }
                 }
             } break;
 
@@ -622,6 +711,27 @@ cui_step()
                 switch (ev.xbutton.button)
                 {
                     case Button1:
+                    {
+                        if ((ev.xbutton.time - window->last_left_click_time) <= _cui_context.double_click_time)
+                        {
+                            window->last_left_click_time = INT16_MIN;
+
+                            window->base.event.mouse.x = ev.xbutton.x;
+                            window->base.event.mouse.y = ev.xbutton.y;
+
+                            cui_window_handle_event(window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+                        }
+                        else
+                        {
+                            window->last_left_click_time = ev.xbutton.time;
+
+                            window->base.event.mouse.x = ev.xbutton.x;
+                            window->base.event.mouse.y = ev.xbutton.y;
+
+                            cui_window_handle_event(window, CUI_EVENT_TYPE_PRESS);
+                        }
+                    } break;
+
                     case Button2:
                     case Button3:
                     {
