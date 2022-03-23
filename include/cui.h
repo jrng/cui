@@ -244,6 +244,18 @@ cui_make_rect(int32_t x_min, int32_t y_min, int32_t x_max, int32_t y_max)
     return result;
 }
 
+static inline int32_t
+cui_rect_get_width(CuiRect rect)
+{
+    return (rect.max.x - rect.min.x);
+}
+
+static inline int32_t
+cui_rect_get_height(CuiRect rect)
+{
+    return (rect.max.y - rect.min.y);
+}
+
 static inline CuiRect
 cui_rect_get_union(CuiRect a, CuiRect b)
 {
@@ -485,7 +497,7 @@ typedef struct CuiFontFile
 typedef struct CuiFont
 {
     float font_scale;
-    float line_height;
+    int32_t line_height;
     float baseline_offset;
 
     CuiFontFile *file;
@@ -511,10 +523,9 @@ typedef enum CuiWidgetType
 {
     CUI_WIDGET_TYPE_BOX         = 0,
     CUI_WIDGET_TYPE_GRAVITY_BOX = 1,
-    CUI_WIDGET_TYPE_TOOLBAR     = 2,
-    CUI_WIDGET_TYPE_TABS        = 3,
-    CUI_WIDGET_TYPE_ICON_BUTTON = 4,
-    CUI_WIDGET_TYPE_CHECKBOX    = 5,
+    CUI_WIDGET_TYPE_TABS        = 2,
+    CUI_WIDGET_TYPE_ICON_BUTTON = 3,
+    CUI_WIDGET_TYPE_CHECKBOX    = 4,
 
     CUI_WIDGET_TYPE_CUSTOM      = 100,
 } CuiWidgetType;
@@ -571,8 +582,15 @@ typedef struct CuiWidget
     int32_t tabs_width;
     int32_t tabs_height;
     int32_t border_width;
-    int32_t inline_padding;
-    CuiRect padding;
+
+    float padding_top;
+    float padding_right;
+    float padding_bottom;
+    float padding_left;
+    float padding_inline;
+
+    CuiRect effective_padding;
+    int32_t effective_inline_padding;
 
     void (*on_action)(struct CuiWidget *widget);
 
@@ -707,7 +725,6 @@ bool cui_platform_dialog_file_open(CuiWindow *window, CuiString **filenames, Cui
 
 void cui_widget_box_init(CuiWidget *widget);
 void cui_widget_gravity_box_init(CuiWidget *widget, CuiDirection direction);
-void cui_widget_toolbar_init(CuiWidget *widget);
 void cui_widget_tabs_init(CuiWidget *widget);
 void cui_widget_icon_button_init(CuiWidget *widget, CuiString label, CuiIconType icon_type);
 void cui_widget_checkbox_init(CuiWidget *widget, CuiString label, bool initial_value);

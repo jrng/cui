@@ -26,26 +26,16 @@ cui_widget_gravity_box_init(CuiWidget *widget, CuiDirection direction)
     widget->ui_scale = 0.0f;
     widget->label = cui_make_string(0, 0);
 
+    widget->padding_top    = 4.0f;
+    widget->padding_right  = 8.0f;
+    widget->padding_bottom = 4.0f;
+    widget->padding_left   = 8.0f;
+    widget->padding_inline = 8.0f;
+
     CuiDListInit(&widget->list);
     CuiDListInit(&widget->children);
 
     widget->direction = direction;
-}
-
-void
-cui_widget_toolbar_init(CuiWidget *widget)
-{
-    widget->type = CUI_WIDGET_TYPE_TOOLBAR;
-    widget->flags = 0;
-    widget->state = 0;
-    widget->parent = 0;
-    widget->window = 0;
-    widget->color_theme = 0;
-    widget->ui_scale = 0.0f;
-    widget->label = cui_make_string(0, 0);
-
-    CuiDListInit(&widget->list);
-    CuiDListInit(&widget->children);
 }
 
 void
@@ -60,6 +50,11 @@ cui_widget_tabs_init(CuiWidget *widget)
     widget->ui_scale = 0.0f;
     widget->active_index = 0;
     widget->label = cui_make_string(0, 0);
+
+    widget->padding_top    = 4.0f;
+    widget->padding_right  = 8.0f;
+    widget->padding_bottom = 4.0f;
+    widget->padding_left   = 12.0f;
 
     CuiDListInit(&widget->list);
     CuiDListInit(&widget->children);
@@ -212,40 +207,21 @@ cui_widget_get_preferred_size(CuiWidget *widget)
                 {
                     if (!CuiDListIsEmpty(&widget->children))
                     {
+                        width -= widget->effective_inline_padding;
+
                         CuiForWidget(child, &widget->children)
                         {
                             CuiPoint size = cui_widget_get_preferred_size(child);
 
-                            width += size.x;
+                            width += size.x + widget->effective_inline_padding;
                             height = cui_max_int32(height, size.y);
                         }
                     }
                 } break;
             }
 
-            result = cui_make_point(width, height);
-        } break;
-
-        case CUI_WIDGET_TYPE_TOOLBAR:
-        {
-            int32_t width = 0;
-            int32_t height = 0;
-
-            if (!CuiDListIsEmpty(&widget->children))
-            {
-                width -= widget->inline_padding;
-
-                CuiForWidget(child, &widget->children)
-                {
-                    CuiPoint size = cui_widget_get_preferred_size(child);
-
-                    width += size.x + widget->inline_padding;
-                    height = cui_max_int32(height, size.y);
-                }
-            }
-
-            width  += widget->padding.min.x + widget->padding.max.x;
-            height += widget->padding.min.y + widget->padding.max.y + widget->border_width;
+            width  += widget->effective_padding.min.x + widget->effective_padding.max.x;
+            height += widget->effective_padding.min.y + widget->effective_padding.max.y;
 
             result = cui_make_point(width, height);
         } break;
@@ -276,7 +252,7 @@ cui_widget_get_preferred_size(CuiWidget *widget)
             int32_t padding_x = (int32_t) ceilf(0.5f * (label_width - roundf(widget->ui_scale * 32)));
 
             result.x = cui_max_int32(lroundf(widget->ui_scale * 32.0f) + 2 * padding_x, (int32_t) ceilf(label_width));
-            result.y = (int32_t) ceilf(widget->ui_scale * 24.0f) + (int32_t) font->line_height;
+            result.y = (int32_t) ceilf(widget->ui_scale * 24.0f) + font->line_height;
         } break;
 
         case CUI_WIDGET_TYPE_CHECKBOX:
@@ -285,11 +261,10 @@ cui_widget_get_preferred_size(CuiWidget *widget)
 
             float label_width = cui_font_get_string_width(font, widget->label);
 
-            result.x = (int32_t) ceilf(widget->ui_scale * 16.0f) +
-                       widget->inline_padding +
-                       (int32_t) ceilf(label_width);
-            result.y = cui_max_int32((int32_t) ceilf(widget->ui_scale * 16.0f),
-                                     (int32_t) font->line_height);
+            int32_t checkbox_icon_size = (int32_t) ceilf(widget->ui_scale * 16.0f);
+
+            result.x = checkbox_icon_size + widget->effective_inline_padding + (int32_t) ceilf(label_width);
+            result.y = cui_max_int32(checkbox_icon_size, font->line_height);
         } break;
     }
 
@@ -325,20 +300,11 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
 
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
         {
-            CuiForWidget(child, &widget->children)
-            {
-                cui_widget_set_ui_scale(child, ui_scale);
-            }
-        } break;
-
-        case CUI_WIDGET_TYPE_TOOLBAR:
-        {
-            widget->padding.min.x = lroundf(widget->ui_scale * 12.0f);
-            widget->padding.min.y = lroundf(widget->ui_scale * 4.0f);
-            widget->padding.max.x = lroundf(widget->ui_scale * 12.0f);
-            widget->padding.max.y = lroundf(widget->ui_scale * 4.0f);
-            widget->inline_padding = lroundf(widget->ui_scale * 12.0f);
-            widget->border_width = lroundf(widget->ui_scale * 0.85f);
+            widget->effective_padding.min.x  = lroundf(widget->ui_scale * widget->padding_left);
+            widget->effective_padding.min.y  = lroundf(widget->ui_scale * widget->padding_top);
+            widget->effective_padding.max.x  = lroundf(widget->ui_scale * widget->padding_right);
+            widget->effective_padding.max.y  = lroundf(widget->ui_scale * widget->padding_bottom);
+            widget->effective_inline_padding = lroundf(widget->ui_scale * widget->padding_inline);
 
             CuiForWidget(child, &widget->children)
             {
@@ -350,12 +316,13 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
         {
             CuiFont *font = widget->window->base.font;
 
-            widget->padding.min.x = lroundf(widget->ui_scale * 12.0f);
-            widget->padding.min.y = lroundf(widget->ui_scale * 4.0f);
-            widget->padding.max.x = lroundf(widget->ui_scale * 8.0f);
-            widget->padding.max.y = lroundf(widget->ui_scale * 4.0f);
+            widget->effective_padding.min.x  = lroundf(widget->ui_scale * widget->padding_left);
+            widget->effective_padding.min.y  = lroundf(widget->ui_scale * widget->padding_top);
+            widget->effective_padding.max.x  = lroundf(widget->ui_scale * widget->padding_right);
+            widget->effective_padding.max.y  = lroundf(widget->ui_scale * widget->padding_bottom);
+
             widget->tabs_width = lroundf(widget->ui_scale * 200.0f);
-            widget->tabs_height = (int32_t) font->line_height + widget->padding.min.y + widget->padding.max.y;
+            widget->tabs_height = font->line_height + widget->effective_padding.min.y + widget->effective_padding.max.y;
             widget->border_width = lroundf(widget->ui_scale * 0.85f);
 
             CuiForWidget(child, &widget->children)
@@ -366,7 +333,10 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
 
         case CUI_WIDGET_TYPE_CHECKBOX:
         {
-            widget->inline_padding = lroundf(widget->ui_scale * 4.0f);
+            int32_t checkbox_icon_width = (int32_t) ceilf(widget->ui_scale * 16.0f);
+
+            widget->effective_inline_padding = lroundf(widget->ui_scale * 4.0f);
+            widget->effective_padding.min.x = checkbox_icon_width + widget->effective_inline_padding;
         } break;
     }
 }
@@ -401,14 +371,21 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
                 {
                     if (!CuiDListIsEmpty(&widget->children))
                     {
-                        CuiRect child_rect = widget->rect;
+                        CuiRect parent_rect = widget->rect;
+
+                        parent_rect.min.x += widget->effective_padding.min.x;
+                        parent_rect.min.y += widget->effective_padding.min.y;
+                        parent_rect.max.x -= widget->effective_padding.max.x;
+                        parent_rect.max.y -= widget->effective_padding.max.y;
+
+                        CuiRect child_rect = parent_rect;
 
                         CuiForWidget(child, &widget->children)
                         {
                             if (child->list.next == &widget->children)
                             {
-                                child_rect.min.y = cui_min_int32(child_rect.min.y, widget->rect.max.y);
-                                child_rect.max.y = widget->rect.max.y;
+                                child_rect.min.y = cui_min_int32(child_rect.min.y, parent_rect.max.y);
+                                child_rect.max.y = parent_rect.max.y;
 
                                 cui_widget_layout(child, child_rect);
                             }
@@ -440,14 +417,21 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
                 {
                     if (!CuiDListIsEmpty(&widget->children))
                     {
-                        CuiRect child_rect = widget->rect;
+                        CuiRect parent_rect = widget->rect;
+
+                        parent_rect.min.x += widget->effective_padding.min.x;
+                        parent_rect.min.y += widget->effective_padding.min.y;
+                        parent_rect.max.x -= widget->effective_padding.max.x;
+                        parent_rect.max.y -= widget->effective_padding.max.y;
+
+                        CuiRect child_rect = parent_rect;
 
                         CuiForWidget(child, &widget->children)
                         {
                             if (child->list.next == &widget->children)
                             {
-                                child_rect.min.x = cui_min_int32(child_rect.min.x, widget->rect.max.x);
-                                child_rect.max.x = widget->rect.max.x;
+                                child_rect.min.x = cui_min_int32(child_rect.min.x, parent_rect.max.x);
+                                child_rect.max.x = parent_rect.max.x;
 
                                 cui_widget_layout(child, child_rect);
                             }
@@ -459,26 +443,11 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
 
                                 cui_widget_layout(child, child_rect);
 
-                                child_rect.min.x = child_rect.max.x;
+                                child_rect.min.x = child_rect.max.x + widget->effective_inline_padding;
                             }
                         }
                     }
                 } break;
-            }
-        } break;
-
-        case CUI_WIDGET_TYPE_TOOLBAR:
-        {
-            int32_t x = widget->rect.min.x + widget->padding.min.x;
-            int32_t y = widget->rect.min.y + widget->padding.min.y;
-
-            CuiForWidget(child, &widget->children)
-            {
-                CuiPoint size = cui_widget_get_preferred_size(child);
-
-                cui_widget_layout(child, cui_make_rect(x, y, x + size.x, y + size.y));
-
-                x += size.x + widget->inline_padding;
             }
         } break;
 
@@ -507,6 +476,17 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
             int32_t y1 = y0 + (int32_t) ceilf(widget->ui_scale * 24.0f);
 
             widget->action_rect = cui_make_rect(x0, y0, x1, y1);
+        } break;
+
+        case CUI_WIDGET_TYPE_CHECKBOX:
+        {
+            CuiFont *font = widget->window->base.font;
+
+            int32_t height = cui_rect_get_height(widget->rect);
+            int32_t checkbox_icon_height = (int32_t) ceilf(widget->ui_scale * 16.0f);
+
+            widget->effective_padding.min.y = (height - checkbox_icon_height) / 2;
+            widget->effective_padding.max.y = (height - font->line_height) / 2;
         } break;
     }
 }
@@ -549,24 +529,6 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
 
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
         {
-            CuiForWidget(child, &widget->children)
-            {
-                if (cui_rect_overlaps(child->rect, ctx->redraw_rect))
-                {
-                    cui_widget_draw(child, ctx, color_theme, temporary_memory);
-                }
-            }
-        } break;
-
-        case CUI_WIDGET_TYPE_TOOLBAR:
-        {
-            cui_draw_fill_rect(ctx, widget->rect, cui_make_color(0.157f, 0.173f, 0.204f, 1.0f));
-
-            CuiRect border_rect = widget->rect;
-            border_rect.min.y = border_rect.max.y - widget->border_width;
-
-            cui_draw_fill_rect(ctx, border_rect, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
-
             CuiForWidget(child, &widget->children)
             {
                 if (cui_rect_overlaps(child->rect, ctx->redraw_rect))
@@ -621,14 +583,14 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
 
                         cui_draw_fill_rect(ctx, tab_rect, color_theme->tabs_active_tab_bg);
 
-                        cui_draw_fill_string(temporary_memory, ctx, font, (float) (tab_rect.min.x + widget->padding.min.x),
-                                             (float) (tab_rect.min.y + widget->padding.min.y) + font->baseline_offset,
+                        cui_draw_fill_string(temporary_memory, ctx, font, (float) (tab_rect.min.x + widget->effective_padding.min.x),
+                                             (float) (tab_rect.min.y + widget->effective_padding.min.y) + font->baseline_offset,
                                              child->label, color_theme->tabs_active_tab_fg);
                     }
                     else
                     {
-                        cui_draw_fill_string(temporary_memory, ctx, font, (float) (tab_rect.min.x + widget->padding.min.x),
-                                             (float) (tab_rect.min.y + widget->padding.min.y) + font->baseline_offset,
+                        cui_draw_fill_string(temporary_memory, ctx, font, (float) (tab_rect.min.x + widget->effective_padding.min.x),
+                                             (float) (tab_rect.min.y + widget->effective_padding.min.y) + font->baseline_offset,
                                              child->label, color_theme->tabs_inactive_tab_fg);
                     }
 
@@ -683,7 +645,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
             }
 
             cui_draw_fill_string(temporary_memory, ctx, font, (float) widget->rect.min.x,
-                                 (float) widget->rect.max.y + font->baseline_offset - font->line_height,
+                                 (float) (widget->rect.max.y - font->line_height) + font->baseline_offset,
                                  widget->label, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
 
             cui_draw_set_clip_rect(ctx, prev_clip);
@@ -695,26 +657,23 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
 
             CuiFont *font = widget->window->base.font;
 
-            int32_t px16 = (int32_t) ceilf(widget->ui_scale * 16.0f);
-            int32_t offset_x = px16 + widget->inline_padding;
-
             if (widget->value)
             {
-                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) widget->rect.min.y,
+                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
                                     CUI_SHAPE_CHECKBOX_OUTER, widget->ui_scale, cui_make_color(0.337f, 0.541f, 0.949f, 1.0f));
-                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) widget->rect.min.y,
+                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
                                     CUI_SHAPE_CHECKMARK, widget->ui_scale, cui_make_color(1.0f, 1.0f, 1.0f, 1.0f));
             }
             else
             {
-                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) widget->rect.min.y,
+                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
                                     CUI_SHAPE_CHECKBOX_OUTER, widget->ui_scale, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
-                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) widget->rect.min.y,
+                cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
                                     CUI_SHAPE_CHECKBOX_INNER, widget->ui_scale, cui_make_color(0.184f, 0.200f, 0.239f, 1.0f));
             }
 
-            cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + offset_x),
-                                 (float) widget->rect.max.y + font->baseline_offset - font->line_height,
+            cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + widget->effective_padding.min.x),
+                                 (float) (widget->rect.min.y + widget->effective_padding.max.y) + font->baseline_offset,
                                  widget->label, cui_make_color(0.616f, 0.647f, 0.706f, 1.0f));
 
             cui_draw_set_clip_rect(ctx, prev_clip);
@@ -739,7 +698,6 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
     {
         case CUI_WIDGET_TYPE_BOX:
         case CUI_WIDGET_TYPE_GRAVITY_BOX:
-        case CUI_WIDGET_TYPE_TOOLBAR:
         {
             switch (event_type)
             {

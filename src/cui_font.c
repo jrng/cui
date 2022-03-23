@@ -1169,8 +1169,8 @@ void
 cui_font_update_with_size_and_line_height(CuiFont *font, float font_size, float line_height)
 {
     font->font_scale = cui_font_file_get_scale_for_unit_height(font->file, font_size);
-    font->line_height = ceilf(font_size * line_height);
-    font->baseline_offset = 0.5f * (font->line_height - font_size) +
+    font->line_height = (int32_t) ceilf(font_size * line_height);
+    font->baseline_offset = 0.5f * ((float) font->line_height - font_size) +
                             (font->file->ascent * font->font_scale);
 }
 
