@@ -704,8 +704,9 @@ _cui_add_window()
         cui_glyph_cache_create(&window->base.glyph_cache);
 
         window->base.font = _cui_font_manager_find_font(&_cui_context.common.temporary_memory, &_cui_context.common.font_manager,
+                                                        CuiStringLiteral("Inter-Regular"),
                                                         // Linux
-                                                        CuiStringLiteral("ClearSans-Regular"), CuiStringLiteral("Roboto-Regular"),
+                                                        CuiStringLiteral("Roboto-Regular"),
                                                         // Windows
                                                         CuiStringLiteral("verdana"));
 
