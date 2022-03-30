@@ -634,13 +634,13 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
                 case CUI_ICON_LOAD:
                 {
                     cui_draw_fill_shape(temporary_memory, ctx, icon_x, (float) widget->rect.min.y,
-                                        CUI_SHAPE_LOAD, widget->ui_scale, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
+                                        CUI_SHAPE_LOAD_24, widget->ui_scale, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
                 } break;
 
                 case CUI_ICON_TAPE:
                 {
                     cui_draw_fill_shape(temporary_memory, ctx, icon_x, (float) widget->rect.min.y,
-                                        CUI_SHAPE_TAPE, widget->ui_scale, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
+                                        CUI_SHAPE_TAPE_24, widget->ui_scale, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
                 } break;
             }
 
@@ -660,16 +660,16 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
             if (widget->value)
             {
                 cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
-                                    CUI_SHAPE_CHECKBOX_OUTER, widget->ui_scale, cui_make_color(0.337f, 0.541f, 0.949f, 1.0f));
+                                    CUI_SHAPE_CHECKBOX_OUTER_16, widget->ui_scale, cui_make_color(0.337f, 0.541f, 0.949f, 1.0f));
                 cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
-                                    CUI_SHAPE_CHECKMARK, widget->ui_scale, cui_make_color(1.0f, 1.0f, 1.0f, 1.0f));
+                                    CUI_SHAPE_CHECKMARK_16, widget->ui_scale, cui_make_color(1.0f, 1.0f, 1.0f, 1.0f));
             }
             else
             {
                 cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
-                                    CUI_SHAPE_CHECKBOX_OUTER, widget->ui_scale, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
+                                    CUI_SHAPE_CHECKBOX_OUTER_16, widget->ui_scale, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
                 cui_draw_fill_shape(temporary_memory, ctx, (float) widget->rect.min.x, (float) (widget->rect.min.y + widget->effective_padding.min.y),
-                                    CUI_SHAPE_CHECKBOX_INNER, widget->ui_scale, cui_make_color(0.184f, 0.200f, 0.239f, 1.0f));
+                                    CUI_SHAPE_CHECKBOX_INNER_16, widget->ui_scale, cui_make_color(0.184f, 0.200f, 0.239f, 1.0f));
             }
 
             cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + widget->effective_padding.min.x),

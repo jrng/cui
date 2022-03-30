@@ -514,11 +514,11 @@ typedef struct CuiFont
 
 typedef enum CuiShapeType
 {
-    CUI_SHAPE_LOAD           = 0,
-    CUI_SHAPE_TAPE           = 1,
-    CUI_SHAPE_CHECKBOX_OUTER = 2,
-    CUI_SHAPE_CHECKBOX_INNER = 3,
-    CUI_SHAPE_CHECKMARK      = 4,
+    CUI_SHAPE_CHECKBOX_OUTER_16 = 0,
+    CUI_SHAPE_CHECKBOX_INNER_16 = 1,
+    CUI_SHAPE_CHECKMARK_16      = 2,
+    CUI_SHAPE_LOAD_24           = 3,
+    CUI_SHAPE_TAPE_24           = 4,
 } CuiShapeType;
 
 typedef enum CuiIconType

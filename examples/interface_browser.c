@@ -8,6 +8,11 @@ typedef struct InterfaceBrowser
     CuiWidget second_page;
 
     CuiWidget first_page_column;
+
+    CuiWidget icon_button_row;
+    CuiWidget icon_buttons[2];
+    CuiWidget last_icon_button;
+
     CuiWidget checkbox_row;
 
     CuiWidget checkboxes[3];
@@ -52,8 +57,18 @@ int main(int argc, char **argv)
 
     cui_widget_append_child(&app.first_page, &app.first_page_column);
 
-    cui_widget_gravity_box_init(&app.checkbox_row, CUI_DIRECTION_WEST);
+    cui_widget_gravity_box_init(&app.icon_button_row, CUI_DIRECTION_WEST);
+    cui_widget_append_child(&app.first_page_column, &app.icon_button_row);
 
+    cui_widget_icon_button_init(app.icon_buttons + 0, CuiStringLiteral("Load"), CUI_ICON_LOAD);
+    cui_widget_icon_button_init(app.icon_buttons + 1, CuiStringLiteral("Record"), CUI_ICON_TAPE);
+    cui_widget_box_init(&app.last_icon_button);
+
+    cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 0);
+    cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 1);
+    cui_widget_append_child(&app.icon_button_row, &app.last_icon_button);
+
+    cui_widget_gravity_box_init(&app.checkbox_row, CUI_DIRECTION_WEST);
     cui_widget_append_child(&app.first_page_column, &app.checkbox_row);
 
     cui_widget_checkbox_init(app.checkboxes + 0, CuiStringLiteral("First checkbox"), true);
