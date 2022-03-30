@@ -345,7 +345,12 @@ cui_init(int arg_count, char **args)
         return false;
     }
 
+    int major, minor;
+    int event_base, error_base;
+
     _cui_context.has_shared_memory_extension = (XShmQueryExtension(_cui_context.x11_display) == True);
+    _cui_context.has_xsync_extension = (XSyncQueryExtension(_cui_context.x11_display, &event_base, &error_base) &&
+                                        XSyncInitialize(_cui_context.x11_display, &major, &minor));
 
     if (_cui_context.has_shared_memory_extension)
     {
@@ -372,9 +377,12 @@ cui_init(int arg_count, char **args)
     }
 
     _cui_context.atom_manager = XInternAtom(_cui_context.x11_display, "MANAGER", false);
+    _cui_context.atom_cardinal = XInternAtom(_cui_context.x11_display, "CARDINAL", false);
     _cui_context.atom_utf8_string = XInternAtom(_cui_context.x11_display, "UTF8_STRING", false);
     _cui_context.atom_wm_protocols = XInternAtom(_cui_context.x11_display, "WM_PROTOCOLS", false);
     _cui_context.atom_wm_delete_window = XInternAtom(_cui_context.x11_display, "WM_DELETE_WINDOW", false);
+    _cui_context.atom_wm_sync_request = XInternAtom(_cui_context.x11_display, "_NET_WM_SYNC_REQUEST", false);
+    _cui_context.atom_wm_sync_request_counter = XInternAtom(_cui_context.x11_display, "_NET_WM_SYNC_REQUEST_COUNTER", false);
     _cui_context.atom_xsettings_screen = XInternAtom(_cui_context.x11_display, xsettings_screen_name, false);
     _cui_context.atom_xsettings_settings = XInternAtom(_cui_context.x11_display, "_XSETTINGS_SETTINGS", false);
 
@@ -448,7 +456,23 @@ cui_window_create()
     window->x11_window = XCreateWindow(_cui_context.x11_display, _cui_context.x11_root_window, 0, 0, width, height,
                                        0, 0, InputOutput, 0, CWEventMask, &window_attr);
 
-    XSetWMProtocols(_cui_context.x11_display, window->x11_window, &_cui_context.atom_wm_delete_window, 1);
+    Atom protocols[] = {
+        _cui_context.atom_wm_delete_window,
+        _cui_context.atom_wm_sync_request,
+    };
+
+    XSetWMProtocols(_cui_context.x11_display, window->x11_window, protocols, CuiArrayCount(protocols));
+
+    if (_cui_context.has_xsync_extension)
+    {
+        XSyncValue counter_value;
+        XSyncIntToValue(&counter_value, 0);
+
+        window->frame_sync = XSyncCreateCounter(_cui_context.x11_display, counter_value);
+
+        XChangeProperty(_cui_context.x11_display, window->x11_window, _cui_context.atom_wm_sync_request_counter,
+                        _cui_context.atom_cardinal, 32, PropModeReplace, (unsigned char *) &window->frame_sync, 1);
+    }
 
     window->last_left_click_time = INT16_MIN;
 
@@ -720,6 +744,16 @@ cui_step()
                               ev.xexpose.width, ev.xexpose.height);
                     XFlush(_cui_context.x11_display);
                 }
+
+                if (window->x11_configure_serial)
+                {
+                    XSyncValue counter_value;
+
+                    XSyncIntsToValue(&counter_value, window->x11_configure_serial & 0xFFFFFFFF, window->x11_configure_serial >> 32);
+                    XSyncSetCounter(_cui_context.x11_display, window->frame_sync, counter_value);
+
+                    window->x11_configure_serial = 0;
+                }
             } break;
 
             case ClientMessage:
@@ -729,6 +763,10 @@ cui_step()
                     if ((Atom) ev.xclient.data.l[0] == _cui_context.atom_wm_delete_window)
                     {
                         cui_window_close(window);
+                    }
+                    else if ((Atom) ev.xclient.data.l[0] == _cui_context.atom_wm_sync_request)
+                    {
+                        window->x11_sync_request_serial = ((uint64_t) ev.xclient.data.l[3] << 32) | (uint64_t) ev.xclient.data.l[2];
                     }
                 }
                 else if (ev.xclient.message_type == _cui_context.atom_manager)
@@ -743,6 +781,9 @@ cui_step()
 
             case ConfigureNotify:
             {
+                window->x11_configure_serial = window->x11_sync_request_serial;
+                window->x11_sync_request_serial = 0;
+
                 if ((window->backbuffer.width != ev.xconfigure.width) ||
                     (window->backbuffer.height != ev.xconfigure.height))
                 {

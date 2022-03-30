@@ -209,6 +209,7 @@ typedef struct CuiX11DesktopSettings
 } CuiX11DesktopSettings;
 
 #include <X11/Xlib.h>
+#include <X11/extensions/sync.h>
 #include <X11/extensions/XShm.h>
 
 typedef int gint;
@@ -298,6 +299,10 @@ struct CuiWindow
     GdkWindow *gdk_window;
     GtkWindow *gtk_window;
 
+    uint64_t x11_sync_request_serial;
+    uint64_t x11_configure_serial;
+
+    XSyncCounter frame_sync;
     XShmSegmentInfo shared_memory_info;
 
     bool backbuffer_is_ready;
@@ -325,13 +330,18 @@ typedef struct CuiContext
     GC x11_default_gc;
 
     Atom atom_manager;
+    Atom atom_cardinal;
     Atom atom_utf8_string;
     Atom atom_wm_protocols;
     Atom atom_wm_delete_window;
+    Atom atom_wm_sync_request;
+    Atom atom_wm_sync_request_counter;
     Atom atom_xsettings_screen;
     Atom atom_xsettings_settings;
 
+    bool has_xsync_extension;
     bool has_shared_memory_extension;
+
     int frame_completion_event;
 
     bool gtk3_initialized;
