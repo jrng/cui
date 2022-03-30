@@ -1,5 +1,6 @@
 #include <dlfcn.h>
 #include <stdlib.h>
+#include <sys/shm.h>
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <X11/Xutil.h>
@@ -188,6 +189,12 @@ _cui_window_get_from_x11_window(Window x11_window)
     return window;
 }
 
+static Bool
+_cui_is_shm_completion_event(Display *x11_display, XEvent *ev, XPointer arg)
+{
+    return (ev->type == (intptr_t) arg) ? True : False;
+}
+
 static void
 _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 {
@@ -199,13 +206,42 @@ _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 
     if (needed_size > window->backbuffer_memory_size)
     {
-        if (window->backbuffer.pixels)
-        {
-            cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
-        }
-
+        int64_t old_backbuffer_memory_size = window->backbuffer_memory_size;
         window->backbuffer_memory_size = CuiAlign(needed_size, CuiMiB(4));
-        window->backbuffer.pixels = cui_allocate_platform_memory(window->backbuffer_memory_size);
+
+        if (_cui_context.has_shared_memory_extension)
+        {
+            if (!window->backbuffer_is_ready)
+            {
+                XEvent ev;
+                XIfEvent(_cui_context.x11_display, &ev, _cui_is_shm_completion_event, (XPointer) (intptr_t) _cui_context.frame_completion_event);
+                window->backbuffer_is_ready = true;
+            }
+
+            if (window->backbuffer.pixels)
+            {
+                XShmDetach(_cui_context.x11_display, &window->shared_memory_info);
+                shmdt(window->shared_memory_info.shmaddr);
+                shmctl(window->shared_memory_info.shmid, IPC_RMID, 0);
+            }
+
+            window->shared_memory_info.shmid = shmget(IPC_PRIVATE, window->backbuffer_memory_size, IPC_CREAT | 0777);
+            window->shared_memory_info.shmaddr = (char *) shmat(window->shared_memory_info.shmid, 0, 0);
+            window->shared_memory_info.readOnly = True;
+
+            window->backbuffer.pixels = window->shared_memory_info.shmaddr;
+
+            XShmAttach(_cui_context.x11_display, &window->shared_memory_info);
+        }
+        else
+        {
+            if (window->backbuffer.pixels)
+            {
+                cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
+            }
+
+            window->backbuffer.pixels = cui_allocate_platform_memory(window->backbuffer_memory_size);
+        }
     }
 }
 
@@ -309,6 +345,13 @@ cui_init(int arg_count, char **args)
         return false;
     }
 
+    _cui_context.has_shared_memory_extension = (XShmQueryExtension(_cui_context.x11_display) == True);
+
+    if (_cui_context.has_shared_memory_extension)
+    {
+        _cui_context.frame_completion_event = XShmGetEventBase(_cui_context.x11_display) + ShmCompletion;
+    }
+
     _cui_context.default_ui_scale = 1.0f;
     _cui_context.double_click_time = _CUI_DEFAULT_DOUBLE_CLICK_TIME;
 
@@ -398,6 +441,7 @@ cui_window_create()
 
     window->backbuffer_memory_size = 0;
     window->backbuffer.pixels = 0;
+    window->backbuffer_is_ready = true;
 
     _cui_window_resize_backbuffer(window, width, height);
 
@@ -609,11 +653,17 @@ cui_step()
 
         CuiAssert(window);
 
+        if (_cui_context.has_shared_memory_extension && (ev.type == _cui_context.frame_completion_event))
+        {
+            window->backbuffer_is_ready = true;
+            continue;
+        }
+
         switch (ev.type)
         {
             case Expose:
             {
-#if 1
+#if 0
                 CuiRect client_rect;
 
                 client_rect.min.x = ev.xexpose.x;
@@ -621,8 +671,8 @@ cui_step()
                 client_rect.max.x = client_rect.min.x + ev.xexpose.width;
                 client_rect.max.y = client_rect.min.y + ev.xexpose.height;
 
-                // printf("expose (%d) (%d, %d, %d, %d)\n", ev.xexpose.count,
-                //        client_rect.min.x, client_rect.min.y, client_rect.max.x, client_rect.max.y);
+                printf("expose (%d) (%d, %d, %d, %d)\n", ev.xexpose.count,
+                       client_rect.min.x, client_rect.min.y, client_rect.max.x, client_rect.max.y);
 #endif
 
                 if (cui_window_needs_redraw(window))
@@ -647,10 +697,29 @@ cui_step()
                 backbuffer.green_mask = 0x00FF00;
                 backbuffer.blue_mask = 0x0000FF;
 
-                XPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc,
-                          &backbuffer, ev.xexpose.x, ev.xexpose.y, ev.xexpose.x, ev.xexpose.y,
-                          ev.xexpose.width, ev.xexpose.height);
-                XFlush(_cui_context.x11_display);
+                if (_cui_context.has_shared_memory_extension)
+                {
+                    if (!window->backbuffer_is_ready)
+                    {
+                        XEvent ev;
+                        XIfEvent(_cui_context.x11_display, &ev, _cui_is_shm_completion_event, (XPointer) (intptr_t) _cui_context.frame_completion_event);
+                    }
+
+                    backbuffer.width = CuiAlign(backbuffer.width, 16);
+                    backbuffer.obdata = (char *) &window->shared_memory_info;
+
+                    XShmPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
+                                 0, 0, 0, 0, window->backbuffer.width, window->backbuffer.height, True);
+
+                    window->backbuffer_is_ready = false;
+                }
+                else
+                {
+                    XPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc,
+                              &backbuffer, ev.xexpose.x, ev.xexpose.y, ev.xexpose.x, ev.xexpose.y,
+                              ev.xexpose.width, ev.xexpose.height);
+                    XFlush(_cui_context.x11_display);
+                }
             } break;
 
             case ClientMessage:

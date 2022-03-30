@@ -13,7 +13,7 @@ DEBUG_COMPILER_FLAGS="-Wall -std=gnu99 -g -O0"
 RELDEBUG_COMPILER_FLAGS="-std=gnu99 -g -O2"
 RELEASE_COMPILER_FLAGS="-std=gnu99 -O2 -DNDEBUG"
 
-LINKER_FLAGS="-lX11 -lm -ldl -pthread"
+LINKER_FLAGS="-lX11 -lXext -lm -ldl -pthread"
 
 case "$1" in
     "reldebug")

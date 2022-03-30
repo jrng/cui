@@ -209,6 +209,7 @@ typedef struct CuiX11DesktopSettings
 } CuiX11DesktopSettings;
 
 #include <X11/Xlib.h>
+#include <X11/extensions/XShm.h>
 
 typedef int gint;
 typedef char gchar;
@@ -297,6 +298,9 @@ struct CuiWindow
     GdkWindow *gdk_window;
     GtkWindow *gtk_window;
 
+    XShmSegmentInfo shared_memory_info;
+
+    bool backbuffer_is_ready;
     CuiBitmap backbuffer;
     int64_t backbuffer_memory_size;
 
@@ -326,6 +330,9 @@ typedef struct CuiContext
     Atom atom_wm_delete_window;
     Atom atom_xsettings_screen;
     Atom atom_xsettings_settings;
+
+    bool has_shared_memory_extension;
+    int frame_completion_event;
 
     bool gtk3_initialized;
 
