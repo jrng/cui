@@ -733,7 +733,7 @@ cui_step()
                     backbuffer.obdata = (char *) &window->shared_memory_info;
 
                     XShmPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
-                                 0, 0, 0, 0, window->backbuffer.width, window->backbuffer.height, True);
+                                 ev.xexpose.x, ev.xexpose.y, ev.xexpose.x, ev.xexpose.y, ev.xexpose.width, ev.xexpose.height, True);
 
                     window->backbuffer_is_ready = false;
                 }
@@ -908,12 +908,40 @@ cui_step()
             backbuffer.green_mask = 0x00FF00;
             backbuffer.blue_mask = 0x0000FF;
 
-            XPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc,
-                      &backbuffer, redraw_rect.min.x, redraw_rect.min.y,
-                      redraw_rect.min.x, redraw_rect.min.y,
-                      redraw_rect.max.x - redraw_rect.min.x,
-                      redraw_rect.max.y - redraw_rect.min.y);
-            XFlush(_cui_context.x11_display);
+            if (_cui_context.has_shared_memory_extension)
+            {
+                if (!window->backbuffer_is_ready)
+                {
+                    XEvent ev;
+                    XIfEvent(_cui_context.x11_display, &ev, _cui_is_shm_completion_event, (XPointer) (intptr_t) _cui_context.frame_completion_event);
+                }
+
+                backbuffer.width = CuiAlign(backbuffer.width, 16);
+                backbuffer.obdata = (char *) &window->shared_memory_info;
+
+                XShmPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
+                             redraw_rect.min.x, redraw_rect.min.y, redraw_rect.min.x, redraw_rect.min.y,
+                             cui_rect_get_width(redraw_rect), cui_rect_get_height(redraw_rect), True);
+
+                window->backbuffer_is_ready = false;
+            }
+            else
+            {
+                XPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc,
+                          &backbuffer, redraw_rect.min.x, redraw_rect.min.y, redraw_rect.min.x, redraw_rect.min.y,
+                          cui_rect_get_width(redraw_rect), cui_rect_get_height(redraw_rect));
+                XFlush(_cui_context.x11_display);
+            }
+
+            if (window->x11_configure_serial)
+            {
+                XSyncValue counter_value;
+
+                XSyncIntsToValue(&counter_value, window->x11_configure_serial & 0xFFFFFFFF, window->x11_configure_serial >> 32);
+                XSyncSetCounter(_cui_context.x11_display, window->frame_sync, counter_value);
+
+                window->x11_configure_serial = 0;
+            }
         }
     }
 }
