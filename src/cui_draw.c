@@ -52,7 +52,7 @@ cui_draw_fill_rect(CuiGraphicsContext *ctx, CuiRect rect, CuiColor color)
 }
 
 void
-cui_draw_fill_textured_rect(CuiGraphicsContext *ctx, CuiRect rect, CuiPoint uv, CuiColor color)
+cui_draw_fill_textured_rect(CuiGraphicsContext *ctx, CuiRect rect, CuiRect uv, CuiColor color)
 {
     CuiCommandBuffer *command_buffer = ctx->command_buffer;
 
@@ -72,6 +72,76 @@ cui_draw_fill_textured_rect(CuiGraphicsContext *ctx, CuiRect rect, CuiPoint uv, 
     textured_rect->clip_rect = ctx->clip_rect_offset;
 
     command_buffer->index_buffer[command_buffer->index_buffer_count++] = 0x80000000 | offset;
+}
+
+void
+cui_draw_fill_rounded_rect(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiRect rect, float radius, CuiColor color)
+{
+    int32_t offset = (int32_t) ceilf(radius);
+
+    CuiRect uv;
+
+    if (!cui_glyph_cache_find(ctx->cache, 0, CUI_SHAPE_ROUND_CORNER, radius, 0.0f, 0.0f, &uv))
+    {
+        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+        int32_t width  = offset;
+        int32_t height = offset;
+
+        uv = cui_glyph_cache_allocate_texture(ctx->cache, width, height);
+
+        CuiBitmap bitmap;
+        bitmap.width = cui_rect_get_width(uv);
+        bitmap.height = cui_rect_get_height(uv);
+        bitmap.stride = ctx->cache->texture.stride;
+        bitmap.pixels = (uint8_t *) ctx->cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
+
+        CuiPathCommand *path = 0;
+        cui_array_init(path, 16, temporary_memory);
+
+        float c = 0.552f;
+
+        cui_path_move_to(&path, radius, 0.0f);
+        cui_path_line_to(&path, 0.0f, 0.0f);
+        cui_path_line_to(&path, 0.0f, radius);
+        cui_path_cubic_curve_to(&path, radius * c, radius, radius, radius * c, radius, 0.0f);
+
+        CuiEdge *edge_list = 0;
+        cui_array_init(edge_list, 16, temporary_memory);
+
+        cui_path_to_edge_list(path, &edge_list);
+        cui_edge_list_fill(&bitmap, edge_list, cui_make_color(1.0f, 1.0f, 1.0f, 1.0f));
+
+        cui_glyph_cache_put(ctx->cache, 0, CUI_SHAPE_ROUND_CORNER, radius, 0.0f, 0.0f, uv);
+
+        cui_end_temporary_memory(temp_memory);
+    }
+
+    int32_t temp;
+
+    cui_draw_fill_textured_rect(ctx, cui_make_rect(rect.max.x - offset, rect.min.y, rect.max.x, rect.min.y + offset), uv, color);
+
+    temp = uv.min.x;
+    uv.min.x = uv.max.x;
+    uv.max.x = temp;
+
+    cui_draw_fill_textured_rect(ctx, cui_make_rect(rect.min.x, rect.min.y, rect.min.x + offset, rect.min.y + offset), uv, color);
+
+    temp = uv.min.y;
+    uv.min.y = uv.max.y;
+    uv.max.y = temp;
+
+    cui_draw_fill_textured_rect(ctx, cui_make_rect(rect.min.x, rect.max.y - offset, rect.min.x + offset, rect.max.y), uv, color);
+
+    temp = uv.min.x;
+    uv.min.x = uv.max.x;
+    uv.max.x = temp;
+
+    cui_draw_fill_textured_rect(ctx, cui_make_rect(rect.max.x - offset, rect.max.y - offset, rect.max.x, rect.max.y), uv, color);
+
+    cui_draw_fill_rect(ctx, cui_make_rect(rect.min.x + offset, rect.min.y, rect.max.x - offset, rect.min.y + offset), color);
+    cui_draw_fill_rect(ctx, cui_make_rect(rect.min.x, rect.min.y + offset, rect.max.x, rect.max.y - offset), color);
+    cui_draw_fill_rect(ctx, cui_make_rect(rect.min.x + offset, rect.max.y - offset, rect.max.x - offset, rect.max.y), color);
 }
 
 #include "cui_shapes.c"
@@ -165,7 +235,7 @@ cui_draw_fill_string(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiFon
 
             // TODO: if overlap
 
-            cui_draw_fill_textured_rect(ctx, rect, uv.min, color);
+            cui_draw_fill_textured_rect(ctx, rect, uv, color);
         }
 
         x += font->font_scale * cui_font_file_get_glyph_advance(font->file, glyph_index);

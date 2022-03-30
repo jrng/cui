@@ -514,11 +514,12 @@ typedef struct CuiFont
 
 typedef enum CuiShapeType
 {
-    CUI_SHAPE_CHECKBOX_OUTER_16 = 0,
-    CUI_SHAPE_CHECKBOX_INNER_16 = 1,
-    CUI_SHAPE_CHECKMARK_16      = 2,
-    CUI_SHAPE_LOAD_24           = 3,
-    CUI_SHAPE_TAPE_24           = 4,
+    CUI_SHAPE_ROUND_CORNER      = 0,
+    CUI_SHAPE_CHECKBOX_OUTER_16 = 1,
+    CUI_SHAPE_CHECKBOX_INNER_16 = 2,
+    CUI_SHAPE_CHECKMARK_16      = 3,
+    CUI_SHAPE_LOAD_24           = 4,
+    CUI_SHAPE_TAPE_24           = 5,
 } CuiShapeType;
 
 typedef enum CuiIconType
@@ -682,6 +683,7 @@ void cui_get_font_directories(CuiArena *temporary_memory, CuiString **font_dirs,
 
 CuiRect cui_draw_set_clip_rect(CuiGraphicsContext *ctx, CuiRect clip_rect);
 void cui_draw_fill_rect(CuiGraphicsContext *ctx, CuiRect rect, CuiColor color);
+void cui_draw_fill_rounded_rect(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiRect rect, float radius, CuiColor color);
 void cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x, float y, CuiShapeType shape_type, float scale, CuiColor color);
 void cui_draw_fill_string(CuiArena *temporary_memory, CuiGraphicsContext *ctx, CuiFont *font, float x, float y, CuiString str, CuiColor color);
 

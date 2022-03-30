@@ -614,11 +614,11 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
 
             if (widget->state & CUI_WIDGET_STATE_PRESSED)
             {
-                cui_draw_fill_rect(ctx, widget->action_rect, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
+                cui_draw_fill_rounded_rect(temporary_memory, ctx, widget->action_rect, widget->ui_scale * 2.0f, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
             }
             else if (widget->state & CUI_WIDGET_STATE_HOVERED)
             {
-                cui_draw_fill_rect(ctx, widget->action_rect, cui_make_color(0.129f, 0.145f, 0.169f, 1.0f));
+                cui_draw_fill_rounded_rect(temporary_memory, ctx, widget->action_rect, widget->ui_scale * 2.0f, cui_make_color(0.129f, 0.145f, 0.169f, 1.0f));
             }
 
             CuiFont *font = widget->window->base.font;

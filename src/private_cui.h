@@ -100,8 +100,8 @@ typedef struct CuiTexturedRect
 {
     uint32_t clip_rect;
     CuiRect rect;
+    CuiRect uv;
     CuiColor color;
-    CuiPoint uv;
 } CuiTexturedRect;
 
 typedef struct CuiCommandBuffer

@@ -13,7 +13,7 @@ _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect re
 
             CuiRect rect = textured_rect->rect;
             CuiColor color = textured_rect->color;
-            CuiPoint uv = textured_rect->uv;
+            CuiRect uv = textured_rect->uv;
             CuiRect clip_rect = initial_clip_rect;
 
             if (textured_rect->clip_rect)
@@ -27,29 +27,42 @@ _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect re
             int32_t x_max = rect.max.x;
             int32_t y_max = rect.max.y;
 
+            int32_t uv_dir_x = (uv.min.x <= uv.max.x) ? 1 : -1;
+            int32_t uv_dir_y = (uv.min.y <= uv.max.y) ? 1 : -1;
+
+            CuiAssert(cui_rect_get_width(rect) == (uv_dir_x * cui_rect_get_width(uv)));
+            CuiAssert(cui_rect_get_height(rect) == (uv_dir_y * cui_rect_get_height(uv)));
+
             if (x_min < clip_rect.min.x)
             {
-                uv.x += (clip_rect.min.x - x_min);
+                uv.min.x += uv_dir_x * (clip_rect.min.x - x_min);
                 x_min = clip_rect.min.x;
             }
 
             if (y_min < clip_rect.min.y)
             {
-                uv.y += (clip_rect.min.y - y_min);
+                uv.min.y += uv_dir_y * (clip_rect.min.y - y_min);
                 y_min = clip_rect.min.y;
             }
 
             if (x_max > clip_rect.max.x)
             {
+                uv.max.x += uv_dir_x * (x_max - clip_rect.max.x);
                 x_max = clip_rect.max.x;
             }
 
             if (y_max > clip_rect.max.y)
             {
+                uv.max.y += uv_dir_y * (y_max - clip_rect.max.y);
                 y_max = clip_rect.max.y;
             }
 
-            uint8_t *src_row = (uint8_t *) texture->pixels + (uv.y * texture->stride) + (uv.x * 4);
+            int32_t uv_start_x = (uv_dir_x < 0) ? uv.min.x - 1 : uv.min.x;
+            int32_t uv_start_y = (uv_dir_y < 0) ? uv.min.y - 1 : uv.min.y;
+
+            int32_t src_stride = uv_dir_y * texture->stride;
+
+            uint8_t *src_row = (uint8_t *) texture->pixels + (uv_start_y * texture->stride) + (uv_start_x * 4);
             uint8_t *dst_row = (uint8_t *) bitmap->pixels + (y_min * bitmap->stride) + (x_min * 4);
 
             for (int32_t y = y_min; y < y_max; y += 1)
@@ -64,7 +77,7 @@ _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect re
                     float texture_g = (float) ((*src_pixel >>  8) & 0xFF) / 255.0f;
                     float texture_b = (float) ((*src_pixel >>  0) & 0xFF) / 255.0f;
 
-                    src_pixel += 1;
+                    src_pixel += uv_dir_x;
 
                     float src_a = texture_a * color.a;
                     float src_r = texture_r * color.r;
@@ -89,7 +102,7 @@ _cui_render_tile(CuiBitmap *bitmap, CuiCommandBuffer *command_buffer, CuiRect re
                     *dst_pixel++ = (a << 24) | (r << 16) | (g << 8) | b;
                 }
 
-                src_row += texture->stride;
+                src_row += src_stride;
                 dst_row += bitmap->stride;
             }
         }

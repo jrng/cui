@@ -28,11 +28,12 @@ cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x
             {
                 int32_t width  = (int32_t) ceilf(scale * 16.0f);
                 int32_t height = (int32_t) ceilf(scale * 16.0f);
+
                 uv = cui_glyph_cache_allocate_texture(ctx->cache, width, height);
 
                 CuiBitmap bitmap;
-                bitmap.width = uv.max.x - uv.min.x;
-                bitmap.height = uv.max.y - uv.min.y;
+                bitmap.width = cui_rect_get_width(uv);
+                bitmap.height = cui_rect_get_height(uv);
                 bitmap.stride = ctx->cache->texture.stride;
                 bitmap.pixels = (uint8_t *) ctx->cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
 
@@ -61,11 +62,12 @@ cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x
             {
                 int32_t width  = (int32_t) ceilf(scale * 16.0f);
                 int32_t height = (int32_t) ceilf(scale * 16.0f);
+
                 uv = cui_glyph_cache_allocate_texture(ctx->cache, width, height);
 
                 CuiBitmap bitmap;
-                bitmap.width = uv.max.x - uv.min.x;
-                bitmap.height = uv.max.y - uv.min.y;
+                bitmap.width = cui_rect_get_width(uv);
+                bitmap.height = cui_rect_get_height(uv);
                 bitmap.stride = ctx->cache->texture.stride;
                 bitmap.pixels = (uint8_t *) ctx->cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
 
@@ -94,11 +96,12 @@ cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x
             {
                 int32_t width  = (int32_t) ceilf(scale * 16.0f);
                 int32_t height = (int32_t) ceilf(scale * 16.0f);
+
                 uv = cui_glyph_cache_allocate_texture(ctx->cache, width, height);
 
                 CuiBitmap bitmap;
-                bitmap.width = uv.max.x - uv.min.x;
-                bitmap.height = uv.max.y - uv.min.y;
+                bitmap.width = cui_rect_get_width(uv);
+                bitmap.height = cui_rect_get_height(uv);
                 bitmap.stride = ctx->cache->texture.stride;
                 bitmap.pixels = (uint8_t *) ctx->cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
 
@@ -129,11 +132,12 @@ cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x
             {
                 int32_t width  = (int32_t) ceilf(scale * 24.0f);
                 int32_t height = (int32_t) ceilf(scale * 24.0f);
+
                 uv = cui_glyph_cache_allocate_texture(ctx->cache, width, height);
 
                 CuiBitmap bitmap;
-                bitmap.width = uv.max.x - uv.min.x;
-                bitmap.height = uv.max.y - uv.min.y;
+                bitmap.width = cui_rect_get_width(uv);
+                bitmap.height = cui_rect_get_height(uv);
                 bitmap.stride = ctx->cache->texture.stride;
                 bitmap.pixels = (uint8_t *) ctx->cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
 
@@ -196,11 +200,12 @@ cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x
             {
                 int32_t width  = (int32_t) ceilf(scale * 24.0f);
                 int32_t height = (int32_t) ceilf(scale * 24.0f);
+
                 uv = cui_glyph_cache_allocate_texture(ctx->cache, width, height);
 
                 CuiBitmap bitmap;
-                bitmap.width = uv.max.x - uv.min.x;
-                bitmap.height = uv.max.y - uv.min.y;
+                bitmap.width = cui_rect_get_width(uv);
+                bitmap.height = cui_rect_get_height(uv);
                 bitmap.stride = ctx->cache->texture.stride;
                 bitmap.pixels = (uint8_t *) ctx->cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
 
@@ -249,10 +254,10 @@ cui_draw_fill_shape(CuiArena *temporary_memory, CuiGraphicsContext *ctx, float x
     CuiRect rect;
     rect.min.x = (int32_t) bitmap_x;
     rect.min.y = (int32_t) bitmap_y;
-    rect.max.x = rect.min.x + (uv.max.x - uv.min.x);
-    rect.max.y = rect.min.y + (uv.max.y - uv.min.y);
+    rect.max.x = rect.min.x + cui_rect_get_width(uv);
+    rect.max.y = rect.min.y + cui_rect_get_height(uv);
 
     // TODO: if overlap
 
-    cui_draw_fill_textured_rect(ctx, rect, uv.min, color);
+    cui_draw_fill_textured_rect(ctx, rect, uv, color);
 }
