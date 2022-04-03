@@ -1,3 +1,134 @@
+static inline bool
+_cui_is_printable_codepoint(uint32_t codepoint)
+{
+    return ((codepoint >= 32) && (codepoint != 127));
+}
+
+#define _cui_textinput_to_string(text_input) cui_make_string((text_input).data, (text_input).count)
+
+static void
+_cui_textinput_remove(CuiTextInput *input, int64_t start, int64_t end)
+{
+    CuiString str = _cui_textinput_to_string(*input);
+
+    int64_t byte_start = cui_utf8_get_character_byte_offset(str, start);
+    int64_t byte_end   = cui_utf8_get_character_byte_offset(str, end);
+
+    uint8_t *src = input->data + byte_end;
+    uint8_t *dst = input->data + byte_start;
+    int64_t count = input->count - byte_end;
+
+    while (count-- > 0)
+    {
+        *dst++ = *src++;
+    }
+
+    input->count -= (byte_end - byte_start);
+}
+
+static void
+_cui_textinput_delete_range(CuiTextInput *input)
+{
+    int64_t a = cui_min_int64(input->cursor_start, input->cursor_end);
+    int64_t b = cui_max_int64(input->cursor_start, input->cursor_end);
+    _cui_textinput_remove(input, a, b);
+    input->cursor_end   = a;
+    input->cursor_start = a;
+}
+
+static void
+_cui_textinput_insert(CuiTextInput *input, uint32_t codepoint)
+{
+    if (input->cursor_start != input->cursor_end)
+    {
+        _cui_textinput_delete_range(input);
+    }
+
+    uint8_t buf[4];
+    int64_t byte_count = cui_utf8_encode(CuiStringLiteral(buf), 0, codepoint);
+
+    if (byte_count)
+    {
+        CuiString str   = _cui_textinput_to_string(*input);
+        int64_t at_byte = cui_utf8_get_character_byte_offset(str, input->cursor_end);
+        int64_t count   = input->count - at_byte;
+
+        uint8_t *src = input->data + at_byte;
+        uint8_t *dst = src + byte_count;
+
+        cui_copy_memory(dst, src, count);
+        cui_copy_memory(input->data + at_byte, buf, byte_count);
+
+        input->count += byte_count;
+        input->cursor_end  += 1;
+        input->cursor_start = input->cursor_end;
+    }
+}
+
+static void
+_cui_textinput_backspace(CuiTextInput *input)
+{
+    if (input->cursor_start == input->cursor_end)
+    {
+        if (input->cursor_end > 0)
+        {
+            input->cursor_end -= 1;
+            _cui_textinput_delete_range(input);
+        }
+    }
+    else
+    {
+        _cui_textinput_delete_range(input);
+    }
+}
+
+static void
+_cui_textinput_move_left(CuiTextInput *input, bool shift_is_down)
+{
+    if (shift_is_down)
+    {
+        input->cursor_end = cui_max_int64(input->cursor_end - 1, (int64_t) 0);
+    }
+    else
+    {
+        int64_t at = cui_min_int64(input->cursor_start, input->cursor_end);
+        if (input->cursor_start == input->cursor_end)
+        {
+            input->cursor_end = cui_max_int64(at - 1, (int64_t) 0);
+        }
+        else
+        {
+            input->cursor_end = at;
+        }
+        input->cursor_start = input->cursor_end;
+    }
+}
+
+static void
+_cui_textinput_move_right(CuiTextInput *input, bool shift_is_down)
+{
+    if (shift_is_down)
+    {
+        CuiString str = _cui_textinput_to_string(*input);
+        int64_t max_count = cui_utf8_get_character_count(str);
+        input->cursor_end = cui_min_int64(input->cursor_end + 1, max_count);
+    }
+    else
+    {
+        int64_t at = cui_max_int64(input->cursor_start, input->cursor_end);
+        if (input->cursor_start == input->cursor_end)
+        {
+            int64_t max_count = cui_utf8_get_character_count(_cui_textinput_to_string(*input));
+            input->cursor_end = cui_min_int64(at + 1, max_count);
+        }
+        else
+        {
+            input->cursor_end = at;
+        }
+        input->cursor_start = input->cursor_end;
+    }
+}
+
 void
 cui_widget_box_init(CuiWidget *widget)
 {
@@ -91,6 +222,30 @@ cui_widget_checkbox_init(CuiWidget *widget, CuiString label, bool initial_value)
     widget->ui_scale = 0.0f;
     widget->label = label;
     widget->value = initial_value;
+
+    CuiDListInit(&widget->list);
+    CuiDListInit(&widget->children);
+
+    widget->on_action = 0;
+}
+
+void
+cui_widget_textinput_init(CuiWidget *widget, void *buffer, int64_t size)
+{
+    widget->type = CUI_WIDGET_TYPE_TEXTINPUT;
+    widget->flags = 0;
+    widget->state = 0;
+    widget->parent = 0;
+    widget->window = 0;
+    widget->color_theme = 0;
+    widget->ui_scale = 0.0f;
+    widget->label = cui_make_string(0, 0);
+    widget->icon_type = CUI_ICON_NONE;
+    widget->text_input.cursor_start = 0;
+    widget->text_input.cursor_end = 0;
+    widget->text_input.count = 0;
+    widget->text_input.capacity = size;
+    widget->text_input.data = (uint8_t *) buffer;
 
     CuiDListInit(&widget->list);
     CuiDListInit(&widget->children);
@@ -266,6 +421,19 @@ cui_widget_get_preferred_size(CuiWidget *widget)
             result.x = checkbox_icon_size + widget->effective_inline_padding + (int32_t) ceilf(label_width);
             result.y = cui_max_int32(checkbox_icon_size, font->line_height);
         } break;
+
+        case CUI_WIDGET_TYPE_TEXTINPUT:
+        {
+            // TODO: this only is correct for 16x16 icons
+            int32_t icon_width = (int32_t) ceilf(widget->ui_scale * 16.0f);
+            int32_t icon_height = icon_width;
+
+            int32_t preferred_text_width = lroundf(widget->ui_scale * 100.0f);
+
+            result.x = widget->effective_padding.min.x + widget->effective_padding.max.x +
+                       icon_width + preferred_text_width;
+            result.y = 2 * widget->effective_inline_padding + icon_height;
+        } break;
     }
 
     return result;
@@ -337,6 +505,18 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
 
             widget->effective_inline_padding = lroundf(widget->ui_scale * 4.0f);
             widget->effective_padding.min.x = checkbox_icon_width + widget->effective_inline_padding;
+        } break;
+
+        case CUI_WIDGET_TYPE_TEXTINPUT:
+        {
+            int32_t px1 = lroundf(widget->ui_scale * 1.0f);
+            int32_t px4 = lroundf(widget->ui_scale * 4.0f);
+
+            int32_t padding = px1 + px4;
+
+            widget->effective_inline_padding = padding;
+            widget->effective_padding.min.x = padding;
+            widget->effective_padding.max.x = padding;
         } break;
     }
 }
@@ -486,6 +666,17 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
             int32_t checkbox_icon_height = (int32_t) ceilf(widget->ui_scale * 16.0f);
 
             widget->effective_padding.min.y = (height - checkbox_icon_height) / 2;
+            widget->effective_padding.max.y = (height - font->line_height) / 2;
+        } break;
+
+        case CUI_WIDGET_TYPE_TEXTINPUT:
+        {
+            CuiFont *font = widget->window->base.font;
+
+            int32_t height = cui_rect_get_height(widget->rect);
+            int32_t icon_height = (int32_t) ceilf(widget->ui_scale * 16.0f);
+
+            widget->effective_padding.min.y = (height - icon_height) / 2;
             widget->effective_padding.max.y = (height - font->line_height) / 2;
         } break;
     }
@@ -675,6 +866,64 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
             cui_draw_fill_string(temporary_memory, ctx, font, (float) (widget->rect.min.x + widget->effective_padding.min.x),
                                  (float) (widget->rect.min.y + widget->effective_padding.max.y) + font->baseline_offset,
                                  widget->label, cui_make_color(0.616f, 0.647f, 0.706f, 1.0f));
+
+            cui_draw_set_clip_rect(ctx, prev_clip);
+        } break;
+
+        case CUI_WIDGET_TYPE_TEXTINPUT:
+        {
+            CuiRect prev_clip = cui_draw_set_clip_rect(ctx, widget->rect);
+
+            CuiFont *font = widget->window->base.font;
+
+            int32_t px1 = lroundf(widget->ui_scale * 1.0f);
+            float radius = lroundf(widget->ui_scale * 3.0f);
+
+            CuiRect border_rect = widget->rect;
+            CuiRect fill_rect = cui_make_rect(border_rect.min.x + px1, border_rect.min.y + px1,
+                                              border_rect.max.x - px1, border_rect.max.y - px1);
+
+            if (widget->state & CUI_WIDGET_STATE_FOCUSED)
+            {
+                cui_draw_fill_rounded_rect(temporary_memory, ctx, border_rect, radius, cui_make_color(0.337f, 0.541f, 0.949f, 1.0f));
+                cui_draw_fill_rounded_rect(temporary_memory, ctx, fill_rect, radius - (float) px1, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
+            }
+            else
+            {
+                cui_draw_fill_rounded_rect(temporary_memory, ctx, border_rect, radius, cui_make_color(0.184f, 0.200f, 0.239f, 1.0f));
+                cui_draw_fill_rounded_rect(temporary_memory, ctx, fill_rect, radius - (float) px1, cui_make_color(0.094f, 0.102f, 0.122f, 1.0f));
+            }
+
+            cui_draw_set_clip_rect(ctx, fill_rect);
+
+            CuiString str = _cui_textinput_to_string(widget->text_input);
+
+            int32_t x0 = widget->rect.min.x + widget->effective_padding.min.x;
+            int32_t y0 = widget->rect.min.y + widget->effective_padding.max.y;
+
+            float cursor_end = cui_font_get_substring_width(font, str, widget->text_input.cursor_end);
+
+            if (widget->text_input.cursor_start != widget->text_input.cursor_end)
+            {
+                int32_t cursor_start = lroundf(cui_font_get_substring_width(font, str, widget->text_input.cursor_start));
+                int32_t _cursor_end = lroundf(cursor_end);
+                int32_t a = cui_min_int32(cursor_start, _cursor_end);
+                int32_t b = cui_max_int32(cursor_start, _cursor_end);
+
+                cui_draw_fill_rect(ctx, cui_make_rect(x0 + a, y0, x0 + b, y0 + font->line_height), cui_make_color(0.337f, 0.541f, 0.949f, 0.75f));
+            }
+
+            cui_draw_fill_string(temporary_memory, ctx, font, (float) x0, (float) y0 + font->baseline_offset,
+                                 str, cui_make_color(0.843f, 0.855f, 0.878f, 1.0f));
+
+            if (widget->state & CUI_WIDGET_STATE_FOCUSED)
+            {
+                float cursor_width = roundf(widget->ui_scale * 1.0f);
+                int32_t cursor_x0 = x0 + lroundf(cursor_end + 0.5f * cursor_width);
+                int32_t cursor_x1 = cursor_x0 + (int32_t) cursor_width;
+
+                cui_draw_fill_rect(ctx, cui_make_rect(cursor_x0, y0, cursor_x1, y0 + font->line_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f));
+            }
 
             cui_draw_set_clip_rect(ctx, prev_clip);
         } break;
@@ -1058,6 +1307,89 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                 } break;
 
                 default: break;
+            }
+        } break;
+
+        case CUI_WIDGET_TYPE_TEXTINPUT:
+        {
+            switch (event_type)
+            {
+                case CUI_EVENT_TYPE_ENTER:
+                {
+                    result = true;
+                } break;
+
+                case CUI_EVENT_TYPE_MOVE:
+                {
+                    result = true;
+                } break;
+
+                case CUI_EVENT_TYPE_LEAVE:
+                {
+                    result = true;
+                } break;
+
+                case CUI_EVENT_TYPE_PRESS:
+                case CUI_EVENT_TYPE_DOUBLE_CLICK:
+                {
+                    widget->state |= CUI_WIDGET_STATE_FOCUSED;
+                    cui_window_set_focused(window, widget);
+                    cui_window_request_redraw(window, widget->rect);
+                    result = true;
+                } break;
+
+                case CUI_EVENT_TYPE_KEY_PRESS:
+                {
+                    if (window->base.event.key.ctrl_is_down)
+                    {
+                    }
+                    else if (_cui_is_printable_codepoint(window->base.event.key.codepoint))
+                    {
+                        _cui_textinput_insert(&widget->text_input, window->base.event.key.codepoint);
+                        cui_window_request_redraw(window, widget->rect);
+                    }
+                    else
+                    {
+                        switch(window->base.event.key.codepoint)
+                        {
+                            case CUI_KEY_BACKSPACE:
+                            {
+                                _cui_textinput_backspace(&widget->text_input);
+                                cui_window_request_redraw(window, widget->rect);
+                            } break;
+
+                            case CUI_KEY_LEFT:
+                            {
+                                _cui_textinput_move_left(&widget->text_input, window->base.event.key.shift_is_down);
+                                cui_window_request_redraw(window, widget->rect);
+                            } break;
+
+                            case CUI_KEY_RIGHT:
+                            {
+                                _cui_textinput_move_right(&widget->text_input, window->base.event.key.shift_is_down);
+                                cui_window_request_redraw(window, widget->rect);
+                            } break;
+
+                            case CUI_KEY_TAB:
+                            {
+                            } break;
+                        }
+                    }
+                } break;
+
+                case CUI_EVENT_TYPE_FOCUS:
+                {
+                } break;
+
+                case CUI_EVENT_TYPE_UNFOCUS:
+                {
+                    if (widget->state & CUI_WIDGET_STATE_FOCUSED)
+                    {
+                        widget->state &= ~CUI_WIDGET_STATE_FOCUSED;
+                        cui_window_request_redraw(window, widget->rect);
+                    }
+                    result = true;
+                } break;
             }
         } break;
     }

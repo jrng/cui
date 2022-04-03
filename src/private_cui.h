@@ -293,6 +293,7 @@ struct CuiWindow
     CuiWindowBase base;
 
     Window x11_window;
+    XIC x11_input_context;
 
     int32_t last_left_click_time;
 
@@ -328,6 +329,7 @@ typedef struct CuiContext
     Window x11_settings_window;
 
     GC x11_default_gc;
+    XIM x11_input_method;
 
     Atom atom_manager;
     Atom atom_cardinal;

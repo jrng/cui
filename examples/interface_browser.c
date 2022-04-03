@@ -14,9 +14,12 @@ typedef struct InterfaceBrowser
     CuiWidget last_icon_button;
 
     CuiWidget checkbox_row;
-
     CuiWidget checkboxes[3];
     CuiWidget last_checkbox;
+
+    CuiWidget textinput_row;
+    CuiWidget textinputs[3];
+    CuiWidget last_textinput;
 
     CuiWidget first_page_last_row;
 } InterfaceBrowser;
@@ -57,29 +60,51 @@ int main(int argc, char **argv)
 
     cui_widget_append_child(&app.first_page, &app.first_page_column);
 
-    cui_widget_gravity_box_init(&app.icon_button_row, CUI_DIRECTION_WEST);
-    cui_widget_append_child(&app.first_page_column, &app.icon_button_row);
+    { // icon buttons
+        cui_widget_gravity_box_init(&app.icon_button_row, CUI_DIRECTION_WEST);
+        cui_widget_append_child(&app.first_page_column, &app.icon_button_row);
 
-    cui_widget_icon_button_init(app.icon_buttons + 0, CuiStringLiteral("Load"), CUI_ICON_LOAD);
-    cui_widget_icon_button_init(app.icon_buttons + 1, CuiStringLiteral("Record"), CUI_ICON_TAPE);
-    cui_widget_box_init(&app.last_icon_button);
+        cui_widget_icon_button_init(app.icon_buttons + 0, CuiStringLiteral("Load"), CUI_ICON_LOAD);
+        cui_widget_icon_button_init(app.icon_buttons + 1, CuiStringLiteral("Record"), CUI_ICON_TAPE);
+        cui_widget_box_init(&app.last_icon_button);
 
-    cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 0);
-    cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 1);
-    cui_widget_append_child(&app.icon_button_row, &app.last_icon_button);
+        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 0);
+        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 1);
+        cui_widget_append_child(&app.icon_button_row, &app.last_icon_button);
+    }
 
-    cui_widget_gravity_box_init(&app.checkbox_row, CUI_DIRECTION_WEST);
-    cui_widget_append_child(&app.first_page_column, &app.checkbox_row);
+    { // checkboxes
+        cui_widget_gravity_box_init(&app.checkbox_row, CUI_DIRECTION_WEST);
+        cui_widget_append_child(&app.first_page_column, &app.checkbox_row);
 
-    cui_widget_checkbox_init(app.checkboxes + 0, CuiStringLiteral("First checkbox"), true);
-    cui_widget_checkbox_init(app.checkboxes + 1, CuiStringLiteral("Second checkbox"), false);
-    cui_widget_checkbox_init(app.checkboxes + 2, CuiStringLiteral("Third checkbox"), true);
-    cui_widget_box_init(&app.last_checkbox);
+        cui_widget_checkbox_init(app.checkboxes + 0, CuiStringLiteral("First checkbox"), true);
+        cui_widget_checkbox_init(app.checkboxes + 1, CuiStringLiteral("Second checkbox"), false);
+        cui_widget_checkbox_init(app.checkboxes + 2, CuiStringLiteral("Third checkbox"), true);
+        cui_widget_box_init(&app.last_checkbox);
 
-    cui_widget_append_child(&app.checkbox_row, app.checkboxes + 0);
-    cui_widget_append_child(&app.checkbox_row, app.checkboxes + 1);
-    cui_widget_append_child(&app.checkbox_row, app.checkboxes + 2);
-    cui_widget_append_child(&app.checkbox_row, &app.last_checkbox);
+        cui_widget_append_child(&app.checkbox_row, app.checkboxes + 0);
+        cui_widget_append_child(&app.checkbox_row, app.checkboxes + 1);
+        cui_widget_append_child(&app.checkbox_row, app.checkboxes + 2);
+        cui_widget_append_child(&app.checkbox_row, &app.last_checkbox);
+    }
+
+    { // textinputs
+        cui_widget_gravity_box_init(&app.textinput_row, CUI_DIRECTION_WEST);
+        cui_widget_append_child(&app.first_page_column, &app.textinput_row);
+
+        int64_t textinput_buffer_size = CuiKiB(1);
+        uint8_t *textinput_buffer = (uint8_t *) cui_allocate_platform_memory(CuiArrayCount(app.textinputs) * textinput_buffer_size);
+
+        cui_widget_textinput_init(app.textinputs + 0, textinput_buffer + (0 * textinput_buffer_size), textinput_buffer_size);
+        cui_widget_textinput_init(app.textinputs + 1, textinput_buffer + (1 * textinput_buffer_size), textinput_buffer_size);
+        cui_widget_textinput_init(app.textinputs + 2, textinput_buffer + (2 * textinput_buffer_size), textinput_buffer_size);
+        cui_widget_box_init(&app.last_textinput);
+
+        cui_widget_append_child(&app.textinput_row, app.textinputs + 0);
+        cui_widget_append_child(&app.textinput_row, app.textinputs + 1);
+        cui_widget_append_child(&app.textinput_row, app.textinputs + 2);
+        cui_widget_append_child(&app.textinput_row, &app.last_textinput);
+    }
 
     cui_widget_box_init(&app.first_page_last_row);
     cui_widget_append_child(&app.first_page_column, &app.first_page_last_row);

@@ -237,7 +237,7 @@ _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
         {
             if (window->backbuffer.pixels)
             {
-                cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
+                cui_deallocate_platform_memory(window->backbuffer.pixels, old_backbuffer_memory_size);
             }
 
             window->backbuffer.pixels = cui_allocate_platform_memory(window->backbuffer_memory_size);
@@ -338,6 +338,11 @@ cui_init(int arg_count, char **args)
         pthread_create(threads + thread_index, 0, _cui_thread_proc, 0);
     }
 
+    if (!XSupportsLocale() || !XSetLocaleModifiers("@im=none"))
+    {
+        return false;
+    }
+
     _cui_context.x11_display = XOpenDisplay(0);
 
     if (!_cui_context.x11_display)
@@ -355,6 +360,13 @@ cui_init(int arg_count, char **args)
     if (_cui_context.has_shared_memory_extension)
     {
         _cui_context.frame_completion_event = XShmGetEventBase(_cui_context.x11_display) + ShmCompletion;
+    }
+
+    _cui_context.x11_input_method = XOpenIM(_cui_context.x11_display, 0, 0, 0);
+
+    if (!_cui_context.x11_input_method)
+    {
+        return false;
     }
 
     _cui_context.default_ui_scale = 1.0f;
@@ -476,6 +488,18 @@ cui_window_create()
 
     window->last_left_click_time = INT16_MIN;
 
+    window->x11_input_context = XCreateIC(_cui_context.x11_input_method, XNInputStyle,
+                                          XIMPreeditNothing | XIMStatusNothing,
+                                          XNClientWindow, window->x11_window, (void *) 0);
+
+    if (!window->x11_input_context)
+    {
+        cui_window_destroy(window);
+        return 0;
+    }
+
+    XSetICFocus(window->x11_input_context);
+
     return window;
 }
 
@@ -525,9 +549,28 @@ cui_window_close(CuiWindow *window)
 void
 cui_window_destroy(CuiWindow *window)
 {
-    if (window->backbuffer.pixels)
+    if (_cui_context.has_shared_memory_extension)
     {
-        cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
+        if (!window->backbuffer_is_ready)
+        {
+            XEvent ev;
+            XIfEvent(_cui_context.x11_display, &ev, _cui_is_shm_completion_event, (XPointer) (intptr_t) _cui_context.frame_completion_event);
+            window->backbuffer_is_ready = true;
+        }
+
+        if (window->backbuffer.pixels)
+        {
+            XShmDetach(_cui_context.x11_display, &window->shared_memory_info);
+            shmdt(window->shared_memory_info.shmaddr);
+            shmctl(window->shared_memory_info.shmid, IPC_RMID, 0);
+        }
+    }
+    else
+    {
+        if (window->backbuffer.pixels)
+        {
+            cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
+        }
     }
 
     _cui_remove_window(window);
@@ -875,6 +918,82 @@ cui_step()
                         cui_window_handle_event(window, CUI_EVENT_TYPE_RELEASE);
                     } break;
                 }
+            } break;
+
+            case KeyPress:
+            {
+                KeySym key;
+                Status status;
+                char buffer[32];
+
+                int ret = Xutf8LookupString(window->x11_input_context, &ev.xkey, buffer,
+                                            sizeof(buffer), &key, &status);
+
+                CuiAssert(status != XBufferOverflow);
+
+#define _CUI_KEY_PRESS_EVENT(key_id)                                                \
+    window->base.event.key.codepoint     = (key_id);                                \
+    window->base.event.key.alt_is_down   = 1 & (ev.xkey.state >> Mod1MapIndex);     \
+    window->base.event.key.ctrl_is_down  = 1 & (ev.xkey.state >> ControlMapIndex);  \
+    window->base.event.key.shift_is_down = 1 & (ev.xkey.state >> ShiftMapIndex);    \
+    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_PRESS);
+
+                if ((status == XLookupKeySym) || (status == XLookupBoth))
+                {
+                    switch (key)
+                    {
+                        case XK_BackSpace: { _CUI_KEY_PRESS_EVENT(CUI_KEY_BACKSPACE); } break;
+                        case XK_Tab:       { _CUI_KEY_PRESS_EVENT(CUI_KEY_TAB);       } break;
+                        case XK_Linefeed:  { _CUI_KEY_PRESS_EVENT(CUI_KEY_LINEFEED);  } break;
+                        case XK_Return:    { _CUI_KEY_PRESS_EVENT(CUI_KEY_ENTER);     } break;
+                        case XK_Escape:    { _CUI_KEY_PRESS_EVENT(CUI_KEY_ESCAPE);    } break;
+                        case XK_Delete:    { _CUI_KEY_PRESS_EVENT(CUI_KEY_DELETE);    } break;
+                        case XK_Up:        { _CUI_KEY_PRESS_EVENT(CUI_KEY_UP);        } break;
+                        case XK_Down:      { _CUI_KEY_PRESS_EVENT(CUI_KEY_DOWN);      } break;
+                        case XK_Left:      { _CUI_KEY_PRESS_EVENT(CUI_KEY_LEFT);      } break;
+                        case XK_Right:     { _CUI_KEY_PRESS_EVENT(CUI_KEY_RIGHT);     } break;
+
+                        case XK_F1:  case XK_F2:  case XK_F3:  case XK_F4:
+                        case XK_F5:  case XK_F6:  case XK_F7:  case XK_F8:
+                        case XK_F9:  case XK_F10: case XK_F11: case XK_F12:
+                        {
+                            _CUI_KEY_PRESS_EVENT(CUI_KEY_F1 + (key - XK_F1));
+                        } break;
+
+                        default:
+                        {
+                            if ((key >= 32) && (key < 127))
+                            {
+                                _CUI_KEY_PRESS_EVENT(key);
+                            }
+                        } break;
+                    }
+                }
+
+                if ((status == XLookupChars) || (status == XLookupBoth))
+                {
+                    int64_t i = 0;
+                    CuiString str = cui_make_string(buffer, ret);
+
+                    while (i < str.count)
+                    {
+                        CuiUnicodeResult utf8 = cui_utf8_decode(str, i);
+
+                        if (utf8.codepoint > 127)
+                        {
+                            _CUI_KEY_PRESS_EVENT(utf8.codepoint);
+                        }
+
+                        i += utf8.byte_count;
+                    }
+                }
+
+#undef _CUI_KEY_PRESS_EVENT
+
+            } break;
+
+            case KeyRelease:
+            {
             } break;
         }
     }

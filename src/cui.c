@@ -258,6 +258,41 @@ cui_utf16le_to_utf8(CuiArena *arena, CuiString utf16_str)
     return result;
 }
 
+int64_t
+cui_utf8_get_character_count(CuiString str)
+{
+    int64_t index = 0;
+    int64_t count = 0;
+
+    while (index < str.count)
+    {
+        index += cui_utf8_decode(str, index).byte_count;
+        count += 1;
+    }
+
+    return count;
+}
+
+int64_t
+cui_utf8_get_character_byte_offset(CuiString str, int64_t character_index)
+{
+    int64_t index = 0;
+    int64_t count = 0;
+
+    while (index < str.count)
+    {
+        if (count == character_index)
+        {
+            break;
+        }
+
+        index += cui_utf8_decode(str, index).byte_count;
+        count += 1;
+    }
+
+    return index;
+}
+
 CuiString
 cui_copy_string(CuiArena *arena, CuiString str)
 {
@@ -365,6 +400,23 @@ cui_to_c_string(CuiArena *arena, CuiString str)
     *dst = 0;
 
     return result;
+}
+
+void
+cui_copy_memory(void *_dst, void *_src, uint64_t size)
+{
+    if (_dst < _src)
+    {
+        uint8_t *src = (uint8_t *) _src;
+        uint8_t *dst = (uint8_t *) _dst;
+        while (size--) *dst++ = *src++;
+    }
+    else if (_dst > _src)
+    {
+        uint8_t *src = (uint8_t *) _src + size;
+        uint8_t *dst = (uint8_t *) _dst + size;
+        while (size--) *--dst = *--src;
+    }
 }
 
 void
@@ -548,12 +600,14 @@ _cui_font_manager_scan_fonts(CuiArena *temporary_memory, CuiFontManager *font_ma
 
     cui_end_temporary_memory(temp_memory);
 
+#if 0
     for (int32_t i = 0; i < cui_array_count(font_manager->font_refs); i += 1)
     {
         CuiFontRef *ref = font_manager->font_refs + i;
 
         printf("'%.*s' -> '%.*s'\n", (int32_t) ref->name.count, ref->name.data, (int32_t) ref->path.count, ref->path.data);
     }
+#endif
 }
 
 #define _cui_font_manager_find_font(temporary_memory, font_manager, ...) \
@@ -704,6 +758,7 @@ _cui_add_window()
         cui_glyph_cache_create(&window->base.glyph_cache);
 
         window->base.font = _cui_font_manager_find_font(&_cui_context.common.temporary_memory, &_cui_context.common.font_manager,
+                                                        // Common
                                                         CuiStringLiteral("Inter-Regular"),
                                                         // Linux
                                                         CuiStringLiteral("Roboto-Regular"),

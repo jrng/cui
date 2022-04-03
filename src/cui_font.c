@@ -1020,7 +1020,9 @@ cui_font_file_init(CuiFontFile *font_file, void *data, int64_t count)
     table_offset = 4;
     table_count = cui_read_u16_be(font_file->cmap, 2);
 
+#if 0
     printf("cmap sub table count = %u\n", table_count);
+#endif
 
     for (uint16_t table_index = 0; table_index < table_count; table_index += 1)
     {
@@ -1199,6 +1201,44 @@ cui_font_get_string_width(CuiFont *font, CuiString str)
 
             prev_glyph_index = glyph_index;
             index += utf8.byte_count;
+        }
+    }
+
+    return width;
+}
+
+float
+cui_font_get_substring_width(CuiFont *font, CuiString str, int64_t character_index)
+{
+    float width = 0.0f;
+
+    if ((str.count > 0) && (character_index > 0))
+    {
+        int64_t index = 0;
+        int64_t count = 1;
+
+        CuiUnicodeResult utf8 = cui_utf8_decode(str, index);
+        uint32_t prev_glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->file, utf8.codepoint);
+
+        width += font->font_scale * cui_font_file_get_glyph_advance(font->file, prev_glyph_index);
+        index += utf8.byte_count;
+
+        while (index < str.count)
+        {
+            if (count == character_index)
+            {
+                break;
+            }
+
+            utf8 = cui_utf8_decode(str, index);
+            uint32_t glyph_index = cui_font_file_get_glyph_index_from_codepoint(font->file, utf8.codepoint);
+
+            width += font->font_scale * (cui_font_file_get_glyph_advance(font->file, glyph_index) +
+                                         0 /* cui_font_file_get_glyph_kerning(font->file, prev_glyph_index, glyph_index) */);
+
+            prev_glyph_index = glyph_index;
+            index += utf8.byte_count;
+            count += 1;
         }
     }
 

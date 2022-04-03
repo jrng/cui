@@ -42,12 +42,17 @@ cui_window_set_focused(CuiWindow *window, CuiWidget *widget)
 {
     CuiWindowBase *window_base = (CuiWindowBase *) window;
 
-    if (window_base->focused_widget)
-    {
-        // TODO: do something with the old widget
-    }
+    CuiWidget *old_widget = window_base->focused_widget;
 
-    window_base->focused_widget = widget;
+    if (widget != old_widget)
+    {
+        window_base->focused_widget = widget;
+
+        for (CuiWidget *w = old_widget; w && !cui_widget_contains(w, widget); w = w->parent)
+        {
+            cui_widget_handle_event(w, CUI_EVENT_TYPE_UNFOCUS);
+        }
+    }
 }
 
 void
@@ -123,6 +128,14 @@ cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
             else
             {
                 cui_widget_handle_event(&window_base->root_widget, CUI_EVENT_TYPE_WHEEL);
+            }
+        } break;
+
+        case CUI_EVENT_TYPE_KEY_PRESS:
+        {
+            if (window_base->focused_widget)
+            {
+                cui_widget_handle_event(window_base->focused_widget, CUI_EVENT_TYPE_KEY_PRESS);
             }
         } break;
 

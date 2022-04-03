@@ -96,6 +96,9 @@
 static inline int32_t cui_min_int32(int32_t a, int32_t b) { return (a < b) ? a : b; }
 static inline int32_t cui_max_int32(int32_t a, int32_t b) { return (a > b) ? a : b; }
 
+static inline int64_t cui_min_int64(int64_t a, int64_t b) { return (a < b) ? a : b; }
+static inline int64_t cui_max_int64(int64_t a, int64_t b) { return (a > b) ? a : b; }
+
 static inline float cui_min_float(float a, float b) { return (a < b) ? a : b; }
 static inline float cui_max_float(float a, float b) { return (a > b) ? a : b; }
 
@@ -309,7 +312,50 @@ typedef enum CuiEventType
     CUI_EVENT_TYPE_DRAG         = 5,
     CUI_EVENT_TYPE_RELEASE      = 6,
     CUI_EVENT_TYPE_WHEEL        = 7,
+    CUI_EVENT_TYPE_KEY_PRESS    = 8,
+    CUI_EVENT_TYPE_KEY_RELEASE  = 9,
+    CUI_EVENT_TYPE_FOCUS        = 10,
+    CUI_EVENT_TYPE_UNFOCUS      = 11,
 } CuiEventType;
+
+typedef enum CuiKeyId
+{
+    CUI_KEY_UNKNOWN,
+
+    CUI_KEY_ALT = 1,
+    CUI_KEY_CTRL = 2,
+    CUI_KEY_SHIFT = 3,
+
+    CUI_KEY_UP = 4,
+    CUI_KEY_DOWN = 5,
+    CUI_KEY_LEFT = 6,
+    CUI_KEY_RIGHT = 7,
+
+    CUI_KEY_BACKSPACE = 8,
+    CUI_KEY_TAB = 9,
+    CUI_KEY_LINEFEED = 10,
+    CUI_KEY_ENTER = 13,
+
+    CUI_KEY_F1  = 14,
+    CUI_KEY_F2  = 15,
+    CUI_KEY_F3  = 16,
+    CUI_KEY_F4  = 17,
+    CUI_KEY_F5  = 18,
+    CUI_KEY_F6  = 19,
+    CUI_KEY_F7  = 20,
+    CUI_KEY_F8  = 21,
+    CUI_KEY_F9  = 22,
+    CUI_KEY_F10 = 23,
+    CUI_KEY_F11 = 24,
+    CUI_KEY_F12 = 25,
+
+    CUI_KEY_ESCAPE = 27,
+    CUI_KEY_SPACE = 32,
+
+    // rest of ascii table
+
+    CUI_KEY_DELETE = 127,
+} CuiKeyId;
 
 typedef struct CuiEvent
 {
@@ -322,6 +368,13 @@ typedef struct CuiEvent
     {
         int32_t dx;
     } wheel;
+    struct
+    {
+        bool alt_is_down;
+        bool ctrl_is_down;
+        bool shift_is_down;
+        uint32_t codepoint;
+    } key;
 } CuiEvent;
 
 typedef struct CuiAllocationParams
@@ -512,6 +565,16 @@ typedef struct CuiFont
     struct CuiFont *fallback;
 } CuiFont;
 
+typedef struct CuiTextInput
+{
+    int64_t cursor_start;
+    int64_t cursor_end;
+
+    int64_t count;
+    int64_t capacity;
+    uint8_t *data;
+} CuiTextInput;
+
 typedef enum CuiShapeType
 {
     CUI_SHAPE_ROUND_CORNER      = 0,
@@ -524,8 +587,9 @@ typedef enum CuiShapeType
 
 typedef enum CuiIconType
 {
-    CUI_ICON_LOAD = 0,
-    CUI_ICON_TAPE = 1,
+    CUI_ICON_NONE = 0,
+    CUI_ICON_LOAD = 1,
+    CUI_ICON_TAPE = 2,
 } CuiIconType;
 
 typedef enum CuiWidgetType
@@ -535,6 +599,7 @@ typedef enum CuiWidgetType
     CUI_WIDGET_TYPE_TABS        = 2,
     CUI_WIDGET_TYPE_ICON_BUTTON = 3,
     CUI_WIDGET_TYPE_CHECKBOX    = 4,
+    CUI_WIDGET_TYPE_TEXTINPUT   = 5,
 
     CUI_WIDGET_TYPE_CUSTOM      = 100,
 } CuiWidgetType;
@@ -587,6 +652,8 @@ typedef struct CuiWidget
 
     CuiString label;
     CuiIconType icon_type;
+
+    CuiTextInput text_input;
 
     int32_t tabs_width;
     int32_t tabs_height;
@@ -738,6 +805,7 @@ void cui_widget_gravity_box_init(CuiWidget *widget, CuiDirection direction);
 void cui_widget_tabs_init(CuiWidget *widget);
 void cui_widget_icon_button_init(CuiWidget *widget, CuiString label, CuiIconType icon_type);
 void cui_widget_checkbox_init(CuiWidget *widget, CuiString label, bool initial_value);
+void cui_widget_textinput_init(CuiWidget *widget, void *buffer, int64_t size);
 void cui_widget_custom_init(CuiWidget *widget);
 
 void cui_widget_add_flags(CuiWidget *widget, uint32_t flags);
