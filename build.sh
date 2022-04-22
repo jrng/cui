@@ -43,8 +43,7 @@ compile "${COMPILER} ${COMPILER_FLAGS} -I../include -c -o cui.o ../src/cui.c"
 compile "ar -rc libcui.a cui.o"
 
 # shape compile
-
-compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o shape_compile ../src/shape_compile.c"
+compile "${COMPILER} ${COMPILER_FLAGS} -o shape_compile ../src/shape_compile.c"
 
 # examples
 
