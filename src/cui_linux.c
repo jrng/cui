@@ -488,6 +488,18 @@ cui_window_create()
 
     window->last_left_click_time = INT16_MIN;
 
+    int32_t integer_scale = (int32_t) window->base.ui_scale;
+
+    XSizeHints sh = { 0 };
+    sh.flags = PMinSize | PResizeInc | PWinGravity;
+    sh.win_gravity = StaticGravity;
+    sh.min_width  = integer_scale * 64;
+    sh.min_height = integer_scale * 32;
+    sh.width_inc  = integer_scale;
+    sh.height_inc = integer_scale;
+
+    XSetWMNormalHints(_cui_context.x11_display, window->x11_window, &sh);
+
     window->x11_input_context = XCreateIC(_cui_context.x11_input_method, XNInputStyle,
                                           XIMPreeditNothing | XIMStatusNothing,
                                           XNClientWindow, window->x11_window, (void *) 0);
@@ -684,28 +696,42 @@ cui_step()
                 {
                     if ((remaining == 0) && (format == 8))
                     {
-
                         CuiX11DesktopSettings desktop_settings = _cui_parse_desktop_settings(cui_make_string(settings_buffer, length));
 
-                        _cui_context.default_ui_scale = desktop_settings.ui_scale;
-                        _cui_context.double_click_time = desktop_settings.double_click_time;
-
-                        for (uint32_t i = 0; i < _cui_context.common.window_count; i += 1)
+                        if (_cui_context.default_ui_scale != desktop_settings.ui_scale)
                         {
-                            CuiWindow *window = _cui_context.common.windows[i];
+                            _cui_context.default_ui_scale = desktop_settings.ui_scale;
+                            _cui_context.double_click_time = desktop_settings.double_click_time;
 
-                            float inv_ui_scale = 1.0f / window->base.ui_scale;
-                            window->base.ui_scale = _cui_context.default_ui_scale;
+                            for (uint32_t i = 0; i < _cui_context.common.window_count; i += 1)
+                            {
+                                CuiWindow *window = _cui_context.common.windows[i];
 
-                            int32_t new_width  = lroundf((inv_ui_scale * window->backbuffer.width) * window->base.ui_scale);
-                            int32_t new_height = lroundf((inv_ui_scale * window->backbuffer.height) * window->base.ui_scale);
+                                float inv_ui_scale = 1.0f / window->base.ui_scale;
+                                window->base.ui_scale = _cui_context.default_ui_scale;
 
-                            cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
-                            cui_glyph_cache_reset(&window->base.glyph_cache);
+                                int32_t new_width  = lroundf((inv_ui_scale * window->backbuffer.width) * window->base.ui_scale);
+                                int32_t new_height = lroundf((inv_ui_scale * window->backbuffer.height) * window->base.ui_scale);
 
-                            cui_widget_set_ui_scale(&window->base.root_widget, window->base.ui_scale);
+                                cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
+                                cui_glyph_cache_reset(&window->base.glyph_cache);
 
-                            cui_window_resize(window, new_width, new_height);
+                                cui_widget_set_ui_scale(&window->base.root_widget, window->base.ui_scale);
+
+                                int32_t integer_scale = (int32_t) window->base.ui_scale;
+
+                                XSizeHints sh = { 0 };
+                                sh.flags = PMinSize | PResizeInc | PWinGravity;
+                                sh.win_gravity = StaticGravity;
+                                sh.min_width  = integer_scale * 64;
+                                sh.min_height = integer_scale * 32;
+                                sh.width_inc  = integer_scale;
+                                sh.height_inc = integer_scale;
+
+                                XSetWMNormalHints(_cui_context.x11_display, window->x11_window, &sh);
+
+                                cui_window_resize(window, new_width, new_height);
+                            }
                         }
                     }
 
