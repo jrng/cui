@@ -86,7 +86,7 @@ parse_float(const char **str)
 
 int main()
 {
-    FILE *file = fopen("src/cui_shapes.c", "wb");
+    FILE *file = fopen("src/cui_shapes.c", "w");
 
     if (file)
     {

@@ -877,7 +877,7 @@ void cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorT
             CuiFont *font = widget->window->base.font;
 
             int32_t px1 = lroundf(widget->ui_scale * 1.0f);
-            float radius = lroundf(widget->ui_scale * 3.0f);
+            float radius = roundf(widget->ui_scale * 3.0f);
 
             CuiRect border_rect = widget->rect;
             CuiRect fill_rect = cui_make_rect(border_rect.min.x + px1, border_rect.min.y + px1,

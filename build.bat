@@ -10,6 +10,9 @@ REM static library
 cl %CompilerFlags% -c -I"../include" -Fo"cui.obj" "../src/cui.c"
 lib -nologo "cui.obj"
 
+REM shape compile
+cl %CompilerFlags% -Fe"shape_compile.exe" "../src/shape_compile.c"
+
 REM interface browser
 cl %CompilerFlags% -I"../include" -Fe"interface_browser.exe" "../examples/interface_browser.c" /link %LinkerFlags% cui.lib
 
