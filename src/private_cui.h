@@ -1,29 +1,200 @@
-#define CUI_MAX_WINDOW_COUNT 16
-#define CUI_DEFAULT_WINDOW_WIDTH 800
-#define CUI_DEFAULT_WINDOW_HEIGHT 600
-#define CUI_DEFAULT_PUSH_BUFFER_SIZE CuiMiB(1)
-#define CUI_DEFAULT_INDEX_BUFFER_SIZE CuiKiB(64)
-
-#if CUI_PLATFORM_LINUX
+#if !CUI_PLATFORM_WINDOWS
 #include <pthread.h>
 #endif
 
-typedef struct CuiCompletionState
+typedef enum CuiJpegMode
+{
+    CUI_JPEG_MODE_UNKNOWN     = 0,
+    CUI_JPEG_MODE_BASELINE    = 1,
+    CUI_JPEG_MODE_PROGRESSIVE = 2,
+} CuiJpegMode;
+
+typedef struct CuiJpegComponent
+{
+    uint8_t factor_x;
+    uint8_t factor_y;
+    uint8_t quant_table_id;
+    uint8_t ac_table_id;
+    uint8_t dc_table_id;
+    int32_t dc_value;
+} CuiJpegComponent;
+
+typedef struct CuiJpegHuffmanTableEntry
+{
+    uint8_t symbol;
+    uint8_t length;
+} CuiJpegHuffmanTableEntry;
+
+typedef struct CuiJpegHuffmanTable
+{
+    uint32_t entry_count;
+    uint32_t max_code_length;
+    CuiJpegHuffmanTableEntry *entries;
+} CuiJpegHuffmanTable;
+
+typedef struct CuiJpegQuantizationTable
+{
+    uint8_t values[64];
+} CuiJpegQuantizationTable;
+
+typedef struct CuiJpegBitReader
+{
+    CuiString *stream;
+    uint32_t bit_buffer;
+    uint32_t bit_count;
+} CuiJpegBitReader;
+
+typedef struct CuiTransform
+{
+    float m[6];
+} CuiTransform;
+
+typedef struct CuiContourPoint
+{
+    uint8_t flags;
+    float x;
+    float y;
+} CuiContourPoint;
+
+typedef struct CuiEdge
+{
+    bool positive;
+    float x0, y0;
+    float x1, y1;
+} CuiEdge;
+
+typedef struct CuiColoredGlyphLayer
+{
+    uint32_t glyph_index;
+    CuiColor color;
+    CuiRect bounding_box;
+} CuiColoredGlyphLayer;
+
+typedef enum CuiPathCommandType
+{
+    CUI_PATH_COMMAND_MOVE_TO            = 0,
+    CUI_PATH_COMMAND_LINE_TO            = 1,
+    CUI_PATH_COMMAND_QUADRATIC_CURVE_TO = 2,
+    CUI_PATH_COMMAND_CUBIC_CURVE_TO     = 3,
+    CUI_PATH_COMMAND_ARC_TO             = 4,
+    CUI_PATH_COMMAND_CLOSE_PATH         = 5,
+} CuiPathCommandType;
+
+typedef struct CuiPathCommand
+{
+    CuiPathCommandType type;
+
+    float x, y;
+
+    float cx1, cy1;
+    float cx2, cy2;
+
+    bool large_arc_flag, sweep_flag;
+} CuiPathCommand;
+
+typedef struct CuiFontFileId { uint16_t value; } CuiFontFileId;
+
+typedef struct CuiFontFile
+{
+    CuiString name;
+    CuiString contents;
+
+    int16_t ascent;
+    int16_t descent;
+    int16_t line_gap;
+
+    uint16_t glyph_count;
+    uint16_t hmetrics_count;
+    uint16_t loca_index_format;
+
+    uint8_t *cmap;
+    uint8_t *COLR;
+    uint8_t *CPAL;
+    uint8_t *mapping_table;
+    uint8_t *glyf;
+    uint8_t *hmtx;
+    uint8_t *loca;
+} CuiFontFile;
+
+typedef struct CuiFont
+{
+    float font_scale;
+    int32_t line_height;
+    float baseline_offset;
+
+    CuiFontFileId file_id;
+    CuiFontId fallback_id;
+} CuiFont;
+
+typedef struct CuiSizedFont
+{
+    float size;
+    float line_height;
+
+    CuiFont font;
+} CuiSizedFont;
+
+typedef struct CuiSizedFontSpec
+{
+    CuiString name;
+    float size;
+    float line_height;
+} CuiSizedFontSpec;
+
+typedef struct CuiFontRef
+{
+    CuiString name;
+    CuiString path;
+} CuiFontRef;
+
+typedef struct CuiFontFileManager
+{
+    CuiArena arena;
+
+    CuiFontFile *font_files;
+    CuiFontRef  *font_refs;
+} CuiFontFileManager;
+
+typedef struct CuiFontManager
+{
+    CuiArena arena;
+
+    CuiSizedFont *sized_fonts;
+    CuiFontFileManager *font_file_manager;
+} CuiFontManager;
+
+static inline CuiSizedFontSpec
+cui_make_sized_font_spec(CuiString name, float size, float line_height)
+{
+    CuiSizedFontSpec result;
+    result.name = name;
+    result.size = size;
+    result.line_height = line_height;
+    return result;
+}
+
+#ifndef CUI_NO_BACKEND
+
+#define CUI_MAX_WINDOW_COUNT 16
+#define CUI_MAX_TEXTURE_COUNT 16
+#define CUI_DEFAULT_WINDOW_WIDTH 800
+#define CUI_DEFAULT_WINDOW_HEIGHT 600
+
+typedef struct CuiWorkerThreadTaskGroup
 {
     volatile uint32_t completion_goal;
     volatile uint32_t completion_count;
-} CuiCompletionState;
 
-typedef void CuiWorkFunction(void *data);
+    void (*task_func)(void *);
+} CuiWorkerThreadTaskGroup;
 
-typedef struct CuiWorkQueueEntry
+typedef struct CuiWorkerThreadQueueEntry
 {
-    CuiWorkFunction *work;
+    CuiWorkerThreadTaskGroup *task_group;
     void *data;
-    CuiCompletionState *completion_state;
-} CuiWorkQueueEntry;
+} CuiWorkerThreadQueueEntry;
 
-typedef struct CuiWorkQueue
+typedef struct CuiWorkerThreadQueue
 {
     volatile uint32_t write_index;
     volatile uint32_t read_index;
@@ -35,41 +206,46 @@ typedef struct CuiWorkQueue
     pthread_cond_t semaphore_cond;
 #endif
 
-    CuiWorkQueueEntry entries[64];
-} CuiWorkQueue;
+    CuiWorkerThreadQueueEntry entries[64];
+} CuiWorkerThreadQueue;
 
-typedef struct CuiTextBuffer
+typedef enum CuiBackgroundTaskState
 {
-    struct CuiTextBuffer *next;
-    int16_t occupied;
-    uint8_t data[4096];
-} CuiTextBuffer;
+    CUI_BACKGROUND_TASK_STATE_PENDING   = 0,
+    CUI_BACKGROUND_TASK_STATE_RUNNING   = 1,
+    CUI_BACKGROUND_TASK_STATE_CANCELING = 2,
+    CUI_BACKGROUND_TASK_STATE_FINISHED  = 3,
+} CuiBackgroundTaskState;
 
-typedef struct CuiStringBuilder
+typedef struct CuiBackgroundThreadQueueEntry
 {
-    CuiArena *arena;
-    CuiTextBuffer *write_buffer;
-    CuiTextBuffer base_buffer;
-} CuiStringBuilder;
+    CuiBackgroundTask *task;
+    void (*task_func)(CuiBackgroundTask *, void *);
+    void *data;
+} CuiBackgroundThreadQueueEntry;
 
-typedef struct CuiFontRef
+typedef struct CuiBackgroundThreadQueue
 {
-    CuiString name;
-    CuiString path;
-} CuiFontRef;
+    volatile uint32_t write_index;
+    volatile uint32_t read_index;
 
-typedef struct CuiFontManager
-{
-    CuiArena arena;
+#if CUI_PLATFORM_WINDOWS
+    HANDLE semaphore;
+#else
+    pthread_mutex_t semaphore_mutex;
+    pthread_cond_t semaphore_cond;
+#endif
 
-    CuiFontFile *font_files;
-    CuiFontRef  *font_refs;
-} CuiFontManager;
+    CuiBackgroundThreadQueueEntry entries[8];
+} CuiBackgroundThreadQueue;
 
 typedef struct CuiGlyphKey
 {
+    // NOTE: id 0 is for shapes, aller others are font ids
     uint32_t id;
+
     uint32_t codepoint;
+
     float scale;
     float offset_x;
     float offset_y;
@@ -86,26 +262,42 @@ typedef struct CuiGlyphCache
 
     int32_t x, y, y_max;
 
+    int32_t texture_id;
     CuiBitmap texture;
+
+    uint64_t allocation_size;
 } CuiGlyphCache;
 
-typedef struct CuiSolidRect
+typedef enum CuiTextureOperationType
 {
-    uint32_t clip_rect;
-    CuiRect rect;
-    CuiColor color;
-} CuiSolidRect;
+    CUI_TEXTURE_OPERATION_ALLOCATE   = 0,
+    CUI_TEXTURE_OPERATION_DEALLOCATE = 1,
+    CUI_TEXTURE_OPERATION_UPDATE     = 2,
+} CuiTextureOperationType;
 
-typedef struct CuiTexturedRect
+typedef struct CuiTextureOperation
 {
-    uint32_t clip_rect;
-    CuiRect rect;
-    CuiRect uv;
-    CuiColor color;
-} CuiTexturedRect;
+    uint16_t type;
+    uint16_t texture_id;
+
+    union
+    {
+        CuiBitmap bitmap;
+        CuiRect rect;
+    } payload;
+} CuiTextureOperation;
+
+typedef struct CuiTextureState
+{
+    uint32_t texture_id;
+    CuiBitmap bitmap;
+} CuiTextureState;
 
 typedef struct CuiCommandBuffer
 {
+    int32_t max_texture_width;
+    int32_t max_texture_height;
+
     uint32_t push_buffer_size;
     uint32_t max_push_buffer_size;
     uint8_t *push_buffer;
@@ -113,268 +305,342 @@ typedef struct CuiCommandBuffer
     uint32_t index_buffer_count;
     uint32_t max_index_buffer_count;
     uint32_t *index_buffer;
+
+    uint32_t texture_operation_count;
+    uint32_t max_texture_operation_count;
+    CuiTextureOperation *texture_operations;
 } CuiCommandBuffer;
 
-struct CuiGraphicsContext
+typedef struct CuiKernel
 {
-    uint32_t clip_rect_offset;
+    float factor;
+    float *weights;
+} CuiKernel;
 
-    CuiRect clip_rect;
-    CuiRect redraw_rect;
-    CuiCommandBuffer *command_buffer;
-    CuiGlyphCache *cache;
-};
+// NOTE: The following two types have to satisfy "all" the alignment rules
+//       for modern graphics apis like metal and opengl. That means that
+//       they have to be a multiple of 16 in size and types like CuiColor
+//       have to be 16 byte aligned, because they are mapped to a vec4 type.
 
-typedef struct CuiContextCommon
+typedef struct CuiClipRect
 {
-    bool running;
-    CuiArena arena;
-    CuiArena temporary_memory;
+    int16_t x_min, y_min;
+    int16_t x_max, y_max;
+    uint8_t padding[8];
+} CuiClipRect;
 
-    uint32_t window_count;
-    struct CuiWindow *windows[CUI_MAX_WINDOW_COUNT];
+typedef struct CuiTexturedRect
+{
+    // first block of 16 byte
+    int16_t x0, y0;
+    int16_t x1, y1;
+    int16_t u0, v0;
+    int16_t u1, v1;
 
-    CuiFontManager font_manager;
+    // second block of 16 byte
+    CuiColor color;
 
-    CuiWorkQueue work_queue;
-} CuiContextCommon;
+    // third block of 16 byte
+    uint32_t texture_id;
+    uint32_t clip_rect;
+    uint8_t padding[8];
+} CuiTexturedRect;
+
+typedef enum CuiRendererType
+{
+    CUI_RENDERER_TYPE_SOFTWARE   = 0,
+    CUI_RENDERER_TYPE_OPENGLES2  = 1,
+    CUI_RENDERER_TYPE_METAL      = 2,
+    CUI_RENDERER_TYPE_DIRECT3D11 = 3,
+} CuiRendererType;
+
+typedef struct CuiPointerCapture
+{
+    int32_t pointer_index;
+    CuiWidget *widget;
+} CuiPointerCapture;
+
+typedef enum CuiWindowState
+{
+    CUI_WINDOW_STATE_MAXIMIZED    = (1 << 0),
+    CUI_WINDOW_STATE_FULLSCREEN   = (1 << 1),
+    CUI_WINDOW_STATE_TILED_LEFT   = (1 << 2),
+    CUI_WINDOW_STATE_TILED_RIGHT  = (1 << 3),
+    CUI_WINDOW_STATE_TILED_TOP    = (1 << 4),
+    CUI_WINDOW_STATE_TILED_BOTTOM = (1 << 5),
+} CuiWindowState;
 
 typedef struct CuiWindowBase
 {
+    uint32_t creation_flags;
+    uint32_t state;
+
     float ui_scale;
 
-    CuiFont *font;
+    bool needs_redraw;
+
+    // This is a bit mask where the index of the bit is the
+    // texture id and a bit being 1 means this texture id is in use.
+    uint32_t allocated_texture_ids;
+
+    CuiArena arena;
+    CuiArena temporary_memory;
+
+    CuiPointerCapture *pointer_captures;
+
+    const CuiColorTheme *color_theme;
+
+    CuiWidget *platform_root_widget;
+    CuiWidget *user_root_widget;
 
     CuiWidget *hovered_widget;
     CuiWidget *pressed_widget;
     CuiWidget *focused_widget;
 
-    CuiColorTheme *color_theme;
-
-    void *user_data;
-
-    uint32_t max_push_buffer_size;
-    uint32_t max_index_buffer_count;
-
-    uint8_t *push_buffer;
-    uint32_t *index_buffer;
-
-    CuiArena temporary_memory;
-    CuiGlyphCache glyph_cache;
+    CuiRendererType renderer_type;
 
     CuiEvent event;
-    CuiWidget root_widget;
+
+    CuiGlyphCache glyph_cache;
+    CuiFontManager font_manager;
 } CuiWindowBase;
 
-#if CUI_PLATFORM_WINDOWS
-
-struct CuiWindow
+struct CuiGraphicsContext
 {
-    CuiWindowBase base;
-
-    HWND window_handle;
-
-    CuiBitmap backbuffer;
-    int64_t backbuffer_memory_size;
-
-    bool needs_redraw;
-    CuiRect redraw_rect;
-
-    bool is_tracking;
+    uint32_t clip_rect_offset;
+    CuiRect clip_rect;
+    CuiRect window_rect;
+    CuiCommandBuffer *command_buffer;
+    CuiGlyphCache *glyph_cache;
+    CuiArena *temporary_memory;
+    CuiFontManager *font_manager;
 };
 
-typedef struct CuiContext
+typedef struct CuiContextCommon
 {
-    CuiContextCommon common;
+    bool main_loop_is_running;
 
-    LPCWSTR window_class_name;
+    int32_t scale_factor;
 
-    UINT (*GetDpiForSystem)();
-    UINT (*GetDpiForWindow)(HWND window_handle);
+    void (*signal_callback)(void);
 
-    HCURSOR cursor_arrow;
-    HCURSOR cursor_text;
-    HCURSOR cursor_hand;
-    HCURSOR cursor_move_all;
-    HCURSOR cursor_move_left_right;
-    HCURSOR cursor_move_top_down;
-} CuiContext;
+    CuiArena arena;
+    CuiArena temporary_memory;
 
+    CuiArena command_line_arguments_arena;
+    CuiString *command_line_arguments;
+
+    CuiFontFileManager font_file_manager;
+
+    CuiWorkerThreadQueue worker_thread_queue;
+    CuiBackgroundThreadQueue interactive_background_thread_queue;
+    CuiBackgroundThreadQueue non_interactive_background_thread_queue;
+
+    uint32_t window_count;
+    struct CuiWindow *windows[CUI_MAX_WINDOW_COUNT];
+} CuiContextCommon;
+
+#if !defined(CUI_BACKEND_X11_ENABLED)
+#  define CUI_BACKEND_X11_ENABLED 0
+#endif
+
+#if !defined(CUI_BACKEND_WAYLAND_ENABLED)
+#  define CUI_BACKEND_WAYLAND_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_SOFTWARE_ENABLED)
+#  define CUI_RENDERER_SOFTWARE_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_OPENGLES2_ENABLED)
+#  define CUI_RENDERER_OPENGLES2_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_METAL_ENABLED)
+#  define CUI_RENDERER_METAL_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_DIRECT3D11_ENABLED)
+#  define CUI_RENDERER_DIRECT3D11_ENABLED 0
+#endif
+
+#if !defined(CUI_FRAMEBUFFER_SCREENSHOT_ENABLED)
+#  define CUI_FRAMEBUFFER_SCREENSHOT_ENABLED 0
+#endif
+
+#if CUI_RENDERER_SOFTWARE_ENABLED
+
+typedef struct CuiRendererSoftware
+{
+    CuiCommandBuffer command_buffer;
+    CuiBitmap bitmaps[CUI_MAX_TEXTURE_COUNT];
+
+    uint64_t allocation_size;
+} CuiRendererSoftware;
+
+#endif
+
+#if CUI_RENDERER_OPENGLES2_ENABLED
+
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+
+#define EGL_PLATFORM_X11_EXT              0x31D5
+#define EGL_PLATFORM_WAYLAND_EXT          0x31D8
+
+typedef struct CuiOpengles2Vertex
+{
+    CuiFloatPoint position;
+    CuiFloatPoint uv;
+    CuiColor color;
+} CuiOpengles2Vertex;
+
+typedef struct CuiOpengles2DrawCommand
+{
+    uint32_t vertex_offset;
+    uint32_t vertex_count;
+    GLuint texture_id;
+    CuiFloatPoint texture_scale;
+    int32_t clip_rect_x;
+    int32_t clip_rect_y;
+    int32_t clip_rect_width;
+    int32_t clip_rect_height;
+} CuiOpengles2DrawCommand;
+
+typedef struct CuiRendererOpengles2
+{
+    CuiCommandBuffer command_buffer;
+
+#if 0
+    uint64_t platform_performance_frequency;
+
+    float min_render_time;
+    float max_render_time;
+    double sum_render_time;
+    int32_t frame_count;
+#endif
+
+    GLuint program;
+    GLuint vertex_buffer;
+    GLuint vertex_scale_location;
+    GLuint texture_scale_location;
+    GLuint texture_location;
+    GLuint position_location;
+    GLuint color_location;
+    GLuint uv_location;
+
+    CuiBitmap bitmaps[CUI_MAX_TEXTURE_COUNT];
+    GLuint textures[CUI_MAX_TEXTURE_COUNT];
+
+    CuiOpengles2Vertex *vertices;
+    CuiOpengles2DrawCommand *draw_list;
+
+    uint64_t allocation_size;
+} CuiRendererOpengles2;
+
+#endif
+
+#if CUI_RENDERER_METAL_ENABLED
+
+#include <Metal/Metal.h>
+#include <QuartzCore/CAMetalLayer.h>
+
+typedef struct CuiRendererMetal
+{
+    CuiCommandBuffer command_buffer;
+
+    id<MTLDevice> device;
+    id<MTLCommandQueue> command_queue;
+    id<MTLRenderPipelineState> pipeline;
+
+    MTLRenderPassDescriptor *render_pass;
+
+    id<MTLBuffer> buffer_transform;
+    id<MTLBuffer> push_buffer;
+    id<MTLBuffer> index_buffer;
+
+    CuiBitmap bitmaps[CUI_MAX_TEXTURE_COUNT];
+    id<MTLTexture> textures[CUI_MAX_TEXTURE_COUNT];
+
+    uint64_t allocation_size;
+} CuiRendererMetal;
+
+#endif
+
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+
+#define COBJMACROS
+
+#include <d3d11.h>
+#include <dxgi1_2.h>
+
+#undef COBJMACROS
+
+typedef struct CuiDirect3D11Constants
+{
+    float vertex_transform[16];
+    CuiFloatPoint texture_scale;
+} CuiDirect3D11Constants;
+
+typedef struct CuiDirect3D11Vertex
+{
+    CuiFloatPoint position;
+    CuiFloatPoint uv;
+    CuiColor color;
+} CuiDirect3D11Vertex;
+
+typedef struct CuiRendererDirect3D11
+{
+    CuiCommandBuffer command_buffer;
+
+    int32_t framebuffer_width;
+    int32_t framebuffer_height;
+
+    ID3D11Device *device;
+    ID3D11DeviceContext *device_context;
+    IDXGISwapChain1 *swapchain;
+    ID3D11RenderTargetView *framebuffer_view;
+
+    ID3D11VertexShader *vertex_shader;
+    ID3D11PixelShader *pixel_shader;
+
+    ID3D11Buffer *vertex_buffer;
+    ID3D11InputLayout *vertex_layout;
+
+    ID3D11Buffer *constant_buffer;
+    ID3D11RasterizerState *rasterizer_state;
+    ID3D11BlendState *blend_state;
+
+    CuiBitmap bitmaps[CUI_MAX_TEXTURE_COUNT];
+    ID3D11Texture2D *textures[CUI_MAX_TEXTURE_COUNT];
+    ID3D11ShaderResourceView *texture_views[CUI_MAX_TEXTURE_COUNT];
+    ID3D11SamplerState *samplers[CUI_MAX_TEXTURE_COUNT];
+
+    uint64_t allocation_size;
+} CuiRendererDirect3D11;
+
+#endif
+
+#endif
+
+#include <stdarg.h>
+
+#if CUI_ARCH_ARM64
+#include <arm_neon.h>
+#endif
+
+#if CUI_ARCH_X86_64
+#include <emmintrin.h>
+#endif
+
+#if CUI_PLATFORM_ANDROID
+#include "cui_android.h"
+#elif CUI_PLATFORM_WINDOWS
+#include "cui_windows.h"
 #elif CUI_PLATFORM_LINUX
-
-typedef struct CuiX11DesktopSettings
-{
-    float ui_scale;
-    int32_t double_click_time;
-} CuiX11DesktopSettings;
-
-#include <X11/Xlib.h>
-#include <X11/extensions/sync.h>
-#include <X11/extensions/XShm.h>
-
-typedef int gint;
-typedef char gchar;
-typedef gint gboolean;
-typedef unsigned long gulong;
-typedef gulong GType;
-
-typedef enum GConnectFlags
-{
-    G_CONNECT_AFTER   = 1 << 0,
-    G_CONNECT_SWAPPED = 1 << 1,
-} GConnectFlags;
-
-typedef void (*GCallback) (void);
-
-typedef struct GMainContext GMainContext;
-
-typedef struct GSList
-{
-    void *data;
-    struct GSList *next;
-} GSList;
-
-typedef enum GtkResponseType
-{
-    GTK_RESPONSE_NONE         = -1,
-    GTK_RESPONSE_REJECT       = -2,
-    GTK_RESPONSE_ACCEPT       = -3,
-    GTK_RESPONSE_DELETE_EVENT = -4,
-    GTK_RESPONSE_OK           = -5,
-    GTK_RESPONSE_CANCEL       = -6,
-    GTK_RESPONSE_CLOSE        = -7,
-    GTK_RESPONSE_YES          = -8,
-    GTK_RESPONSE_NO           = -9,
-    GTK_RESPONSE_APPLY        = -10,
-    GTK_RESPONSE_HELP         = -11,
-} GtkResponseType;
-
-typedef enum GtkFileChooserAction
-{
-    GTK_FILE_CHOOSER_ACTION_OPEN          = 0,
-    GTK_FILE_CHOOSER_ACTION_SAVE          = 1,
-    GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER = 2,
-    GTK_FILE_CHOOSER_ACTION_CREATE_FOLDER = 3,
-} GtkFileChooserAction;
-
-typedef struct GdkDisplay GdkDisplay;
-typedef struct GdkWindow GdkWindow;
-
-typedef struct GtkWidget GtkWidget;
-typedef struct GtkDialog GtkDialog;
-typedef struct GtkWindow GtkWindow;
-typedef struct GtkFileChooser GtkFileChooser;
-
-typedef void (*PFN_g_free) (void *mem);
-typedef void (*PFN_g_slist_free) (GSList *list);
-typedef gboolean (*PFN_g_main_context_iteration) (GMainContext *context, gboolean may_block);
-typedef gulong (*PFN_g_signal_connect_data) (void *instance, const gchar *detailed_signal, GCallback c_handler, void *data, void *destroy_data, GConnectFlags connect_flags);
-
-typedef GdkDisplay *(*PFN_gdk_display_get_default) (void);
-typedef GdkWindow *(*PFN_gdk_x11_window_foreign_new_for_display) (GdkDisplay *display, Window window);
-
-typedef GType (*PFN_gtk_window_get_type) (void);
-typedef GtkWidget *(*PFN_gtk_widget_new) (GType type, const gchar *first_property_name, ...);
-typedef gboolean (*PFN_gtk_init_check) (int *argc, char ***argv);
-typedef void (*PFN_gtk_widget_destroy) (GtkWidget *widget);
-typedef void (*PFN_gtk_widget_realize) (GtkWidget *widget);
-typedef void (*PFN_gtk_widget_set_window) (GtkWidget *widget, GdkWindow *window);
-typedef void (*PFN_gtk_widget_set_has_window) (GtkWidget *widget, gboolean has_window);
-typedef gint (*PFN_gtk_dialog_run) (GtkDialog *dialog);
-typedef gchar *(*PFN_gtk_file_chooser_get_filename) (GtkFileChooser *chooser);
-typedef GSList *(*PFN_gtk_file_chooser_get_filenames) (GtkFileChooser *chooser);
-typedef GtkWidget *(*PFN_gtk_file_chooser_dialog_new) (const gchar *title, GtkWindow *parent, GtkFileChooserAction action, const gchar *first_button_text, ...);
-typedef void (*PFN_gtk_file_chooser_set_select_multiple) (GtkFileChooser *chooser, gboolean select_multiple);
-typedef void (*PFN_gtk_file_chooser_set_do_overwrite_confirmation) (GtkFileChooser *chooser, gboolean do_overwrite_confirmation);
-typedef void (*PFN_gtk_file_chooser_set_current_name) (GtkFileChooser *chooser, const gchar *name);
-
-struct CuiWindow
-{
-    CuiWindowBase base;
-
-    Window x11_window;
-    XIC x11_input_context;
-
-    int32_t last_left_click_time;
-
-    GdkWindow *gdk_window;
-    GtkWindow *gtk_window;
-
-    uint64_t x11_sync_request_serial;
-    uint64_t x11_configure_serial;
-
-    XSyncCounter frame_sync;
-    XShmSegmentInfo shared_memory_info;
-
-    bool backbuffer_is_ready;
-    CuiBitmap backbuffer;
-    int64_t backbuffer_memory_size;
-
-    bool needs_redraw;
-    CuiRect redraw_rect;
-};
-
-typedef struct CuiContext
-{
-    CuiContextCommon common;
-
-    float default_ui_scale;
-    int32_t double_click_time;
-
-    int x11_default_screen;
-
-    Display *x11_display;
-
-    Window x11_root_window;
-    Window x11_settings_window;
-
-    GC x11_default_gc;
-    XIM x11_input_method;
-
-    Atom atom_manager;
-    Atom atom_cardinal;
-    Atom atom_utf8_string;
-    Atom atom_wm_protocols;
-    Atom atom_wm_delete_window;
-    Atom atom_wm_sync_request;
-    Atom atom_wm_sync_request_counter;
-    Atom atom_xsettings_screen;
-    Atom atom_xsettings_settings;
-
-    bool has_xsync_extension;
-    bool has_shared_memory_extension;
-
-    int frame_completion_event;
-
-    bool gtk3_initialized;
-
-    void *gtk3_handle;
-    GdkDisplay *gdk_display;
-
-    PFN_g_free                                          g_free;
-    PFN_g_slist_free                                    g_slist_free;
-    PFN_g_main_context_iteration                        g_main_context_iteration;
-    PFN_g_signal_connect_data                           g_signal_connect_data;
-
-    PFN_gdk_display_get_default                         gdk_display_get_default;
-    PFN_gdk_x11_window_foreign_new_for_display          gdk_x11_window_foreign_new_for_display;
-
-    PFN_gtk_window_get_type                             gtk_window_get_type;
-    PFN_gtk_widget_new                                  gtk_widget_new;
-    PFN_gtk_init_check                                  gtk_init_check;
-    PFN_gtk_widget_destroy                              gtk_widget_destroy;
-    PFN_gtk_widget_realize                              gtk_widget_realize;
-    PFN_gtk_widget_set_window                           gtk_widget_set_window;
-    PFN_gtk_widget_set_has_window                       gtk_widget_set_has_window;
-    PFN_gtk_dialog_run                                  gtk_dialog_run;
-    PFN_gtk_file_chooser_get_filename                   gtk_file_chooser_get_filename;
-    PFN_gtk_file_chooser_get_filenames                  gtk_file_chooser_get_filenames;
-    PFN_gtk_file_chooser_dialog_new                     gtk_file_chooser_dialog_new;
-    PFN_gtk_file_chooser_set_select_multiple            gtk_file_chooser_set_select_multiple;
-    PFN_gtk_file_chooser_set_do_overwrite_confirmation  gtk_file_chooser_set_do_overwrite_confirmation;
-    PFN_gtk_file_chooser_set_current_name               gtk_file_chooser_set_current_name;
-} CuiContext;
-
+#include "cui_linux.h"
+#elif CUI_PLATFORM_MACOS
+#include "cui_macos.h"
 #else
-#error unsupported platform
+#  error unsupported platform
 #endif

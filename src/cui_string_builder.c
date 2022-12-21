@@ -1,11 +1,3 @@
-void
-cui_string_builder_init(CuiStringBuilder *builder)
-{
-    builder->base_buffer.next = 0;
-    builder->base_buffer.occupied = 0;
-    builder->write_buffer = &builder->base_buffer;
-}
-
 static void
 _cui_string_builder_expand(CuiStringBuilder *builder)
 {
@@ -17,8 +9,9 @@ _cui_string_builder_expand(CuiStringBuilder *builder)
     builder->write_buffer = new_buffer;
 }
 
+#if 0
 static uint8_t *
-_cui_string_builder_reserve_space(CuiStringBuilder *builder, int64_t _size)
+_cui_string_builder_reserve_space(CuiStringBuilder *builder, uint64_t _size)
 {
     CuiAssert(_size <= CuiArrayCount(builder->base_buffer.data));
 
@@ -34,6 +27,16 @@ _cui_string_builder_reserve_space(CuiStringBuilder *builder, int64_t _size)
     builder->write_buffer->occupied += size;
 
     return result;
+}
+#endif
+
+void
+cui_string_builder_init(CuiStringBuilder *builder, CuiArena *arena)
+{
+    builder->arena = arena;
+    builder->base_buffer.next = 0;
+    builder->base_buffer.occupied = 0;
+    builder->write_buffer = &builder->base_buffer;
 }
 
 void
@@ -127,13 +130,17 @@ cui_string_builder_append_number(CuiStringBuilder *builder, int64_t value, int64
 }
 
 void
-cui_string_builder_append_unsigned_number(CuiStringBuilder *builder, uint64_t value, int64_t leading_zeros, int64_t base)
+cui_string_builder_append_unsigned_number(CuiStringBuilder *builder, uint64_t value, int64_t leading_zeros, int64_t base, bool uppercase_digits)
 {
     uint8_t buf[64];
     int64_t index = CuiArrayCount(buf) - 1;
 
-    // const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
-    const char *digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+    if (uppercase_digits)
+    {
+        digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    }
 
     if (!value)
     {
@@ -159,7 +166,7 @@ cui_string_builder_append_unsigned_number(CuiStringBuilder *builder, uint64_t va
 }
 
 void
-cui_string_builder_append_float(CuiStringBuilder *builder, double value)
+cui_string_builder_append_float(CuiStringBuilder *builder, double value, int32_t digits_after_decimal_point)
 {
     if (value < 0.0)
     {
@@ -167,12 +174,29 @@ cui_string_builder_append_float(CuiStringBuilder *builder, double value)
         value = -value;
     }
 
+    double factor = 0.0;
+
+    if (digits_after_decimal_point > 0)
+    {
+        factor = 1.0;
+
+        for (int32_t i = 0; i < digits_after_decimal_point; i += 1)
+        {
+            factor *= 10.0;
+        }
+    }
+
     int64_t a = (int64_t) value;
-    int64_t b = (int64_t) ((value - a) * 10000000.0f);
+    int64_t b = (int64_t) ((value - (double) a) * factor);
+
+    if (b == 0)
+    {
+        digits_after_decimal_point = 0;
+    }
 
     cui_string_builder_append_number(builder, a, 0);
     cui_string_builder_append_character(builder, '.');
-    cui_string_builder_append_number(builder, b, 7);
+    cui_string_builder_append_number(builder, b, digits_after_decimal_point);
 }
 
 void
@@ -259,7 +283,7 @@ cui_string_builder_print(CuiStringBuilder *builder, CuiString format, va_list ar
 
                         case 'u':
                         {
-                            cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), 0, 10);
+                            cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), 0, 10, false);
                         } break;
 
                         case 'd':
@@ -278,7 +302,7 @@ cui_string_builder_print(CuiStringBuilder *builder, CuiString format, va_list ar
                                 {
                                     case 'u':
                                     {
-                                        cui_string_builder_append_unsigned_number(builder, va_arg(args, uint64_t), 0, 10);
+                                        cui_string_builder_append_unsigned_number(builder, va_arg(args, uint64_t), 0, 10, false);
                                     } break;
 
                                     case 'd':
@@ -302,7 +326,7 @@ cui_string_builder_print(CuiStringBuilder *builder, CuiString format, va_list ar
 
                         case 'f':
                         {
-                            cui_string_builder_append_float(builder, va_arg(args, double));
+                            cui_string_builder_append_float(builder, va_arg(args, double), 6);
                         } break;
 
                         case '0':
@@ -321,11 +345,36 @@ cui_string_builder_print(CuiStringBuilder *builder, CuiString format, va_list ar
                             {
                                 if (format.data[index] == 'u')
                                 {
-                                    cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), width, 10);
+                                    cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), width, 10, false);
                                 }
                                 else if (format.data[index] == 'x')
                                 {
-                                    cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), width, 16);
+                                    cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), width, 16, false);
+                                }
+                                else if (format.data[index] == 'X')
+                                {
+                                    cui_string_builder_append_unsigned_number(builder, va_arg(args, uint32_t), width, 16, true);
+                                }
+                            }
+                        } break;
+
+                        case '.':
+                        {
+                            index += 1;
+
+                            int32_t precision = 0;
+
+                            while ((index < format.count) && (format.data[index] >= '0') && (format.data[index] <= '9'))
+                            {
+                                precision = (10 * precision) + (format.data[index] - '0');
+                                index += 1;
+                            }
+
+                            if (index < format.count)
+                            {
+                                if (format.data[index] == 'f')
+                                {
+                                    cui_string_builder_append_float(builder, va_arg(args, double), precision);
                                 }
                             }
                         } break;
@@ -354,9 +403,7 @@ CuiString
 cui_sprint(CuiArena *arena, CuiString format, ...)
 {
     CuiStringBuilder builder;
-    builder.arena = arena;
-
-    cui_string_builder_init(&builder);
+    cui_string_builder_init(&builder, arena);
 
     va_list args;
     va_start(args, format);

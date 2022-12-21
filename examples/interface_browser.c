@@ -2,120 +2,308 @@
 
 typedef struct InterfaceBrowser
 {
-    CuiWindow *window;
+    CuiWindow *window1;
+    CuiWindow *window2;
 
-    CuiWidget first_page;
-    CuiWidget second_page;
+    CuiWidget root_widget;
 
-    CuiWidget first_page_column;
-
-    CuiWidget icon_button_row;
-    CuiWidget icon_buttons[2];
-    CuiWidget last_icon_button;
+    CuiWidget checkbox_label;
 
     CuiWidget checkbox_row;
     CuiWidget checkboxes[3];
     CuiWidget last_checkbox;
 
-    CuiWidget textinput_row;
-    CuiWidget textinputs[3];
-    CuiWidget last_textinput;
+    CuiWidget icon_button_label;
 
-    CuiWidget first_page_last_row;
+    CuiWidget icon_button_row;
+    CuiWidget icon_buttons[4];
+    CuiWidget last_icon_button;
+
+    CuiWidget label_button_label;
+
+    CuiWidget label_button_row;
+    CuiWidget label_buttons[4];
+    CuiWidget last_label_button;
+
+    CuiWidget icon_label_button_label;
+
+    CuiWidget icon_label_button_row;
+    CuiWidget icon_label_buttons[4];
+    CuiWidget last_icon_label_button;
+
+    CuiWidget emoji_label;
+    CuiWidget emoji;
+
+    CuiWidget label_wrapper;
+    CuiWidget label_pos;
+
+    CuiWidget text_input_label;
+
+    CuiWidget text_input_row;
+    CuiWidget text_inputs[3];
+    CuiWidget last_text_input;
+
+    CuiWidget last_row;
 } InterfaceBrowser;
 
 static InterfaceBrowser app;
 
-
-#if CUI_PLATFORM_WINDOWS
-int CALLBACK wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_line, int show_code)
-#else
-int main(int argc, char **argv)
-#endif
+CUI_PLATFORM_MAIN
 {
-#if CUI_PLATFORM_WINDOWS
-    if (!cui_init(0, 0))
-#else
-    if (!cui_init(argc, argv))
-#endif
+    if (!CUI_PLATFORM_INIT)
     {
         return -1;
     }
 
-    app.window = cui_window_create();
+    app.window1 = cui_window_create(0);
+    app.window2 = cui_window_create(0);
 
-    cui_window_set_title(app.window, "Interface Browser");
-    cui_window_resize(app.window, lroundf(cui_window_get_ui_scale(app.window) * 800),
-                                  lroundf(cui_window_get_ui_scale(app.window) * 600));
+    cui_window_set_title(app.window1, CuiStringLiteral("🔥🔥🔥 Interface Browser 🔥🔥🔥"));
+    cui_window_resize(app.window1, lroundf(cui_window_get_ui_scale(app.window1) * 640),
+                                  lroundf(cui_window_get_ui_scale(app.window1) * 480));
 
-    cui_widget_tabs_init(cui_window_get_root_widget(app.window));
+    cui_window_set_title(app.window2, CuiStringLiteral("Window 2"));
 
-    cui_widget_box_init(&app.first_page);
-    cui_widget_add_flags(&app.first_page, CUI_WIDGET_FLAG_FILL_BACKGROUND);
-    cui_widget_set_label(&app.first_page, CuiStringLiteral("First page"));
+    cui_widget_init(&app.root_widget, CUI_WIDGET_TYPE_BOX);
+    cui_widget_add_flags(&app.root_widget, CUI_WIDGET_FLAG_DRAW_BACKGROUND);
+    cui_widget_set_main_axis(&app.root_widget, CUI_AXIS_Y);
+    cui_widget_set_y_axis_gravity(&app.root_widget, CUI_GRAVITY_START);
+    cui_widget_set_inline_padding(&app.root_widget, 8.0f);
+    cui_widget_set_padding(&app.root_widget, 8.0f, 8.0f, 8.0f, 8.0f);
 
-    cui_widget_append_child(cui_window_get_root_widget(app.window), &app.first_page);
+    { // checkbox label
+        cui_widget_init(&app.checkbox_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.checkbox_label, CuiStringLiteral("Checkboxes"));
+        cui_widget_set_x_axis_gravity(&app.checkbox_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.checkbox_label, CUI_GRAVITY_START);
 
-    cui_widget_gravity_box_init(&app.first_page_column, CUI_DIRECTION_NORTH);
-
-    cui_widget_append_child(&app.first_page, &app.first_page_column);
-
-    { // icon buttons
-        cui_widget_gravity_box_init(&app.icon_button_row, CUI_DIRECTION_WEST);
-        cui_widget_append_child(&app.first_page_column, &app.icon_button_row);
-
-        cui_widget_icon_button_init(app.icon_buttons + 0, CuiStringLiteral("Load"), CUI_ICON_LOAD);
-        cui_widget_icon_button_init(app.icon_buttons + 1, CuiStringLiteral("Record"), CUI_ICON_TAPE);
-        cui_widget_box_init(&app.last_icon_button);
-
-        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 0);
-        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 1);
-        cui_widget_append_child(&app.icon_button_row, &app.last_icon_button);
+        cui_widget_append_child(&app.root_widget, &app.checkbox_label);
     }
 
-    { // checkboxes
-        cui_widget_gravity_box_init(&app.checkbox_row, CUI_DIRECTION_WEST);
-        cui_widget_append_child(&app.first_page_column, &app.checkbox_row);
+    { // checkbox row
+        cui_widget_init(&app.checkbox_row, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(&app.checkbox_row, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(&app.checkbox_row, CUI_GRAVITY_START);
+        cui_widget_set_inline_padding(&app.checkbox_row, 8.0f);
 
-        cui_widget_checkbox_init(app.checkboxes + 0, CuiStringLiteral("First checkbox"), true);
-        cui_widget_checkbox_init(app.checkboxes + 1, CuiStringLiteral("Second checkbox"), false);
-        cui_widget_checkbox_init(app.checkboxes + 2, CuiStringLiteral("Third checkbox"), true);
-        cui_widget_box_init(&app.last_checkbox);
+        cui_widget_init(app.checkboxes + 0, CUI_WIDGET_TYPE_CHECKBOX);
+        cui_widget_init(app.checkboxes + 1, CUI_WIDGET_TYPE_CHECKBOX);
+        cui_widget_init(app.checkboxes + 2, CUI_WIDGET_TYPE_CHECKBOX);
+        cui_widget_init(&app.last_checkbox, CUI_WIDGET_TYPE_BOX);
+
+        cui_widget_set_value(app.checkboxes + 0, true);
+        cui_widget_set_value(app.checkboxes + 1, false);
+        cui_widget_set_value(app.checkboxes + 2, true);
+
+        cui_widget_set_label(app.checkboxes + 0, CuiStringLiteral("First checkbox"));
+        cui_widget_set_label(app.checkboxes + 1, CuiStringLiteral("Second checkbox"));
+        cui_widget_set_label(app.checkboxes + 2, CuiStringLiteral("Third checkbox"));
 
         cui_widget_append_child(&app.checkbox_row, app.checkboxes + 0);
         cui_widget_append_child(&app.checkbox_row, app.checkboxes + 1);
         cui_widget_append_child(&app.checkbox_row, app.checkboxes + 2);
         cui_widget_append_child(&app.checkbox_row, &app.last_checkbox);
+
+        cui_widget_append_child(&app.root_widget, &app.checkbox_row);
     }
 
-    { // textinputs
-        cui_widget_gravity_box_init(&app.textinput_row, CUI_DIRECTION_WEST);
-        cui_widget_append_child(&app.first_page_column, &app.textinput_row);
+    { // icon button label
+        cui_widget_init(&app.icon_button_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.icon_button_label, CuiStringLiteral("Icon buttons"));
+        cui_widget_set_x_axis_gravity(&app.icon_button_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.icon_button_label, CUI_GRAVITY_START);
 
-        int64_t textinput_buffer_size = CuiKiB(1);
-        uint8_t *textinput_buffer = (uint8_t *) cui_allocate_platform_memory(CuiArrayCount(app.textinputs) * textinput_buffer_size);
-
-        cui_widget_textinput_init(app.textinputs + 0, textinput_buffer + (0 * textinput_buffer_size), textinput_buffer_size);
-        cui_widget_textinput_init(app.textinputs + 1, textinput_buffer + (1 * textinput_buffer_size), textinput_buffer_size);
-        cui_widget_textinput_init(app.textinputs + 2, textinput_buffer + (2 * textinput_buffer_size), textinput_buffer_size);
-        cui_widget_box_init(&app.last_textinput);
-
-        cui_widget_append_child(&app.textinput_row, app.textinputs + 0);
-        cui_widget_append_child(&app.textinput_row, app.textinputs + 1);
-        cui_widget_append_child(&app.textinput_row, app.textinputs + 2);
-        cui_widget_append_child(&app.textinput_row, &app.last_textinput);
+        cui_widget_append_child(&app.root_widget, &app.icon_button_label);
     }
 
-    cui_widget_box_init(&app.first_page_last_row);
-    cui_widget_append_child(&app.first_page_column, &app.first_page_last_row);
+    { // icon button row
+        cui_widget_init(&app.icon_button_row, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(&app.icon_button_row, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(&app.icon_button_row, CUI_GRAVITY_START);
+        cui_widget_set_inline_padding(&app.icon_button_row, 8.0f);
 
-    cui_widget_box_init(&app.second_page);
-    cui_widget_add_flags(&app.second_page, CUI_WIDGET_FLAG_FILL_BACKGROUND);
-    cui_widget_set_label(&app.second_page, CuiStringLiteral("Second page"));
+        cui_widget_init(app.icon_buttons + 0, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.icon_buttons + 1, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.icon_buttons + 2, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.icon_buttons + 3, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(&app.last_icon_button, CUI_WIDGET_TYPE_BOX);
 
-    cui_widget_append_child(cui_window_get_root_widget(app.window), &app.second_page);
+        cui_widget_set_icon(app.icon_buttons + 0, CUI_ICON_ANGLE_UP_12);
+        cui_widget_set_icon(app.icon_buttons + 1, CUI_ICON_ANGLE_RIGHT_12);
+        cui_widget_set_icon(app.icon_buttons + 2, CUI_ICON_ANGLE_DOWN_12);
+        cui_widget_set_icon(app.icon_buttons + 3, CUI_ICON_ANGLE_LEFT_12);
 
-    cui_window_show(app.window);
+        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 0);
+        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 1);
+        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 2);
+        cui_widget_append_child(&app.icon_button_row, app.icon_buttons + 3);
+        cui_widget_append_child(&app.icon_button_row, &app.last_icon_button);
+
+        cui_widget_append_child(&app.root_widget, &app.icon_button_row);
+    }
+
+    { // label button label
+        cui_widget_init(&app.label_button_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.label_button_label, CuiStringLiteral("Label buttons"));
+        cui_widget_set_x_axis_gravity(&app.label_button_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.label_button_label, CUI_GRAVITY_START);
+
+        cui_widget_append_child(&app.root_widget, &app.label_button_label);
+    }
+
+    { // label button row
+        cui_widget_init(&app.label_button_row, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(&app.label_button_row, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(&app.label_button_row, CUI_GRAVITY_START);
+        cui_widget_set_inline_padding(&app.label_button_row, 8.0f);
+
+        cui_widget_init(app.label_buttons + 0, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.label_buttons + 1, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.label_buttons + 2, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.label_buttons + 3, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(&app.last_label_button, CUI_WIDGET_TYPE_BOX);
+
+        cui_widget_set_label(app.label_buttons + 0, CuiStringLiteral("Up"));
+        cui_widget_set_label(app.label_buttons + 1, CuiStringLiteral("Right"));
+        cui_widget_set_label(app.label_buttons + 2, CuiStringLiteral("Down"));
+        cui_widget_set_label(app.label_buttons + 3, CuiStringLiteral("Left"));
+
+        cui_widget_append_child(&app.label_button_row, app.label_buttons + 0);
+        cui_widget_append_child(&app.label_button_row, app.label_buttons + 1);
+        cui_widget_append_child(&app.label_button_row, app.label_buttons + 2);
+        cui_widget_append_child(&app.label_button_row, app.label_buttons + 3);
+        cui_widget_append_child(&app.label_button_row, &app.last_label_button);
+
+        cui_widget_append_child(&app.root_widget, &app.label_button_row);
+    }
+
+    { // icon label button label
+        cui_widget_init(&app.icon_label_button_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.icon_label_button_label, CuiStringLiteral("Label buttons"));
+        cui_widget_set_x_axis_gravity(&app.icon_label_button_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.icon_label_button_label, CUI_GRAVITY_START);
+
+        cui_widget_append_child(&app.root_widget, &app.icon_label_button_label);
+    }
+
+    { // icon label button row
+        cui_widget_init(&app.icon_label_button_row, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(&app.icon_label_button_row, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(&app.icon_label_button_row, CUI_GRAVITY_START);
+        cui_widget_set_inline_padding(&app.icon_label_button_row, 8.0f);
+
+        cui_widget_init(app.icon_label_buttons + 0, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.icon_label_buttons + 1, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.icon_label_buttons + 2, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.icon_label_buttons + 3, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(&app.last_icon_label_button, CUI_WIDGET_TYPE_BOX);
+
+        cui_widget_set_icon(app.icon_label_buttons + 0, CUI_ICON_ANGLE_UP_12);
+        cui_widget_set_icon(app.icon_label_buttons + 1, CUI_ICON_ANGLE_RIGHT_12);
+        cui_widget_set_icon(app.icon_label_buttons + 2, CUI_ICON_ANGLE_DOWN_12);
+        cui_widget_set_icon(app.icon_label_buttons + 3, CUI_ICON_ANGLE_LEFT_12);
+
+        cui_widget_set_label(app.icon_label_buttons + 0, CuiStringLiteral("Up"));
+        cui_widget_set_label(app.icon_label_buttons + 1, CuiStringLiteral("Right"));
+        cui_widget_set_label(app.icon_label_buttons + 2, CuiStringLiteral("Down"));
+        cui_widget_set_label(app.icon_label_buttons + 3, CuiStringLiteral("Left"));
+
+        cui_widget_append_child(&app.icon_label_button_row, app.icon_label_buttons + 0);
+        cui_widget_append_child(&app.icon_label_button_row, app.icon_label_buttons + 1);
+        cui_widget_append_child(&app.icon_label_button_row, app.icon_label_buttons + 2);
+        cui_widget_append_child(&app.icon_label_button_row, app.icon_label_buttons + 3);
+        cui_widget_append_child(&app.icon_label_button_row, &app.last_icon_label_button);
+
+        cui_widget_append_child(&app.root_widget, &app.icon_label_button_row);
+    }
+
+    { // emoji label
+        cui_widget_init(&app.emoji_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.emoji_label, CuiStringLiteral("Emojis"));
+        cui_widget_set_x_axis_gravity(&app.emoji_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.emoji_label, CUI_GRAVITY_START);
+
+        cui_widget_append_child(&app.root_widget, &app.emoji_label);
+    }
+
+    { // emoji
+        cui_widget_init(&app.emoji, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.emoji, CuiStringLiteral("💩 🔥 ✅"));
+        cui_widget_set_x_axis_gravity(&app.emoji, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.emoji, CUI_GRAVITY_START);
+
+        cui_widget_append_child(&app.root_widget, &app.emoji);
+    }
+
+    { // label positioning
+        cui_widget_init(&app.label_wrapper, CUI_WIDGET_TYPE_BOX);
+        cui_widget_add_flags(&app.label_wrapper, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_FIXED_HEIGHT);
+        cui_widget_set_preferred_size(&app.label_wrapper, 0.0f, 32.0f);
+        cui_widget_append_child(&app.root_widget, &app.label_wrapper);
+
+        app.label_wrapper.color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+
+        cui_widget_init(&app.label_pos, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.label_pos, CuiStringLiteral("Hello World!"));
+        cui_widget_set_x_axis_gravity(&app.label_pos, CUI_GRAVITY_END);
+        cui_widget_set_y_axis_gravity(&app.label_pos, CUI_GRAVITY_END);
+        cui_widget_append_child(&app.label_wrapper, &app.label_pos);
+    }
+
+    { // text input label
+        cui_widget_init(&app.text_input_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.text_input_label, CuiStringLiteral("Text Inputs"));
+        cui_widget_set_x_axis_gravity(&app.text_input_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.text_input_label, CUI_GRAVITY_START);
+
+        cui_widget_append_child(&app.root_widget, &app.text_input_label);
+    }
+
+    { // text input row
+        cui_widget_init(&app.text_input_row, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(&app.text_input_row, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(&app.text_input_row, CUI_GRAVITY_START);
+        cui_widget_set_inline_padding(&app.text_input_row, 8.0f);
+
+        cui_widget_init(app.text_inputs + 0, CUI_WIDGET_TYPE_TEXTINPUT);
+        cui_widget_init(app.text_inputs + 1, CUI_WIDGET_TYPE_TEXTINPUT);
+        cui_widget_init(app.text_inputs + 2, CUI_WIDGET_TYPE_TEXTINPUT);
+        cui_widget_init(&app.last_text_input, CUI_WIDGET_TYPE_BOX);
+
+        int64_t text_input_buffer_size = CuiKiB(1);
+        uint8_t *text_input_buffer = (uint8_t *) cui_platform_allocate(CuiArrayCount(app.text_inputs) * text_input_buffer_size);
+
+        cui_widget_set_textinput_buffer(app.text_inputs + 0, text_input_buffer + (0 * text_input_buffer_size), text_input_buffer_size);
+        cui_widget_set_textinput_buffer(app.text_inputs + 1, text_input_buffer + (1 * text_input_buffer_size), text_input_buffer_size);
+        cui_widget_set_textinput_buffer(app.text_inputs + 2, text_input_buffer + (2 * text_input_buffer_size), text_input_buffer_size);
+
+        cui_widget_set_icon(app.text_inputs + 0, CUI_ICON_NONE);
+        cui_widget_set_icon(app.text_inputs + 1, CUI_ICON_ANGLE_RIGHT_12);
+        cui_widget_set_icon(app.text_inputs + 2, CUI_ICON_SEARCH_12);
+
+        cui_widget_set_label(app.text_inputs + 0, CuiStringLiteral("Enter..."));
+        cui_widget_set_label(app.text_inputs + 1, CuiStringLiteral(""));
+        cui_widget_set_label(app.text_inputs + 2, CuiStringLiteral("Search"));
+
+        cui_widget_set_preferred_size(app.text_inputs + 0, 128.0f, 0.0f);
+        cui_widget_set_preferred_size(app.text_inputs + 1, 128.0f, 0.0f);
+        cui_widget_set_preferred_size(app.text_inputs + 2, 128.0f, 0.0f);
+
+        cui_widget_append_child(&app.text_input_row, app.text_inputs + 0);
+        cui_widget_append_child(&app.text_input_row, app.text_inputs + 1);
+        cui_widget_append_child(&app.text_input_row, app.text_inputs + 2);
+        cui_widget_append_child(&app.text_input_row, &app.last_text_input);
+
+        cui_widget_append_child(&app.root_widget, &app.text_input_row);
+    }
+
+    cui_widget_init(&app.last_row, CUI_WIDGET_TYPE_BOX);
+    cui_widget_append_child(&app.root_widget, &app.last_row);
+
+    cui_window_set_root_widget(app.window1, &app.root_widget);
+
+    cui_window_show(app.window1);
+    cui_window_show(app.window2);
 
     return cui_main_loop();
 }

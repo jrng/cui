@@ -1,7 +1,1044 @@
+#include <VersionHelpers.h>
 #include <windowsx.h>
+#include <uxtheme.h>
+#include <vssym32.h>
+
+static DWORD
+_cui_worker_thread_proc(void *data)
+{
+    CuiWorkerThreadQueue *queue = &_cui_context.common.worker_thread_queue;
+
+    for (;;)
+    {
+        if (_cui_do_next_worker_thread_queue_entry(queue))
+        {
+            WaitForSingleObject(queue->semaphore, INFINITE);
+        }
+    }
+
+    return 0;
+}
+
+static DWORD
+_cui_background_thread_proc(void *data)
+{
+    CuiBackgroundThreadQueue *queue = (CuiBackgroundThreadQueue *) data;
+
+    for (;;)
+    {
+        if (_cui_do_next_background_thread_queue_entry(queue))
+        {
+            WaitForSingleObject(queue->semaphore, INFINITE);
+        }
+    }
+
+    return 0;
+}
+
+#if CUI_RENDERER_SOFTWARE_ENABLED
+
+static void
+_cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
+{
+    CuiAssert(window->base.renderer_type == CUI_RENDERER_TYPE_SOFTWARE);
+
+    CuiAssert((window->renderer.software.backbuffer.width != width) || (window->renderer.software.backbuffer.height != height));
+
+    window->renderer.software.backbuffer.width  = width;
+    window->renderer.software.backbuffer.height = height;
+    window->renderer.software.backbuffer.stride = CuiAlign(window->renderer.software.backbuffer.width * 4, 64);
+
+    int64_t needed_size = (int64_t) window->renderer.software.backbuffer.stride *
+                          (int64_t) window->renderer.software.backbuffer.height;
+
+    if (needed_size > window->renderer.software.backbuffer_memory_size)
+    {
+        if (window->renderer.software.backbuffer.pixels)
+        {
+            cui_platform_deallocate(window->renderer.software.backbuffer.pixels, window->renderer.software.backbuffer_memory_size);
+        }
+
+        window->renderer.software.backbuffer_memory_size = CuiAlign(needed_size, CuiMiB(4));
+        window->renderer.software.backbuffer.pixels = cui_platform_allocate(window->renderer.software.backbuffer_memory_size);
+    }
+}
+
+#endif
+
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+
+static bool
+_cui_initialize_direct3d11(CuiWindow *window)
+{
+    ID3D11Device *d3d11_base_device;
+    ID3D11DeviceContext *d3d11_base_context;
+
+    UINT flags = D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    D3D_FEATURE_LEVEL feature_levels[] = { D3D_FEATURE_LEVEL_11_0 };
+
+#if 0
+    flags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+    HRESULT res = D3D11CreateDevice(0, D3D_DRIVER_TYPE_HARDWARE, 0, flags, feature_levels, CuiArrayCount(feature_levels),
+                                    D3D11_SDK_VERSION, &d3d11_base_device, 0, &d3d11_base_context);
+
+    if (FAILED(res))
+    {
+        res = D3D11CreateDevice(0, D3D_DRIVER_TYPE_WARP, 0, flags, feature_levels, CuiArrayCount(feature_levels),
+                                D3D11_SDK_VERSION, &d3d11_base_device, 0, &d3d11_base_context);
+    }
+
+    if (SUCCEEDED(res))
+    {
+        IDXGIFactory2 *dxgi_factory = 0;
+
+        IDXGIDevice *dxgi_device;
+
+        if (SUCCEEDED(ID3D11Device_QueryInterface(d3d11_base_device, &IID_IDXGIDevice, (void **) &dxgi_device)))
+        {
+            IDXGIAdapter *dxgi_adapter;
+
+            if (SUCCEEDED(IDXGIDevice_GetAdapter(dxgi_device, &dxgi_adapter)))
+            {
+                IDXGIAdapter_GetParent(dxgi_adapter, &IID_IDXGIFactory2, (void **) &dxgi_factory);
+                IDXGIAdapter_Release(dxgi_adapter);
+            }
+
+            IDXGIDevice_Release(dxgi_device);
+        }
+
+        if (dxgi_factory)
+        {
+            IDXGISwapChain1 *dxgi_swapchain;
+
+            DXGI_SWAP_CHAIN_DESC1 swapchain_description;
+            swapchain_description.Width              = 0;
+            swapchain_description.Height             = 0;
+            swapchain_description.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
+            swapchain_description.Stereo             = FALSE;
+            swapchain_description.SampleDesc.Count   = 1;
+            swapchain_description.SampleDesc.Quality = 0;
+            swapchain_description.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            swapchain_description.BufferCount        = 2;
+            swapchain_description.Scaling            = DXGI_SCALING_NONE;
+            swapchain_description.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+            swapchain_description.AlphaMode          = DXGI_ALPHA_MODE_IGNORE;
+            swapchain_description.Flags              = 0;
+
+            if (SUCCEEDED(IDXGIFactory2_CreateSwapChainForHwnd(dxgi_factory, (IUnknown *) d3d11_base_device, window->window_handle,
+                                                               &swapchain_description, 0, 0, &dxgi_swapchain)))
+            {
+                IDXGIFactory2_MakeWindowAssociation(dxgi_factory, window->window_handle, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+
+                window->base.renderer_type = CUI_RENDERER_TYPE_DIRECT3D11;
+                window->renderer.direct3d11.renderer_direct3d11 = _cui_create_direct3d11_renderer(d3d11_base_device, d3d11_base_context, dxgi_swapchain);
+
+                if (window->renderer.direct3d11.renderer_direct3d11)
+                {
+                    window->renderer.direct3d11.d3d11_device = d3d11_base_device;
+                    window->renderer.direct3d11.d3d11_device_context = d3d11_base_context;
+                    window->renderer.direct3d11.dxgi_swapchain = dxgi_swapchain;
+                    return true;
+                }
+            }
+
+            IDXGIFactory2_Release(dxgi_factory);
+        }
+    }
+
+    if (window->renderer.direct3d11.dxgi_swapchain)
+    {
+        IDXGISwapChain1_Release(window->renderer.direct3d11.dxgi_swapchain);
+    }
+
+    if (window->renderer.direct3d11.d3d11_device_context)
+    {
+        ID3D11DeviceContext_Release(window->renderer.direct3d11.d3d11_device_context);
+    }
+
+    if (window->renderer.direct3d11.d3d11_device)
+    {
+        ID3D11Device_Release(window->renderer.direct3d11.d3d11_device);
+    }
+
+    return false;
+}
+
+#endif
+
+static void
+_cui_window_draw(CuiWindow *window)
+{
+    CuiCommandBuffer *command_buffer = 0;
+
+    switch (window->base.renderer_type)
+    {
+        case CUI_RENDERER_TYPE_SOFTWARE:
+        {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+            command_buffer = _cui_software_renderer_begin_command_buffer(window->renderer.software.renderer_software);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+        } break;
+
+        case CUI_RENDERER_TYPE_OPENGLES2:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_METAL:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_DIRECT3D11:
+        {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+            command_buffer = _cui_direct3d11_renderer_begin_command_buffer(window->renderer.direct3d11.renderer_direct3d11);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+        } break;
+    }
+
+    if (window->base.platform_root_widget)
+    {
+        if (!window->base.glyph_cache.allocated)
+        {
+            _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
+                                        cui_window_allocate_texture_id(window));
+        }
+
+        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
+
+        CuiRect window_rect = cui_make_rect(0, 0, window->width, window->height);
+
+        CuiGraphicsContext ctx;
+        ctx.clip_rect_offset = 0;
+        ctx.clip_rect = window_rect;
+        ctx.window_rect = window_rect;
+        ctx.command_buffer = command_buffer;
+        ctx.glyph_cache = &window->base.glyph_cache;
+        ctx.temporary_memory = &window->base.temporary_memory;
+        ctx.font_manager = &window->base.font_manager;
+
+        const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
+
+        if (window->base.color_theme)
+        {
+            color_theme = window->base.color_theme;
+        }
+
+        cui_widget_draw(window->base.platform_root_widget, &ctx, color_theme);
+
+#if 0
+        int32_t texture_width = ctx.glyph_cache->texture.width;
+        int32_t texture_height = ctx.glyph_cache->texture.height;
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(0.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
+                                cui_make_rect(0, 0, texture_width, texture_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f),
+                                ctx.glyph_cache->texture_id, 0);
+#endif
+
+#if 0
+        int32_t framebuffer_width = window->width;
+        int32_t framebuffer_height = window->height;
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, 0, framebuffer_width, 2),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, framebuffer_height - 2, framebuffer_width, framebuffer_height),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, 2, 2, framebuffer_height - 2),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(framebuffer_width - 2, 2, framebuffer_width, framebuffer_height - 2),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+#endif
+
+        cui_end_temporary_memory(temp_memory);
+    }
+
+#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+    CuiArena screenshot_arena;
+    CuiBitmap screenshot_bitmap;
+
+    if (window->take_screenshot)
+    {
+        cui_arena_allocate(&screenshot_arena, CuiMiB(32));
+    }
+#endif
+
+    switch (window->base.renderer_type)
+    {
+        case CUI_RENDERER_TYPE_SOFTWARE:
+        {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+            if ((window->renderer.software.backbuffer.width != window->width) || (window->renderer.software.backbuffer.height != window->height))
+            {
+                _cui_window_resize_backbuffer(window, window->width, window->height);
+            }
+
+            _cui_software_renderer_render(window->renderer.software.renderer_software,
+                                          &window->renderer.software.backbuffer,
+                                          command_buffer, CuiHexColor(0xFF000000));
+
+#  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+            screenshot_bitmap = window->renderer.software.backbuffer;
+#  endif
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+        } break;
+
+        case CUI_RENDERER_TYPE_OPENGLES2:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_METAL:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_DIRECT3D11:
+        {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+            _cui_direct3d11_renderer_render(window->renderer.direct3d11.renderer_direct3d11, command_buffer,
+                                            window->width, window->height, CuiHexColor(0xFFFFFFFF));
+
+#  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+            if (window->take_screenshot)
+            {
+                CuiAssert(!"CUI_FRAMEBUFFER_SCREENSHOT is not supported with CUI_RENDERER_DIRECT3D11.");
+            }
+#  endif
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+        } break;
+    }
+
+#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+
+    if (window->take_screenshot)
+    {
+        CuiString bmp_data = cui_image_encode_bmp(screenshot_bitmap, true, true, &screenshot_arena);
+
+        CuiFile *screenshot_file = cui_platform_file_create(&screenshot_arena, CuiStringLiteral("screenshot_cui.bmp"));
+
+        if (screenshot_file)
+        {
+            cui_platform_file_truncate(screenshot_file, bmp_data.count);
+            cui_platform_file_write(screenshot_file, bmp_data.data, 0, bmp_data.count);
+            cui_platform_file_close(screenshot_file);
+        }
+
+        cui_arena_deallocate(&screenshot_arena);
+
+        window->take_screenshot = false;
+    }
+
+#endif
+}
+
+static inline bool
+_cui_window_is_maximized(CuiWindow *window)
+{
+    bool result = false;
+
+    WINDOWPLACEMENT window_placement = { sizeof(WINDOWPLACEMENT) };
+
+    if (GetWindowPlacement(window->window_handle, &window_placement))
+    {
+        result = (window_placement.showCmd == SW_SHOWMAXIMIZED) ? true : false;
+    }
+
+    return result;
+}
+
+LRESULT CALLBACK
+_cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_param)
+{
+    CuiWindow *window = 0;
+
+    if (message == WM_NCCREATE)
+    {
+        LPCREATESTRUCT create_struct = (LPCREATESTRUCT) l_param;
+        window = (CuiWindow *) create_struct->lpCreateParams;
+        SetWindowLongPtr(window_handle, GWLP_USERDATA, (LONG_PTR) window);
+    }
+    else
+    {
+        window = (CuiWindow *) GetWindowLongPtr(window_handle, GWLP_USERDATA);
+    }
+
+    LRESULT result = FALSE;
+
+    switch (message)
+    {
+        case WM_NCCALCSIZE:
+        {
+            if (w_param && window->use_custom_decoration)
+            {
+                if (!cui_window_is_fullscreen(window))
+                {
+                    int frame_x, frame_y, border_padding;
+
+                    // TODO: cache those on dpi change
+                    if (_cui_context.GetSystemMetricsForDpi)
+                    {
+                        frame_x = _cui_context.GetSystemMetricsForDpi(SM_CXSIZEFRAME, window->dpi);
+                        frame_y = _cui_context.GetSystemMetricsForDpi(SM_CYSIZEFRAME, window->dpi);
+                        border_padding = _cui_context.GetSystemMetricsForDpi(SM_CXPADDEDBORDER, window->dpi);
+                    }
+                    else
+                    {
+                        frame_x = GetSystemMetrics(SM_CXSIZEFRAME);
+                        frame_y = GetSystemMetrics(SM_CYSIZEFRAME);
+                        border_padding = GetSystemMetrics(SM_CXPADDEDBORDER);
+                    }
+
+                    NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *) l_param;
+                    RECT *requested_client_rect = params->rgrc;
+
+                    requested_client_rect->left   += frame_x + border_padding;
+                    requested_client_rect->right  -= frame_x + border_padding;
+                    requested_client_rect->bottom -= frame_y + border_padding;
+
+                    if (_cui_window_is_maximized(window))
+                    {
+                        requested_client_rect->top += border_padding;
+                    }
+                }
+            }
+            else
+            {
+                result = DefWindowProc(window_handle, message, w_param, l_param);
+            }
+        } break;
+
+        case WM_NCHITTEST:
+        {
+            if (window->use_custom_decoration)
+            {
+                LRESULT hit = DefWindowProc(window_handle, message, w_param, l_param);
+
+                if ((hit == HTNOWHERE) || (hit == HTRIGHT) || (hit == HTLEFT) || (hit == HTTOP) || (hit == HTBOTTOM) ||
+                    (hit == HTTOPLEFT) || (hit == HTTOPRIGHT) || (hit == HTBOTTOMLEFT) || (hit == HTBOTTOMRIGHT))
+                {
+                    result = hit;
+                    break;
+                }
+
+                if (!cui_window_is_fullscreen(window))
+                {
+                    int frame_x, frame_y, border_padding;
+
+                    // TODO: cache those on dpi change
+                    if (_cui_context.GetSystemMetricsForDpi)
+                    {
+                        frame_x = _cui_context.GetSystemMetricsForDpi(SM_CXSIZEFRAME, window->dpi);
+                        frame_y = _cui_context.GetSystemMetricsForDpi(SM_CYSIZEFRAME, window->dpi);
+                        border_padding = _cui_context.GetSystemMetricsForDpi(SM_CXPADDEDBORDER, window->dpi);
+                    }
+                    else
+                    {
+                        frame_x = GetSystemMetrics(SM_CXSIZEFRAME);
+                        frame_y = GetSystemMetrics(SM_CYSIZEFRAME);
+                        border_padding = GetSystemMetrics(SM_CXPADDEDBORDER);
+                    }
+
+                    if ((window->base.hovered_widget == window->minimize_button) ||
+                        (window->base.hovered_widget == window->close_button))
+                    {
+                        result = HTCLIENT;
+                        break;
+                    }
+
+                    if (window->maximize_button && (window->base.hovered_widget == window->maximize_button))
+                    {
+                        // This is needed to support snap layouts on windows 11
+                        result = HTMAXBUTTON;
+                        break;
+                    }
+
+                    POINT cursor_point = { .x = GET_X_LPARAM(l_param), .y = GET_Y_LPARAM(l_param) };
+                    ScreenToClient(window->window_handle, &cursor_point);
+
+                    if ((cursor_point.y > 0) && (cursor_point.y < (frame_y + border_padding)))
+                    {
+                        if (cursor_point.x < border_padding)
+                        {
+                            result = HTTOPLEFT;
+                        }
+                        else if (cursor_point.x >= (window->width - border_padding))
+                        {
+                            result = HTTOPRIGHT;
+                        }
+                        else
+                        {
+                            result = HTTOP;
+                        }
+                        break;
+                    }
+
+                    if (window->base.hovered_widget == window->title)
+                    {
+                        result = HTCAPTION;
+                        break;
+                    }
+                }
+
+                result = HTCLIENT;
+            }
+            else
+            {
+                result = DefWindowProc(window_handle, message, w_param, l_param);
+            }
+        } break;
+
+        case WM_CREATE:
+        {
+            if (window->use_custom_decoration)
+            {
+                RECT window_rect;
+                GetWindowRect(window_handle, &window_rect);
+
+                SetWindowPos(window_handle, 0, window_rect.left, window_rect.top,
+                             window_rect.right - window_rect.left, window_rect.bottom - window_rect.top,
+                             SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+            }
+        } break;
+
+        case WM_DPICHANGED:
+        {
+            window->dpi = HIWORD(w_param);
+            float ui_scale = (float) window->dpi / 96.0f;
+
+            _cui_window_set_ui_scale(window, ui_scale);
+
+            RECT *new_window_rect = (RECT *) l_param;
+
+            SetWindowPos(window->window_handle, 0, new_window_rect->left, new_window_rect->top,
+                         new_window_rect->right - new_window_rect->left, new_window_rect->bottom - new_window_rect->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+
+            result = TRUE;
+        } break;
+
+        case WM_SIZE:
+        {
+            RECT client_rect;
+            GetClientRect(window_handle, &client_rect);
+
+            int32_t width = client_rect.right - client_rect.left;
+            int32_t height = client_rect.bottom - client_rect.top;
+
+            if ((window->width != width) || (window->height != height))
+            {
+                window->width = width;
+                window->height = height;
+
+                if (window->base.platform_root_widget)
+                {
+                    CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+                    cui_widget_layout(window->base.platform_root_widget, rect);
+                }
+
+                window->base.needs_redraw = true;
+            }
+        } break;
+
+        case WM_PAINT:
+        {
+            switch (window->base.renderer_type)
+            {
+                case CUI_RENDERER_TYPE_SOFTWARE:
+                {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+                    if (window->base.needs_redraw)
+                    {
+                        _cui_window_draw(window);
+                        window->base.needs_redraw = false;
+                    }
+
+                    PAINTSTRUCT paint;
+                    HDC device_context = BeginPaint(window_handle, &paint);
+
+                    BITMAPINFO bitmap;
+                    bitmap.bmiHeader.biSize        = sizeof(bitmap.bmiHeader);
+                    bitmap.bmiHeader.biWidth       = window->renderer.software.backbuffer.stride / sizeof(uint32_t);
+                    bitmap.bmiHeader.biHeight      = -(LONG) window->renderer.software.backbuffer.height;
+                    bitmap.bmiHeader.biPlanes      = 1;
+                    bitmap.bmiHeader.biBitCount    = 32;
+                    bitmap.bmiHeader.biCompression = BI_RGB;
+
+                    StretchDIBits(device_context, 0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
+                                  0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
+                                  window->renderer.software.backbuffer.pixels, &bitmap, DIB_RGB_COLORS, SRCCOPY);
+
+                    EndPaint(window_handle, &paint);
+#else
+                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+                } break;
+
+                case CUI_RENDERER_TYPE_OPENGLES2:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_METAL:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_DIRECT3D11:
+                {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+                    result = DefWindowProc(window_handle, message, w_param, l_param);
+#else
+                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+                } break;
+            }
+        } break;
+
+        case WM_NCMOUSEMOVE:
+        {
+            if (window->use_custom_decoration)
+            {
+                OutputDebugString(L"WM_NCMOUSEMOVE\n");
+
+                if (window->is_tracking_mouse)
+                {
+                    window->is_tracking_mouse = false;
+                }
+
+                if (!window->is_tracking_ncmouse)
+                {
+                    TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT) };
+                    tracking.dwFlags = TME_LEAVE | TME_NONCLIENT;
+                    tracking.hwndTrack = window->window_handle;
+
+                    TrackMouseEvent(&tracking);
+                    window->is_tracking_ncmouse = true;
+                }
+
+                // TODO: check if we're outside the window bounds to generate LEAVE events
+
+                POINT cursor_point = { .x = GET_X_LPARAM(l_param), .y = GET_Y_LPARAM(l_param) };
+                ScreenToClient(window->window_handle, &cursor_point);
+
+                window->base.event.mouse.x = cursor_point.x;
+                window->base.event.mouse.y = cursor_point.y;
+
+                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+            }
+            else
+            {
+                result = DefWindowProc(window_handle, message, w_param, l_param);
+            }
+        } break;
+
+        case WM_MOUSEMOVE:
+        {
+            OutputDebugString(L"WM_MOUSEMOVE\n");
+
+            if (window->is_tracking_ncmouse)
+            {
+                window->is_tracking_ncmouse = false;
+            }
+
+            if (!window->is_tracking_mouse)
+            {
+                TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT) };
+                tracking.dwFlags = TME_LEAVE;
+                tracking.hwndTrack = window->window_handle;
+
+                TrackMouseEvent(&tracking);
+                window->is_tracking_mouse = true;
+            }
+
+            window->base.event.mouse.x = GET_X_LPARAM(l_param);
+            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+        } break;
+
+        case WM_NCMOUSELEAVE:
+        {
+            if (window->is_tracking_ncmouse)
+            {
+                OutputDebugString(L"WM_NCMOUSELEAVE\n");
+
+                window->is_tracking_ncmouse = false;
+                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+            }
+        } break;
+
+        case WM_MOUSELEAVE:
+        {
+            if (window->is_tracking_mouse)
+            {
+                OutputDebugString(L"WM_MOUSELEAVE\n");
+
+                window->is_tracking_mouse = false;
+                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+            }
+        } break;
+
+        case WM_NCLBUTTONDOWN:
+        {
+            OutputDebugString(L"WM_NCLBUTTONDOWN\n");
+
+            if ((!window->minimize_button || (window->base.hovered_widget != window->minimize_button)) &&
+                (!window->maximize_button || (window->base.hovered_widget != window->maximize_button)) &&
+                (!window->close_button || (window->base.hovered_widget != window->close_button)))
+            {
+                result = DefWindowProc(window_handle, message, w_param, l_param);
+            }
+        } break;
+
+        case WM_LBUTTONDOWN:
+        {
+            OutputDebugString(L"WM_LBUTTONDOWN\n");
+            // TODO: SetCapture(window->window_handle) ?
+            window->base.event.mouse.x = GET_X_LPARAM(l_param);
+            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_DOWN);
+        } break;
+
+        case WM_LBUTTONDBLCLK:
+        {
+            OutputDebugString(L"WM_LBUTTONDBLCLK\n");
+            window->base.event.mouse.x = GET_X_LPARAM(l_param);
+            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+        } break;
+
+        case WM_LBUTTONUP:
+        {
+            // TODO: ReleaseCapture(window->window_handle) ?
+            window->base.event.mouse.x = GET_X_LPARAM(l_param);
+            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_UP);
+        } break;
+
+        case WM_RBUTTONDOWN:
+        {
+            window->base.event.mouse.x = GET_X_LPARAM(l_param);
+            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_DOWN);
+        } break;
+
+        case WM_RBUTTONUP:
+        {
+            window->base.event.mouse.x = GET_X_LPARAM(l_param);
+            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
+        } break;
+
+#define _CUI_KEY_DOWN_EVENT(key_id)                                 \
+    window->base.event.key.codepoint       = (key_id);              \
+    window->base.event.key.alt_is_down     = window->alt_is_down;   \
+    window->base.event.key.ctrl_is_down    = window->ctrl_is_down;  \
+    window->base.event.key.shift_is_down   = window->shift_is_down; \
+    window->base.event.key.command_is_down = false;                 \
+    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_DOWN);
+
+        case WM_KEYDOWN:
+        {
+            switch (w_param)
+            {
+                case VK_BACK:   { _CUI_KEY_DOWN_EVENT(CUI_KEY_BACKSPACE); } break;
+                case VK_TAB:    { _CUI_KEY_DOWN_EVENT(CUI_KEY_TAB);       } break;
+                case VK_RETURN: { _CUI_KEY_DOWN_EVENT(CUI_KEY_ENTER);     } break;
+                case VK_ESCAPE: { _CUI_KEY_DOWN_EVENT(CUI_KEY_ESCAPE);    } break;
+                case VK_UP:     { _CUI_KEY_DOWN_EVENT(CUI_KEY_UP);        } break;
+                case VK_DOWN:   { _CUI_KEY_DOWN_EVENT(CUI_KEY_DOWN);      } break;
+                case VK_LEFT:   { _CUI_KEY_DOWN_EVENT(CUI_KEY_LEFT);      } break;
+                case VK_RIGHT:  { _CUI_KEY_DOWN_EVENT(CUI_KEY_RIGHT);     } break;
+
+                case VK_F1:  case VK_F2:  case VK_F3:  case VK_F4:
+                case VK_F5:  case VK_F6:  case VK_F7:  case VK_F8:
+                case VK_F9:  case VK_F10: case VK_F11: case VK_F12:
+                {
+#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+                    if (w_param == VK_F2)
+                    {
+                        window->take_screenshot = true;
+                        window->base.needs_redraw = true;
+                    }
+                    else
+#endif
+                    {
+                        _CUI_KEY_DOWN_EVENT(CUI_KEY_F1 + (w_param - VK_F1));
+                    }
+                } break;
+
+                case VK_CONTROL:
+                case VK_LCONTROL:
+                case VK_RCONTROL:
+                case VK_MENU:
+                case VK_LMENU:
+                case VK_RMENU:
+                case VK_SHIFT:
+                case VK_LSHIFT:
+                case VK_RSHIFT:
+                    break;
+
+                default:
+                {
+                    BYTE state[256];
+                    uint8_t character;
+
+                    UINT vk = (UINT) w_param;
+                    UINT scan = (UINT) ((l_param >> 1) & 0x7F);
+
+                    GetKeyboardState(state);
+
+                    if (window->ctrl_is_down && !window->alt_is_down)
+                    {
+                        state[VK_CONTROL] = 0;
+                    }
+
+                    int ret = ToAscii(vk, scan, state, (LPWORD) &character, 0);
+
+#if 0
+                    WCHAR buffer[200];
+                    wsprintf(buffer, L"character: %u\n", character);
+                    OutputDebugString(buffer);
+#endif
+
+                    if ((ret == 1) && (character >= 32) && (character < 127))
+                    {
+                        _CUI_KEY_DOWN_EVENT(character);
+                    }
+                } break;
+            }
+        } break;
+
+        case WM_CHAR:
+        {
+            if (w_param >= 128)
+            {
+                _CUI_KEY_DOWN_EVENT(w_param);
+            }
+        } break;
+
+#undef _CUI_KEY_DOWN_EVENT
+
+        case WM_INPUT:
+        {
+            uint8_t raw_input_buffer[sizeof(RAWINPUT)];
+            UINT buffer_size = sizeof(raw_input_buffer);
+
+            GetRawInputData((HRAWINPUT) l_param, RID_INPUT, raw_input_buffer, &buffer_size, sizeof(RAWINPUTHEADER));
+
+            RAWINPUT *raw_input = (RAWINPUT *) raw_input_buffer;
+
+            if (raw_input->header.dwType == RIM_TYPEKEYBOARD)
+            {
+                RAWKEYBOARD *keyboard = &raw_input->data.keyboard;
+
+                bool is_down = (keyboard->Flags & 1) ? false : true;
+
+                switch (keyboard->VKey)
+                {
+                    case VK_MENU:
+                    {
+                        window->alt_is_down = is_down;
+                    } break;
+
+                    case VK_CONTROL:
+                    {
+                        window->ctrl_is_down = is_down;
+                    } break;
+
+                    case VK_SHIFT:
+                    {
+                        window->shift_is_down = is_down;
+                    } break;
+                }
+            }
+
+            result = DefWindowProc(window_handle, message, w_param, l_param);
+        } break;
+
+        case WM_DESTROY:
+        {
+            cui_window_destroy(window);
+        } break;
+
+        default:
+        {
+            result = DefWindowProc(window_handle, message, w_param, l_param);
+        } break;
+    }
+
+    return result;
+}
+
+static void
+_cui_window_on_close_button(CuiWidget *widget)
+{
+    OutputDebugString(L"on_close_button\n");
+    cui_window_close(widget->window);
+}
+
+static void
+_cui_window_on_maximize_button(CuiWidget *widget)
+{
+    OutputDebugString(L"on_maximize_button\n");
+    ShowWindow(widget->window->window_handle, _cui_window_is_maximized(widget->window) ? SW_NORMAL : SW_MAXIMIZE);
+}
+
+static void
+_cui_window_on_minimize_button(CuiWidget *widget)
+{
+    OutputDebugString(L"on_minimize_button\n");
+    ShowWindow(widget->window->window_handle, SW_MINIMIZE);
+}
+
+void
+cui_signal_main_thread(void)
+{
+    SetEvent(_cui_context.signal_event);
+}
+
+CuiString
+cui_platform_get_environment_variable(CuiArena *temporary_memory, CuiArena *arena, CuiString name)
+{
+    CuiString result = { 0 };
+
+    CuiString utf16_name = cui_utf8_to_utf16le(temporary_memory, name);
+    const char *c_name = cui_to_c_string(temporary_memory, utf16_name);
+
+    DWORD size = GetEnvironmentVariable((LPCWSTR) c_name, 0, 0);
+
+    if (size)
+    {
+        int64_t string_length = 2 * size;
+        int64_t buffer_size = string_length + 2;
+        void *buffer = cui_alloc(temporary_memory, buffer_size, CuiDefaultAllocationParams());
+        GetEnvironmentVariable((LPCWSTR) c_name, buffer, buffer_size);
+        result = cui_utf16le_to_utf8(arena, cui_make_string(buffer, string_length));
+    }
+
+    return result;
+}
+
+int32_t cui_platform_get_environment_variable_int32(CuiArena *temporary_memory, CuiString name)
+{
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    int32_t result = cui_parse_int32(cui_platform_get_environment_variable(temporary_memory, temporary_memory, name));
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
+void *
+cui_platform_allocate(uint64_t size)
+{
+    return VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+}
+
+void
+cui_platform_deallocate(void *ptr, uint64_t size)
+{
+    (void) size;
+    VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
+void
+cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
+{
+    if (OpenClipboard(0))
+    {
+        EmptyClipboard();
+
+        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+        // TODO: convert to CRLF
+        CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, text);
+
+        HANDLE clipbuffer = GlobalAlloc(GMEM_MOVEABLE, utf16_string.count + 2);
+
+        if (clipbuffer)
+        {
+            uint8_t *dst = (uint8_t *) GlobalLock(clipbuffer);
+
+            cui_copy_memory(dst, utf16_string.data, utf16_string.count);
+            dst[utf16_string.count + 0] = 0;
+            dst[utf16_string.count + 1] = 0;
+
+            GlobalUnlock(clipbuffer);
+
+            SetClipboardData(CF_UNICODETEXT, clipbuffer);
+        }
+
+        cui_end_temporary_memory(temp_memory);
+
+        CloseClipboard();
+    }
+}
+
+CuiString
+cui_platform_get_clipboard_text(CuiArena *arena)
+{
+    CuiString result = { 0, 0 };
+
+    if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(0))
+    {
+        HANDLE clipboard_handle = GetClipboardData(CF_UNICODETEXT);
+
+        if (clipboard_handle)
+        {
+            void *data = GlobalLock(clipboard_handle);
+
+            if (data)
+            {
+                // TODO: handle CRLF to LF conversion
+                CuiString utf16_string = cui_make_string(data, 2 * wcslen((wchar_t *) data));
+                result = cui_utf16le_to_utf8(arena, utf16_string);
+
+                GlobalUnlock(clipboard_handle);
+            }
+        }
+
+        CloseClipboard();
+    }
+
+    return result;
+}
+
+uint64_t
+cui_platform_get_performance_counter(void)
+{
+    LARGE_INTEGER time;
+    QueryPerformanceCounter(&time);
+    return time.QuadPart;
+}
+
+uint64_t
+cui_platform_get_performance_frequency(void)
+{
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    return frequency.QuadPart;
+}
 
 CuiFile *
-cui_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode)
+cui_platform_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode)
 {
     CuiFile *result = 0;
 
@@ -37,8 +1074,30 @@ cui_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode)
     return result;
 }
 
+CuiFile *
+cui_platform_file_create(CuiArena *temporary_memory, CuiString filename)
+{
+    CuiFile *result = 0;
+
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, filename);
+    HANDLE file = CreateFile((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string),
+                             GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS,
+                             FILE_FLAG_WRITE_THROUGH, 0);
+
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        result = (CuiFile *) file;
+    }
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
 CuiFileAttributes
-cui_file_get_attributes(CuiFile *file)
+cui_platform_file_get_attributes(CuiFile *file)
 {
     CuiAssert(file);
 
@@ -59,7 +1118,7 @@ cui_file_get_attributes(CuiFile *file)
 }
 
 CuiFileAttributes
-cui_get_file_attributes(CuiArena *temporary_memory, CuiString filename)
+cui_platform_get_file_attributes(CuiArena *temporary_memory, CuiString filename)
 {
     CuiFileAttributes result = { 0 };
 
@@ -72,7 +1131,7 @@ cui_get_file_attributes(CuiArena *temporary_memory, CuiString filename)
 
     if (file != INVALID_HANDLE_VALUE)
     {
-        result = cui_file_get_attributes((CuiFile *) file);
+        result = cui_platform_file_get_attributes((CuiFile *) file);
     }
 
     cui_end_temporary_memory(temp_memory);
@@ -81,7 +1140,20 @@ cui_get_file_attributes(CuiArena *temporary_memory, CuiString filename)
 }
 
 void
-cui_file_read(CuiFile *file, void *buffer, uint64_t offset, uint64_t size)
+cui_platform_file_truncate(CuiFile *file, uint64_t size)
+{
+    CuiAssert(file);
+
+    LARGE_INTEGER trunc_size;
+    trunc_size.QuadPart = size;
+    SetFilePointerEx((HANDLE) file, trunc_size, 0, FILE_BEGIN);
+    SetEndOfFile((HANDLE) file);
+    trunc_size.QuadPart = 0;
+    SetFilePointerEx((HANDLE) file, trunc_size, 0, FILE_BEGIN);
+}
+
+void
+cui_platform_file_read(CuiFile *file, void *buffer, uint64_t offset, uint64_t size)
 {
     CuiAssert(file);
 
@@ -93,14 +1165,36 @@ cui_file_read(CuiFile *file, void *buffer, uint64_t offset, uint64_t size)
 }
 
 void
-cui_file_close(CuiFile *file)
+cui_platform_file_write(CuiFile *file, void *buffer, uint64_t offset, uint64_t size)
+{
+    CuiAssert(file);
+
+    DWORD bytes_written = 0;
+    LARGE_INTEGER seek_offset;
+    seek_offset.QuadPart = offset;
+    SetFilePointerEx((HANDLE) file, seek_offset, 0, FILE_BEGIN);
+    WriteFile((HANDLE) file, buffer, size, &bytes_written, 0);
+}
+
+void
+cui_platform_file_close(CuiFile *file)
 {
     CuiAssert(file);
     CloseHandle((HANDLE) file);
 }
 
+CuiString
+cui_platform_get_canonical_filename(CuiArena *temporary_memory, CuiArena *arena, CuiString filename)
+{
+    CuiString result = { 0 };
+
+    result = filename;
+
+    return result;
+}
+
 void
-cui_get_files(CuiArena *temporary_memory, CuiString directory, CuiFileInfo **file_list, CuiArena *arena)
+cui_platform_get_files(CuiArena *temporary_memory, CuiArena *arena, CuiString directory, CuiFileInfo **file_list)
 {
     CuiString search_path = cui_path_concat(temporary_memory, directory, CuiStringLiteral("*"));
 
@@ -137,230 +1231,93 @@ cui_get_files(CuiArena *temporary_memory, CuiString directory, CuiFileInfo **fil
     }
 }
 
-void
-cui_get_font_directories(CuiArena *temporary_memory, CuiString **font_dirs, CuiArena *arena)
+uint32_t
+cui_platform_get_core_count(void)
 {
-    *cui_array_append(*font_dirs) = CuiStringLiteral("C:\\Windows\\Fonts");
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+
+    return system_info.dwNumberOfProcessors;
 }
 
-static void
-_cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
+uint32_t
+cui_platform_get_performance_core_count(void)
 {
-    window->backbuffer.width  = width;
-    window->backbuffer.height = height;
-    window->backbuffer.stride = CuiAlign(window->backbuffer.width * 4, 64);
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
 
-    int64_t needed_size = window->backbuffer.stride * window->backbuffer.height;
-
-    if (needed_size > window->backbuffer_memory_size)
-    {
-        if (window->backbuffer.pixels)
-        {
-            cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
-        }
-
-        window->backbuffer_memory_size = CuiAlign(needed_size, CuiMiB(4));
-        window->backbuffer.pixels = cui_allocate_platform_memory(window->backbuffer_memory_size);
-    }
+    return system_info.dwNumberOfProcessors;
 }
 
-LRESULT CALLBACK
-_cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_param)
+uint32_t
+cui_platform_get_efficiency_core_count(void)
 {
-    CuiWindow *window = 0;
-
-    if (message == WM_NCCREATE)
-    {
-        LPCREATESTRUCT create_struct = (LPCREATESTRUCT) l_param;
-        window = (CuiWindow *) create_struct->lpCreateParams;
-        SetWindowLongPtr(window_handle, GWLP_USERDATA, (LONG_PTR) window);
-    }
-    else
-    {
-        window = (CuiWindow *) GetWindowLongPtr(window_handle, GWLP_USERDATA);
-    }
-
-    LRESULT result = FALSE;
-
-    switch (message)
-    {
-        case WM_DPICHANGED:
-        {
-            float ui_scale = (float) HIWORD(w_param) / 96.0f;
-            window->base.ui_scale = ui_scale;
-
-            cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
-            cui_glyph_cache_reset(&window->base.glyph_cache);
-
-            cui_widget_set_ui_scale(&window->base.root_widget, ui_scale);
-
-            RECT *new_window_rect = (RECT *) l_param;
-
-            SetWindowPos(window->window_handle, 0, new_window_rect->left, new_window_rect->top,
-                         new_window_rect->right - new_window_rect->left, new_window_rect->bottom - new_window_rect->top,
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-
-            result = TRUE;
-        } break;
-
-        case WM_SIZE:
-        {
-            RECT client_rect;
-            GetClientRect(window_handle, &client_rect);
-
-            int32_t width = client_rect.right - client_rect.left;
-            int32_t height = client_rect.bottom - client_rect.top;
-
-            if ((window->backbuffer.width != width) || (window->backbuffer.height != height))
-            {
-                _cui_window_resize_backbuffer(window, width, height);
-
-                CuiRect rect = cui_make_rect(0, 0, window->backbuffer.width, window->backbuffer.height);
-
-                cui_widget_layout(&window->base.root_widget, rect);
-                cui_window_request_redraw(window, rect);
-            }
-        } break;
-
-        case WM_PAINT:
-        {
-            if (cui_window_needs_redraw(window))
-            {
-                cui_window_redraw(window, window->redraw_rect);
-            }
-
-            PAINTSTRUCT paint;
-            HDC device_context = BeginPaint(window_handle, &paint);
-
-            BITMAPINFO bitmap;
-            bitmap.bmiHeader.biSize        = sizeof(bitmap.bmiHeader);
-            bitmap.bmiHeader.biWidth       = window->backbuffer.stride / sizeof(uint32_t);
-            bitmap.bmiHeader.biHeight      = -(LONG) window->backbuffer.height;
-            bitmap.bmiHeader.biPlanes      = 1;
-            bitmap.bmiHeader.biBitCount    = 32;
-            bitmap.bmiHeader.biCompression = BI_RGB;
-
-            StretchDIBits(device_context, 0, 0, window->backbuffer.width, window->backbuffer.height,
-                          0, 0, window->backbuffer.width, window->backbuffer.height, window->backbuffer.pixels,
-                          &bitmap, DIB_RGB_COLORS, SRCCOPY);
-
-            EndPaint(window_handle, &paint);
-        } break;
-
-        case WM_MOUSEMOVE:
-        {
-            if (!window->is_tracking)
-            {
-                TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT) };
-                tracking.dwFlags = TME_LEAVE;
-                tracking.hwndTrack = window->window_handle;
-
-                TrackMouseEvent(&tracking);
-                window->is_tracking = true;
-            }
-
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
-
-            cui_window_handle_event(window, CUI_EVENT_TYPE_MOVE);
-        } break;
-
-        case WM_MOUSELEAVE:
-        {
-            window->is_tracking = false;
-            cui_window_handle_event(window, CUI_EVENT_TYPE_LEAVE);
-        } break;
-
-        case WM_LBUTTONDOWN:
-        {
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
-
-            cui_window_handle_event(window, CUI_EVENT_TYPE_PRESS);
-        } break;
-
-        case WM_LBUTTONUP:
-        {
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
-
-            cui_window_handle_event(window, CUI_EVENT_TYPE_RELEASE);
-        } break;
-
-        case WM_MOUSEWHEEL:
-        {
-            window->base.event.wheel.dx = GET_WHEEL_DELTA_WPARAM(w_param) / WHEEL_DELTA;
-
-            cui_window_handle_event(window, CUI_EVENT_TYPE_WHEEL);
-        } break;
-
-        case WM_DESTROY:
-        {
-            cui_window_destroy(window);
-        } break;
-
-        default:
-        {
-            result = DefWindowProc(window_handle, message, w_param, l_param);
-        } break;
-    }
-
-    return result;
-}
-
-void *
-cui_allocate_platform_memory(uint64_t size)
-{
-    return VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-}
-
-void
-cui_deallocate_platform_memory(void *ptr, uint64_t size)
-{
-    (void) size;
-    VirtualFree(ptr, 0, MEM_RELEASE);
-}
-
-static DWORD
-_cui_thread_proc(void *data)
-{
-    CuiWorkQueue *work_queue = &_cui_context.common.work_queue;
-
-    for (;;)
-    {
-        if (_cui_work_queue_do_next_entry(work_queue))
-        {
-            WaitForSingleObject(work_queue->semaphore, INFINITE);
-        }
-    }
-
     return 0;
 }
 
-typedef BOOL WINAPI set_process_dpi_aware(void);
-typedef BOOL WINAPI set_process_dpi_awareness_context(DPI_AWARENESS_CONTEXT);
+void
+cui_platform_get_font_directories(CuiArena *temporary_memory, CuiArena *arena, CuiString **font_dirs)
+{
+    (void) temporary_memory;
+    (void) arena;
+
+    *cui_array_append(*font_dirs) = CuiStringLiteral("C:\\Windows\\Fonts");
+}
+
+CuiString *
+cui_get_files_to_open(void)
+{
+    return 0;
+}
 
 bool
-cui_init(int arg_count, char **args)
+cui_init(int argument_count, char **arguments)
 {
-    if (!_cui_common_init(arg_count, args))
+    if (!_cui_common_init(argument_count, arguments))
     {
         return false;
     }
 
-    SYSTEM_INFO system_info;
-    GetSystemInfo(&system_info);
+    int arg_count;
+    LPWSTR *args = CommandLineToArgvW(GetCommandLine(), &arg_count);
 
-    int32_t core_count = system_info.dwNumberOfProcessors;
-
-    int32_t thread_count = cui_max_int32(1, cui_min_int32(core_count - 1, 31));
-
-    _cui_context.common.work_queue.semaphore = CreateSemaphore(0, 0, CuiArrayCount(_cui_context.common.work_queue.entries), 0);
-
-    for (int32_t i = 0; i < thread_count; i++)
+    if (args)
     {
-        CreateThread(0, 0, _cui_thread_proc, 0, 0, 0);
+        args += 1;
+        arg_count -= 1;
+
+        for (int i = 0; i < arg_count; i += 1)
+        {
+            CuiString utf16_argument = cui_make_string(args[i], 2 * wcslen(args[i]));
+            CuiString argument = cui_utf16le_to_utf8(&_cui_context.common.command_line_arguments_arena, utf16_argument);
+            *cui_array_append(_cui_context.common.command_line_arguments) = argument;
+        }
+
+        LocalFree(args);
     }
+
+    int32_t worker_thread_count = cui_platform_get_performance_core_count() - 1;
+
+    worker_thread_count = cui_max_int32(1, cui_min_int32(worker_thread_count, 15));
+
+    _cui_context.common.worker_thread_queue.semaphore =
+        CreateSemaphore(0, 0, CuiArrayCount(_cui_context.common.worker_thread_queue.entries), 0);
+    _cui_context.common.interactive_background_thread_queue.semaphore =
+        CreateSemaphore(0, 0, CuiArrayCount(_cui_context.common.interactive_background_thread_queue.entries), 0);
+    _cui_context.common.non_interactive_background_thread_queue.semaphore =
+        CreateSemaphore(0, 0, CuiArrayCount(_cui_context.common.non_interactive_background_thread_queue.entries), 0);
+
+    for (int32_t worker_thread_index = 0;
+         worker_thread_index < worker_thread_count;
+         worker_thread_index += 1)
+    {
+        CreateThread(0, 0, _cui_worker_thread_proc, 0, 0, 0);
+    }
+
+    CreateThread(0, 0, _cui_background_thread_proc, &_cui_context.common.interactive_background_thread_queue, 0, 0);
+    CreateThread(0, 0, _cui_background_thread_proc, &_cui_context.common.non_interactive_background_thread_queue, 0, 0);
+
+    _cui_context.signal_event = CreateEvent(0, TRUE, FALSE, 0);
 
     HMODULE user_32 = LoadLibrary(L"User32.dll");
 
@@ -385,6 +1342,7 @@ cui_init(int arg_count, char **args)
 
     _cui_context.GetDpiForSystem = (UINT (*)()) GetProcAddress(user_32, "GetDpiForSystem");
     _cui_context.GetDpiForWindow = (UINT (*)(HWND)) GetProcAddress(user_32, "GetDpiForWindow");
+    _cui_context.GetSystemMetricsForDpi = (int (*)(int, UINT)) GetProcAddress(user_32, "GetSystemMetricsForDpi");
 
     _cui_context.cursor_arrow           = LoadCursor(0, IDC_ARROW);
     _cui_context.cursor_text            = LoadCursor(0, IDC_IBEAM);
@@ -396,7 +1354,7 @@ cui_init(int arg_count, char **args)
     _cui_context.window_class_name = L"my_very_special_window_class";
 
     WNDCLASS window_class = { sizeof(WNDCLASS) };
-    window_class.style = CS_VREDRAW | CS_HREDRAW;
+    window_class.style = CS_VREDRAW | CS_HREDRAW | CS_DBLCLKS;
     window_class.lpfnWndProc = _cui_window_callback;
     window_class.hInstance = GetModuleHandle(0);
     window_class.lpszClassName = _cui_context.window_class_name;
@@ -411,33 +1369,147 @@ cui_init(int arg_count, char **args)
 }
 
 CuiWindow *
-cui_window_create()
+cui_window_create(uint32_t creation_flags)
 {
-    CuiWindow *window = _cui_add_window();
+    CuiWindow *window = _cui_add_window(creation_flags);
 
-    window->base.ui_scale = 1.0f;
+    window->dpi = 96;
 
     if (_cui_context.GetDpiForSystem)
     {
-        window->base.ui_scale = (float) _cui_context.GetDpiForSystem() / 96.0f;
+        window->dpi = _cui_context.GetDpiForSystem();
     }
     else
     {
         HDC device_context = GetDC(0);
-        window->base.ui_scale = (float) GetDeviceCaps(device_context, LOGPIXELSX) / 96.0f;
+        window->dpi = GetDeviceCaps(device_context, LOGPIXELSX);
         ReleaseDC(0, device_context);
     }
 
-    int32_t width = lroundf(window->base.ui_scale * CUI_DEFAULT_WINDOW_WIDTH);
-    int32_t height = lroundf(window->base.ui_scale * CUI_DEFAULT_WINDOW_HEIGHT);
+    window->base.ui_scale = (float) window->dpi / 96.0f;
 
-    window->backbuffer_memory_size = 0;
-    window->backbuffer.pixels = 0;
+    window->width = lroundf(window->base.ui_scale * CUI_DEFAULT_WINDOW_WIDTH);
+    window->height = lroundf(window->base.ui_scale * CUI_DEFAULT_WINDOW_HEIGHT);
 
-    _cui_window_resize_backbuffer(window, width, height);
+    window->font_id = _cui_font_manager_find_font(&window->base.temporary_memory, &window->base.font_manager, window->base.ui_scale,
+                                                  cui_make_sized_font_spec(CuiStringLiteral("arial"),  14.0f, 1.0f),
+                                                  cui_make_sized_font_spec(CuiStringLiteral("seguiemj"), 14.0f, 1.0f));
 
-    window->window_handle = CreateWindowEx(0, _cui_context.window_class_name, L"", WS_OVERLAPPEDWINDOW,
-                                           CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, GetModuleHandle(0), window);
+    cui_arena_allocate(&window->arena, CuiKiB(4));
+
+    if (IsWindows8OrGreater() && !(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
+    {
+        window->use_custom_decoration = true;
+    }
+
+    if (window->use_custom_decoration)
+    {
+        CuiWidget *root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+        cui_widget_init(root_widget, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(root_widget, CUI_AXIS_Y);
+        cui_widget_set_y_axis_gravity(root_widget, CUI_GRAVITY_START);
+
+        window->titlebar = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+        cui_widget_init(window->titlebar, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(window->titlebar, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(window->titlebar, CUI_GRAVITY_END);
+        cui_widget_add_flags(window->titlebar, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_FIXED_HEIGHT);
+        cui_widget_set_preferred_size(window->titlebar, 0.0f, 0.0f);
+        cui_widget_set_border_width(window->titlebar, 0.0f, 0.0f, 0.0f, 0.0f);
+
+        window->titlebar->color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+        window->titlebar->color_normal_border = CUI_COLOR_WINDOW_TITLEBAR_BORDER;
+
+        cui_widget_append_child(root_widget, window->titlebar);
+
+        // close button
+        window->close_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+        cui_widget_init(window->close_button, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_set_icon(window->close_button, CUI_ICON_WINDOWS_CLOSE);
+        cui_widget_set_border_width(window->close_button, 0.0f, 0.0f, 0.0f, 0.0f);
+        cui_widget_set_border_radius(window->close_button, 0.0f, 0.0f, 0.0f, 0.0f);
+        cui_widget_set_padding(window->close_button, 8.0f, 17.0f, 8.0f, 17.0f);
+        cui_widget_set_box_shadow(window->close_button, 0.0f, 0.0f, 0.0f);
+        cui_widget_append_child(window->titlebar, window->close_button);
+
+        window->close_button->on_action = _cui_window_on_close_button;
+
+        if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+        {
+            // maximize button
+            window->maximize_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(window->maximize_button, CUI_WIDGET_TYPE_BUTTON);
+            cui_widget_set_icon(window->maximize_button, CUI_ICON_WINDOWS_MAXIMIZE);
+            cui_widget_set_border_width(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+            cui_widget_set_border_radius(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+            cui_widget_set_padding(window->maximize_button, 8.0f, 17.0f, 8.0f, 17.0f);
+            cui_widget_set_box_shadow(window->maximize_button, 0.0f, 0.0f, 0.0f);
+            cui_widget_append_child(window->titlebar, window->maximize_button);
+
+            window->maximize_button->on_action = _cui_window_on_maximize_button;
+        }
+
+        // minimize button
+        window->minimize_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+        cui_widget_init(window->minimize_button, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_set_icon(window->minimize_button, CUI_ICON_WINDOWS_MINIMIZE);
+        cui_widget_set_border_width(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+        cui_widget_set_border_radius(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+        cui_widget_set_padding(window->minimize_button, 8.0f, 17.0f, 8.0f, 17.0f);
+        cui_widget_set_box_shadow(window->minimize_button, 0.0f, 0.0f, 0.0f);
+        cui_widget_append_child(window->titlebar, window->minimize_button);
+
+        window->minimize_button->on_action = _cui_window_on_minimize_button;
+
+        // window title
+        window->title = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+        cui_widget_init(window->title, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(window->title, CuiStringLiteral(""));
+        cui_widget_set_x_axis_gravity(window->title, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(window->title, CUI_GRAVITY_CENTER);
+        cui_widget_set_padding(window->title, 0.0f, 0.0f, 0.0f, 8.0f);
+        cui_widget_append_child(window->titlebar, window->title);
+
+        CuiWidget *dummy_user_root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+        cui_widget_init(dummy_user_root_widget, CUI_WIDGET_TYPE_BOX);
+
+        cui_widget_append_child(root_widget, dummy_user_root_widget);
+
+        window->base.user_root_widget = dummy_user_root_widget;
+
+        CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+
+        cui_widget_set_window(root_widget, window);
+        cui_widget_set_ui_scale(root_widget, window->base.ui_scale);
+        cui_widget_layout(root_widget, rect);
+
+        window->base.platform_root_widget = root_widget;
+
+        // all widget have to be allocated at that point
+        window->title_temp_memory = cui_begin_temporary_memory(&window->arena);
+    }
+
+    int window_style = 0;
+
+    if (window->use_custom_decoration)
+    {
+        window_style = WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
+    }
+    else
+    {
+        window_style = WS_OVERLAPPEDWINDOW;
+    }
+
+    // TODO: WS_EX_NOREDIRECTIONBITMAP for direct3d11 ??? This breaks the software rendering.
+    //       Maybe that is because there is only one framebuffer used. Change to a swapchain like on linux.
+    window->window_handle = CreateWindowEx(0, _cui_context.window_class_name, L"", window_style,
+                                           CW_USEDEFAULT, CW_USEDEFAULT, window->width, window->height, 0, 0, GetModuleHandle(0), window);
 
     if (!window->window_handle)
     {
@@ -445,22 +1517,85 @@ cui_window_create()
         return 0;
     }
 
-    if (_cui_context.GetDpiForWindow)
+    RAWINPUTDEVICE input_device;
+    input_device.usUsagePage = 1;
+    input_device.usUsage     = 6;
+    input_device.dwFlags     = 0;
+    input_device.hwndTarget  = window->window_handle;
+
+    RegisterRawInputDevices(&input_device, 1, sizeof(input_device));
+
+    bool renderer_initialized = false;
+
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+
+    if (!renderer_initialized)
     {
-        window->base.ui_scale = (float) _cui_context.GetDpiForWindow(window->window_handle) / 96.0f;
+        renderer_initialized = _cui_initialize_direct3d11(window);
     }
 
-    cui_font_update_with_size_and_line_height(window->base.font, roundf(window->base.ui_scale * 14.0f), 1.0f);
+#endif
+
+#if CUI_RENDERER_SOFTWARE_ENABLED
+
+    if (!renderer_initialized)
+    {
+        window->base.renderer_type = CUI_RENDERER_TYPE_SOFTWARE;
+        window->renderer.software.renderer_software = _cui_create_software_renderer();
+        renderer_initialized = true;
+    }
+
+#endif
+
+    if (!renderer_initialized)
+    {
+        cui_arena_deallocate(&window->arena);
+        _cui_remove_window(window);
+        return 0;
+    }
+
+    if (_cui_context.GetDpiForWindow)
+    {
+        window->dpi = _cui_context.GetDpiForWindow(window->window_handle);
+        float ui_scale = (float) window->dpi / 96.0f;
+
+        _cui_window_set_ui_scale(window, ui_scale);
+    }
+
+    if (window->use_custom_decoration)
+    {
+        SIZE titlebar_size = { 0 };
+        HTHEME theme = OpenThemeData(window->window_handle, L"WINDOW");
+        GetThemePartSize(theme, 0, WP_CAPTION, CS_ACTIVE, 0, TS_TRUE, &titlebar_size);
+        CloseThemeData(theme);
+
+        cui_widget_set_preferred_size(window->titlebar, 0.0f, (float) titlebar_size.cy);
+
+        CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+        cui_widget_layout(window->base.platform_root_widget, rect);
+    }
 
     return window;
 }
 
 void
-cui_window_set_title(CuiWindow *window, const char *title)
+cui_window_set_title(CuiWindow *window, CuiString title)
 {
+    if (window->use_custom_decoration)
+    {
+        cui_end_temporary_memory(window->title_temp_memory);
+        window->title_temp_memory = cui_begin_temporary_memory(&window->arena);
+
+        cui_widget_set_label(window->title, cui_copy_string(&window->arena, title));
+    }
+
+    // We call SetWindowText even if the system title bar isn't used.
+    // That's because that string is used elsewhere. For example in
+    // the task manager and in the task bar preview.
+
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
 
-    CuiString utf16_str = cui_utf8_to_utf16le(&window->base.temporary_memory, CuiCString(title));
+    CuiString utf16_str = cui_utf8_to_utf16le(&window->base.temporary_memory, title);
 
     SetWindowText(window->window_handle, (LPCWSTR) cui_to_c_string(&window->base.temporary_memory, utf16_str));
 
@@ -479,6 +1614,12 @@ cui_window_resize(CuiWindow *window, int32_t width, int32_t height)
     int32_t offset_y = (window_rect.bottom - window_rect.top) -
                        (client_rect.bottom - client_rect.top);
 
+    if (window->use_custom_decoration)
+    {
+        CuiPoint titlebar_size = cui_widget_get_preferred_size(window->titlebar);
+        offset_y += titlebar_size.y;
+    }
+
     SetWindowPos(window->window_handle, 0, 0, 0, width + offset_x, height + offset_y,
                  SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
 }
@@ -486,14 +1627,66 @@ cui_window_resize(CuiWindow *window, int32_t width, int32_t height)
 void
 cui_window_show(CuiWindow *window)
 {
-    CuiRect rect = cui_make_rect(0, 0, window->backbuffer.width, window->backbuffer.height);
-
-    cui_widget_set_window(&window->base.root_widget, window);
-    cui_widget_set_ui_scale(&window->base.root_widget, window->base.ui_scale);
-    cui_widget_layout(&window->base.root_widget, rect);
-    cui_window_redraw_all(window);
-
     ShowWindow(window->window_handle, SW_SHOW);
+    window->base.needs_redraw = true;
+}
+
+void
+cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
+{
+    if (cui_window_is_fullscreen(window))
+    {
+        if (!fullscreen)
+        {
+            DWORD window_style = GetWindowLong(window->window_handle, GWL_STYLE);
+
+            window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
+
+            if (window->use_custom_decoration)
+            {
+                SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
+            }
+            else
+            {
+                SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_OVERLAPPEDWINDOW);
+            }
+
+            SetWindowPlacement(window->window_handle, &window->windowed_placement);
+            SetWindowPos(window->window_handle, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+    }
+    else
+    {
+        if (fullscreen)
+        {
+            DWORD window_style = GetWindowLong(window->window_handle, GWL_STYLE);
+
+            window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
+
+            MONITORINFO monitor_info = { sizeof(monitor_info) };
+
+            window->windowed_placement.length = sizeof(window->windowed_placement);
+
+            if (GetWindowPlacement(window->window_handle, &window->windowed_placement) &&
+                GetMonitorInfo(MonitorFromWindow(window->window_handle, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
+            {
+                if (window->use_custom_decoration)
+                {
+                    SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~(WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX));
+                }
+                else
+                {
+                    SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~WS_OVERLAPPEDWINDOW);
+                }
+
+                SetWindowPos(window->window_handle, HWND_TOP,
+                             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                             monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                             monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            }
+        }
+    }
 }
 
 void
@@ -505,122 +1698,95 @@ cui_window_close(CuiWindow *window)
 void
 cui_window_destroy(CuiWindow *window)
 {
-    if (window->backbuffer.pixels)
+    switch (window->base.renderer_type)
     {
-        cui_deallocate_platform_memory(window->backbuffer.pixels, window->backbuffer_memory_size);
+        case CUI_RENDERER_TYPE_SOFTWARE:
+        {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+            if (window->renderer.software.backbuffer.pixels)
+            {
+                cui_platform_deallocate(window->renderer.software.backbuffer.pixels, window->renderer.software.backbuffer_memory_size);
+            }
+
+            _cui_destroy_software_renderer(window->renderer.software.renderer_software);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+        } break;
+
+        case CUI_RENDERER_TYPE_OPENGLES2:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_METAL:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_DIRECT3D11:
+        {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+            _cui_destroy_direct3d11_renderer(window->renderer.direct3d11.renderer_direct3d11);
+
+            CuiAssert(window->renderer.direct3d11.dxgi_swapchain);
+            IDXGISwapChain1_Release(window->renderer.direct3d11.dxgi_swapchain);
+
+            CuiAssert(window->renderer.direct3d11.d3d11_device_context);
+            ID3D11DeviceContext_Release(window->renderer.direct3d11.d3d11_device_context);
+
+            CuiAssert(window->renderer.direct3d11.d3d11_device);
+            ID3D11Device_Release(window->renderer.direct3d11.d3d11_device);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+        } break;
     }
 
+    cui_arena_deallocate(&window->arena);
     _cui_remove_window(window);
 }
 
-bool
-cui_platform_dialog_file_open(CuiWindow *window, CuiString **filenames, CuiString title, CuiString *filters, bool can_select_multiple)
+void
+cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
 {
-    bool result = false;
+    CuiAssert(widget);
 
-    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-
-    int32_t max_filename_length = 32 * 1024;
-    uint16_t *filename_buffer = cui_alloc_array(&window->base.temporary_memory, uint16_t, max_filename_length, cui_make_allocation_params(true, 8));
-
-    filename_buffer[0] = 0;
-
-    uint16_t *filter_string = 0;
-
-    if ((cui_array_count(filters) > 0) && ((cui_array_count(filters) % 2) == 0))
+    if (window->use_custom_decoration)
     {
-        CuiString *utf16_filters = 0;
-        cui_array_init(utf16_filters, cui_array_count(filters), &window->base.temporary_memory);
-
-        int64_t total_count = 0;
-
-        for (int32_t i = 0; i < cui_array_count(filters); i += 1)
-        {
-            CuiString *utf16_string = cui_array_append(utf16_filters);
-            *utf16_string = cui_utf8_to_utf16le(&window->base.temporary_memory, filters[i]);
-
-            CuiAssert(!(utf16_string->count % 2));
-
-            total_count += (utf16_string->count / 2) + 1;
-        }
-
-        total_count += 1;
-
-        filter_string = cui_alloc_array(&window->base.temporary_memory, uint16_t, total_count, CuiDefaultAllocationParams());
-
-        uint8_t *at = (uint8_t *) filter_string;
-
-        for (int32_t i = 0; i < cui_array_count(utf16_filters); i += 1)
-        {
-            CuiString utf16_string = utf16_filters[i];
-
-            for (int64_t j = 0; j < utf16_string.count; j += 1)
-            {
-                *at++ = utf16_string.data[j];
-            }
-
-            *at++ = 0;
-            *at++ = 0;
-        }
-
-        *at++ = 0;
-        *at++ = 0;
+        CuiAssert(window->base.user_root_widget);
+        cui_widget_replace_child(window->base.platform_root_widget, window->base.user_root_widget, widget);
+    }
+    else
+    {
+        window->base.platform_root_widget = widget;
     }
 
-    OPENFILENAME open_file = { sizeof(OPENFILENAME) };
-    open_file.hwndOwner         = window->window_handle;
-    open_file.lpstrFilter       = filter_string;
-    open_file.lpstrFile         = (LPWSTR) filename_buffer;
-    open_file.nMaxFile          = max_filename_length;
-    open_file.lpstrTitle        = (LPWSTR) cui_to_c_string(&window->base.temporary_memory, cui_utf8_to_utf16le(&window->base.temporary_memory, title));
-    open_file.Flags             = OFN_FILEMUSTEXIST | OFN_EXPLORER;
+    window->base.user_root_widget = widget;
 
-    if (can_select_multiple)
-    {
-        open_file.Flags |= OFN_ALLOWMULTISELECT;
-    }
+    CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
 
-    if (GetOpenFileName(&open_file))
-    {
-        int64_t filename_length = cui_wide_string_length(filename_buffer);
-
-        CuiString utf16_string = cui_make_string(filename_buffer, 2 * filename_length);
-        CuiString filename = cui_utf16le_to_utf8(&window->base.temporary_memory, utf16_string);
-
-        filename_buffer += (filename_length + 1);
-
-        if (*filename_buffer)
-        {
-            CuiString path = filename;
-
-            while (*filename_buffer)
-            {
-                filename_length = cui_wide_string_length(filename_buffer);
-
-                utf16_string = cui_make_string(filename_buffer, 2 * filename_length);
-                filename = cui_utf16le_to_utf8(&window->base.temporary_memory, utf16_string);
-
-                filename_buffer += (filename_length + 1);
-
-                *cui_array_append(*filenames) = cui_path_concat(_cui_array_header(*filenames)->arena, path, filename);
-            }
-        }
-        else
-        {
-            *cui_array_append(*filenames) = cui_copy_string(_cui_array_header(*filenames)->arena, filename);
-        }
-
-        result = true;
-    }
-
-    cui_end_temporary_memory(temp_memory);
-
-    return result;
+    cui_widget_set_window(window->base.user_root_widget, window);
+    cui_widget_set_ui_scale(window->base.user_root_widget, window->base.ui_scale);
+    cui_widget_layout(window->base.platform_root_widget, rect);
 }
 
 void
-cui_step()
+cui_step(void)
 {
+    DWORD ret = MsgWaitForMultipleObjects(1, &_cui_context.signal_event, FALSE, INFINITE, QS_ALLEVENTS);
+
+    if (ret == WAIT_OBJECT_0)
+    {
+        OutputDebugString(L"Signal\n");
+        ResetEvent(_cui_context.signal_event);
+
+        if (_cui_context.common.signal_callback)
+        {
+            _cui_context.common.signal_callback();
+        }
+    }
+
     MSG message;
 
     while (PeekMessage(&message, 0, 0, 0, PM_REMOVE))
@@ -628,79 +1794,63 @@ cui_step()
         TranslateMessage(&message);
         DispatchMessage(&message);
     }
-}
 
-void
-cui_window_request_redraw(CuiWindow *window, CuiRect rect)
-{
-    if (window->needs_redraw)
+    for (uint32_t window_index = 0;
+         window_index < _cui_context.common.window_count; window_index += 1)
     {
-        // TODO: very simple redraw
-        window->redraw_rect = cui_rect_get_union(window->redraw_rect, rect);
+        CuiWindow *window = _cui_context.common.windows[window_index];
+
+        if (window->base.needs_redraw)
+        {
+            _cui_window_draw(window);
+
+            switch (window->base.renderer_type)
+            {
+                case CUI_RENDERER_TYPE_SOFTWARE:
+                {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+                    HDC device_context = GetDC(window->window_handle);
+
+                    BITMAPINFO bitmap;
+                    bitmap.bmiHeader.biSize        = sizeof(bitmap.bmiHeader);
+                    bitmap.bmiHeader.biWidth       = window->renderer.software.backbuffer.stride / sizeof(uint32_t);
+                    bitmap.bmiHeader.biHeight      = -(LONG) window->renderer.software.backbuffer.height;
+                    bitmap.bmiHeader.biPlanes      = 1;
+                    bitmap.bmiHeader.biBitCount    = 32;
+                    bitmap.bmiHeader.biCompression = BI_RGB;
+
+                    StretchDIBits(device_context, 0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
+                                  0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
+                                  window->renderer.software.backbuffer.pixels, &bitmap, DIB_RGB_COLORS, SRCCOPY);
+
+                    ReleaseDC(window->window_handle, device_context);
+#else
+                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+                } break;
+
+                case CUI_RENDERER_TYPE_OPENGLES2:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_METAL:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_DIRECT3D11:
+                {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+                    // TODO: check for errors
+                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 1, 0);
+#else
+                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+                } break;
+            }
+
+            window->base.needs_redraw = false;
+        }
     }
-    else
-    {
-        window->needs_redraw = true;
-        window->redraw_rect = rect;
-    }
-
-    // NOTE: This invalidates the whole client rect to compensate for a weird dwm behavior
-    // in windows where the clip rect is not correct. This leads to visual glitches and things not rendering.
-    //
-    // https://social.msdn.microsoft.com/Forums/en-US/7de13a8d-0bcb-4e4b-a975-e2935c226e24/dwm-invalidaterect
-    // https://stackoverflow.com/questions/17277622/dwm-in-win7-8-gdi
-
-    InvalidateRect(window->window_handle, 0, FALSE);
-}
-
-bool
-cui_window_needs_redraw(CuiWindow *window)
-{
-    return window->needs_redraw;
-}
-
-void
-cui_window_redraw(CuiWindow *window, CuiRect rect)
-{
-    CuiCommandBuffer command_buffer;
-
-    command_buffer.push_buffer_size = 0;
-    command_buffer.max_push_buffer_size = window->base.max_push_buffer_size;
-    command_buffer.push_buffer = window->base.push_buffer;
-
-    command_buffer.index_buffer_count = 0;
-    command_buffer.max_index_buffer_count = window->base.max_index_buffer_count;
-    command_buffer.index_buffer = window->base.index_buffer;
-
-    CuiRect window_rect = cui_make_rect(0, 0, window->backbuffer.width, window->backbuffer.height);
-    CuiRect redraw_rect = cui_rect_get_intersection(window_rect, rect);
-
-    CuiGraphicsContext ctx;
-    ctx.redraw_rect = redraw_rect;
-    ctx.command_buffer = &command_buffer;
-    ctx.cache = &window->base.glyph_cache;
-
-    const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
-
-    if (window->base.color_theme)
-    {
-        color_theme = window->base.color_theme;
-    }
-
-    cui_draw_set_clip_rect(&ctx, redraw_rect);
-
-    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-    cui_widget_draw(&window->base.root_widget, &ctx, color_theme, &window->base.temporary_memory);
-    cui_end_temporary_memory(temp_memory);
-
-    cui_render(&window->backbuffer, &command_buffer, redraw_rect, &window->base.glyph_cache.texture);
-
-    window->needs_redraw = false;
-}
-
-void
-cui_window_redraw_all(CuiWindow *window)
-{
-    CuiRect rect = cui_make_rect(0, 0, window->backbuffer.width, window->backbuffer.height);
-    cui_window_redraw(window, rect);
 }

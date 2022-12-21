@@ -1,0 +1,5 @@
+src/xdg-shell.h
+src/xdg-shell.c
+build_config_linux.sh
+build_config_macos.sh
+build_config_android.sh

@@ -1,17 +1,3 @@
-void
-cui_allocate_arena(CuiArena *arena, uint64_t capacity)
-{
-    arena->capacity = 0;
-    arena->occupied = 0;
-
-    arena->base = (uint8_t *) cui_allocate_platform_memory(capacity);
-
-    if (arena->base)
-    {
-        arena->capacity = capacity;
-    }
-}
-
 static inline uint64_t
 _cui_get_alignment_offset(CuiArena *arena, uint64_t alignment)
 {
@@ -25,6 +11,48 @@ _cui_get_alignment_offset(CuiArena *arena, uint64_t alignment)
     }
 
     return alignment_offset;
+}
+
+void
+cui_arena_allocate(CuiArena *arena, uint64_t capacity)
+{
+    CuiClearStruct(*arena);
+
+    arena->base = (uint8_t *) cui_platform_allocate(capacity);
+
+    if (arena->base)
+    {
+        arena->capacity = capacity;
+    }
+}
+
+void
+cui_arena_deallocate(CuiArena *arena)
+{
+    if (arena->base)
+    {
+        cui_platform_deallocate(arena->base, arena->capacity);
+        CuiClearStruct(*arena);
+    }
+}
+
+void
+cui_arena_initialize_with_memory(CuiArena *arena, void *memory, uint64_t size)
+{
+    if (memory && (size > 0))
+    {
+        arena->occupied = 0;
+        arena->capacity = size;
+        arena->base = (uint8_t *) memory;
+        arena->temporary_memory_count = 0;
+    }
+}
+
+void
+cui_arena_clear(CuiArena *arena)
+{
+    CuiAssert(!arena->temporary_memory_count);
+    arena->occupied = 0;
 }
 
 void *
@@ -74,6 +102,8 @@ cui_realloc(CuiArena *arena, void *old_pointer, uint64_t old_size, uint64_t size
             params.clear = false;
 
             result = cui_alloc(arena, size, params);
+
+            CuiAssert(result);
 
             size -= old_size;
 
