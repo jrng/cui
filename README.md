@@ -2,16 +2,19 @@
 
 CUI is basic user interface library for the c programming language.
 
-![CUI Color Tool on Wayland](/screenshots/color_tool_wayland.png)
+<picture>
+  <source srcset="./screenshots/color_tool_wayland.png 2x">
+  <img alt="CUI Color Tool on Wayland" src="./screenshots/color_tool_wayland.png">
+</picture>
 
 ## Support matrix
 
 | operating system | backend(s)   | software renderer  | opengl es 2.0 renderer | metal renderer     | direct3d11 renderer |
 | ---              | ---          | ---                | ---                    | ---                | ---                 |
-| Linux            | X11, Wayland | :white_check_mark: | :white_check_mark:     | :x:                | :x:                 |
-| macOS            | AppKit       | :white_check_mark: | :x:                    | :white_check_mark: | :x:                 |
-| Windows          | Win32        | :white_check_mark: | :x:                    | :x:                | :white_check_mark:  |
-| Android          | Android      | :x:                | :white_check_mark:     | :x:                | :x:                 |
+| Linux            | X11, Wayland | :heavy_check_mark: | :heavy_check_mark:     | :x:                | :x:                 |
+| macOS            | AppKit       | :heavy_check_mark: | :x:                    | :heavy_check_mark: | :x:                 |
+| Windows          | Win32        | :heavy_check_mark: | :x:                    | :x:                | :heavy_check_mark:  |
+| Android          | Android      | :x:                | :heavy_check_mark:     | :x:                | :x:                 |
 
 ## Usage
 
