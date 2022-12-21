@@ -342,3 +342,36 @@ cui_window_deallocate_texture_id(CuiWindow *window, int32_t texture_id)
 
     window->base.allocated_texture_ids &= ~bit_mask;
 }
+
+CuiFontId
+cui_window_find_font_n(CuiWindow *window, const uint32_t n, ...)
+{
+    va_list args;
+    va_start(args, n);
+
+    CuiFontId result = _cui_font_manager_find_font_valist(&window->base.temporary_memory, &window->base.font_manager, window->base.ui_scale, n, args);
+
+    va_end(args);
+
+    return result;
+}
+
+int32_t
+cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id)
+{
+    CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
+    return font->line_height;
+}
+
+float
+cui_window_get_font_baseline_offset(CuiWindow *window, CuiFontId font_id)
+{
+    CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
+    return font->baseline_offset;
+}
+
+float
+cui_window_get_string_width(CuiWindow *window, CuiFontId font_id, CuiString str)
+{
+    return _cui_font_get_string_width(&window->base.font_manager, font_id, str);
+}

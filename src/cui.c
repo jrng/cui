@@ -267,7 +267,7 @@ _cui_font_get_substring_width(CuiFontManager *font_manager, CuiFontId font_id, C
     _cui_font_manager_find_font_n(temporary_memory, font_manager, ui_scale, CuiNArgs(__VA_ARGS__), __VA_ARGS__)
 
 static CuiFontId
-_cui_font_manager_find_font_n(CuiArena *temporary_memory, CuiFontManager *font_manager, float ui_scale, const uint32_t n, ...)
+_cui_font_manager_find_font_valist(CuiArena *temporary_memory, CuiFontManager *font_manager, float ui_scale, const uint32_t n, va_list args)
 {
     CuiFontId result  = { .value = 0 };
     CuiFontId current = { .value = 0 };
@@ -277,9 +277,6 @@ _cui_font_manager_find_font_n(CuiArena *temporary_memory, CuiFontManager *font_m
     int32_t start_index = cui_array_count(font_manager->sized_fonts);
 
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
-
-    va_list args;
-    va_start(args, n);
 
     for (uint32_t i = 0; i < n; i += 1)
     {
@@ -370,8 +367,6 @@ _cui_font_manager_find_font_n(CuiArena *temporary_memory, CuiFontManager *font_m
         }
     }
 
-    va_end(args);
-
     cui_end_temporary_memory(temp_memory);
 
     int32_t end_index = cui_array_count(font_manager->sized_fonts);
@@ -381,6 +376,19 @@ _cui_font_manager_find_font_n(CuiArena *temporary_memory, CuiFontManager *font_m
         CuiSizedFont *sized_font = font_manager->sized_fonts + index;
         _cui_sized_font_update(sized_font, font_manager->font_file_manager, ui_scale);
     }
+
+    return result;
+}
+
+static inline CuiFontId
+_cui_font_manager_find_font_n(CuiArena *temporary_memory, CuiFontManager *font_manager, float ui_scale, const uint32_t n, ...)
+{
+    va_list args;
+    va_start(args, n);
+
+    CuiFontId result = _cui_font_manager_find_font_valist(temporary_memory, font_manager, ui_scale, n, args);
+
+    va_end(args);
 
     return result;
 }

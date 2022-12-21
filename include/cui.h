@@ -400,6 +400,13 @@ typedef struct CuiString
     uint8_t *data;
 } CuiString;
 
+typedef struct CuiSizedFontSpec
+{
+    CuiString name;
+    float size;
+    float line_height;
+} CuiSizedFontSpec;
+
 typedef enum CuiFileAttributeFlags
 {
     CUI_FILE_ATTRIBUTE_IS_DIRECTORY = (1 << 0),
@@ -554,6 +561,16 @@ cui_make_string(void *data, int64_t count)
     CuiString result;
     result.count = count;
     result.data = (uint8_t *) data;
+    return result;
+}
+
+static inline CuiSizedFontSpec
+cui_make_sized_font_spec(CuiString name, float size, float line_height)
+{
+    CuiSizedFontSpec result;
+    result.name = name;
+    result.size = size;
+    result.line_height = line_height;
     return result;
 }
 
@@ -1281,6 +1298,13 @@ void cui_window_request_redraw(CuiWindow *window);
 void cui_window_set_color_theme(CuiWindow *window, const CuiColorTheme *color_theme);
 int32_t cui_window_allocate_texture_id(CuiWindow *window);
 void cui_window_deallocate_texture_id(CuiWindow *window, int32_t texture_id);
+
+#define cui_window_find_font(window, ...) cui_window_find_font_n(window, CuiNArgs(__VA_ARGS__), __VA_ARGS__)
+
+CuiFontId cui_window_find_font_n(CuiWindow *window, const uint32_t n, ...);
+int32_t cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id);
+float cui_window_get_font_baseline_offset(CuiWindow *window, CuiFontId font_id);
+float cui_window_get_string_width(CuiWindow *window, CuiFontId font_id, CuiString str);
 
 bool cui_window_is_precise_scrolling(CuiWindow *window);
 float cui_window_get_wheel_dx(CuiWindow *window);

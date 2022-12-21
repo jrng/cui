@@ -134,13 +134,6 @@ typedef struct CuiSizedFont
     CuiFont font;
 } CuiSizedFont;
 
-typedef struct CuiSizedFontSpec
-{
-    CuiString name;
-    float size;
-    float line_height;
-} CuiSizedFontSpec;
-
 typedef struct CuiFontRef
 {
     CuiString name;
@@ -162,16 +155,6 @@ typedef struct CuiFontManager
     CuiSizedFont *sized_fonts;
     CuiFontFileManager *font_file_manager;
 } CuiFontManager;
-
-static inline CuiSizedFontSpec
-cui_make_sized_font_spec(CuiString name, float size, float line_height)
-{
-    CuiSizedFontSpec result;
-    result.name = name;
-    result.size = size;
-    result.line_height = line_height;
-    return result;
-}
 
 #ifndef CUI_NO_BACKEND
 
