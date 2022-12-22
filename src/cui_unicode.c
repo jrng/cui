@@ -110,7 +110,8 @@ cui_utf16le_decode(CuiString str, int64_t index)
         {
             uint16_t trailing = (str.data[index + 3] << 8) | str.data[index + 2];
 
-            result.codepoint = ((leading & 0x3FF) >> 6) | (trailing & 0x3FF);
+            result.codepoint = (((uint32_t) (leading & 0x3FF) << 10) |
+                                 (uint32_t) (trailing & 0x3FF)) + 0x10000;
             result.byte_count = 4;
         }
         else
@@ -191,9 +192,7 @@ cui_utf16le_to_utf8(CuiArena *arena, CuiString utf16_str)
 
     if (utf16_str.count)
     {
-        // worst case is that every character takes the same amount of bytes.
-        // e.g. üäö
-        result.count = utf16_str.count;
+        result.count = 2 * utf16_str.count;
         result.data  = cui_alloc_array(arena, uint8_t, result.count, CuiDefaultAllocationParams());
 
         int64_t input_index = 0;
