@@ -926,12 +926,20 @@ cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
 CuiString
 cui_platform_get_clipboard_text(CuiArena *arena)
 {
+    CuiString result = { 0 };
+
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-
     NSString *data = [pasteboard stringForType: NSPasteboardTypeString];
-    const char *data_c = [data fileSystemRepresentation];
 
-    return cui_copy_string(arena, CuiCString(data_c));
+    if ([data length] > 0)
+    {
+        const char *data_c = [data UTF8String];
+        CuiAssert(data_c);
+        result = cui_copy_string(arena, CuiCString(data_c));
+    }
+
+    return result;
+
 }
 
 uint32_t
