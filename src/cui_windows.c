@@ -609,7 +609,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
         {
             if (window->use_custom_decoration)
             {
-                OutputDebugString(L"WM_NCMOUSEMOVE\n");
+                // OutputDebugString(L"WM_NCMOUSEMOVE\n");
 
                 if (window->is_tracking_mouse)
                 {
@@ -644,7 +644,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_MOUSEMOVE:
         {
-            OutputDebugString(L"WM_MOUSEMOVE\n");
+            // OutputDebugString(L"WM_MOUSEMOVE\n");
 
             if (window->is_tracking_ncmouse)
             {
@@ -671,7 +671,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
         {
             if (window->is_tracking_ncmouse)
             {
-                OutputDebugString(L"WM_NCMOUSELEAVE\n");
+                // OutputDebugString(L"WM_NCMOUSELEAVE\n");
 
                 window->is_tracking_ncmouse = false;
                 cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
@@ -682,7 +682,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
         {
             if (window->is_tracking_mouse)
             {
-                OutputDebugString(L"WM_MOUSELEAVE\n");
+                // OutputDebugString(L"WM_MOUSELEAVE\n");
 
                 window->is_tracking_mouse = false;
                 cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
@@ -691,7 +691,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_NCLBUTTONDOWN:
         {
-            OutputDebugString(L"WM_NCLBUTTONDOWN\n");
+            // OutputDebugString(L"WM_NCLBUTTONDOWN\n");
 
             if ((!window->minimize_button || (window->base.hovered_widget != window->minimize_button)) &&
                 (!window->maximize_button || (window->base.hovered_widget != window->maximize_button)) &&
@@ -703,7 +703,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_LBUTTONDOWN:
         {
-            OutputDebugString(L"WM_LBUTTONDOWN\n");
+            // OutputDebugString(L"WM_LBUTTONDOWN\n");
             // TODO: SetCapture(window->window_handle) ?
             window->base.event.mouse.x = GET_X_LPARAM(l_param);
             window->base.event.mouse.y = GET_Y_LPARAM(l_param);
@@ -713,7 +713,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_LBUTTONDBLCLK:
         {
-            OutputDebugString(L"WM_LBUTTONDBLCLK\n");
+            // OutputDebugString(L"WM_LBUTTONDBLCLK\n");
             window->base.event.mouse.x = GET_X_LPARAM(l_param);
             window->base.event.mouse.y = GET_Y_LPARAM(l_param);
 
@@ -889,21 +889,21 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 static void
 _cui_window_on_close_button(CuiWidget *widget)
 {
-    OutputDebugString(L"on_close_button\n");
+    // OutputDebugString(L"on_close_button\n");
     cui_window_close(widget->window);
 }
 
 static void
 _cui_window_on_maximize_button(CuiWidget *widget)
 {
-    OutputDebugString(L"on_maximize_button\n");
+    // OutputDebugString(L"on_maximize_button\n");
     ShowWindow(widget->window->window_handle, _cui_window_is_maximized(widget->window) ? SW_NORMAL : SW_MAXIMIZE);
 }
 
 static void
 _cui_window_on_minimize_button(CuiWidget *widget)
 {
-    OutputDebugString(L"on_minimize_button\n");
+    // OutputDebugString(L"on_minimize_button\n");
     ShowWindow(widget->window->window_handle, SW_MINIMIZE);
 }
 
@@ -1365,6 +1365,17 @@ cui_init(int argument_count, char **arguments)
         return false;
     }
 
+    RAWINPUTDEVICE input_device;
+    input_device.usUsagePage = 1;
+    input_device.usUsage     = 6;
+    input_device.dwFlags     = 0;
+    input_device.hwndTarget  = 0;
+
+    if (!RegisterRawInputDevices(&input_device, 1, sizeof(input_device)))
+    {
+        return false;
+    }
+
     return true;
 }
 
@@ -1516,14 +1527,6 @@ cui_window_create(uint32_t creation_flags)
         cui_window_destroy(window);
         return 0;
     }
-
-    RAWINPUTDEVICE input_device;
-    input_device.usUsagePage = 1;
-    input_device.usUsage     = 6;
-    input_device.dwFlags     = 0;
-    input_device.hwndTarget  = window->window_handle;
-
-    RegisterRawInputDevices(&input_device, 1, sizeof(input_device));
 
     bool renderer_initialized = false;
 
@@ -1778,7 +1781,7 @@ cui_step(void)
 
     if (ret == WAIT_OBJECT_0)
     {
-        OutputDebugString(L"Signal\n");
+        // OutputDebugString(L"Signal\n");
         ResetEvent(_cui_context.signal_event);
 
         if (_cui_context.common.signal_callback)
