@@ -122,6 +122,13 @@ _cui_widget_update_text_offset(CuiWidget *widget)
     CuiAssert(widget->window);
     CuiWindow *window = widget->window;
 
+    CuiFontId font_id = widget->font_id;
+
+    if (font_id.value == 0)
+    {
+        font_id = window->font_id;
+    }
+
     int32_t padding_x = widget->effective_padding.min.x + widget->effective_padding.max.x;
     int32_t padding_y = widget->effective_padding.min.y + widget->effective_padding.max.y;
 
@@ -131,7 +138,7 @@ _cui_widget_update_text_offset(CuiWidget *widget)
     int32_t content_width  = cui_rect_get_width(widget->rect) - (padding_x + border_width_x);
     int32_t content_height = cui_rect_get_height(widget->rect) - (padding_y + border_width_y);
 
-    CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, window->font_id);
+    CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
 
     widget->text_offset = cui_make_float_point((float) (widget->effective_padding.min.x + widget->effective_border_width.min.x),
                                                 (float) (widget->effective_padding.min.y + widget->effective_border_width.min.y) + font->baseline_offset);
@@ -150,14 +157,14 @@ _cui_widget_update_text_offset(CuiWidget *widget)
         case CUI_GRAVITY_CENTER:
         {
             CuiString text = cui_text_input_to_string(widget->text_input);
-            float text_width = _cui_font_get_string_width(&window->base.font_manager, window->font_id, text);
+            float text_width = _cui_font_get_string_width(&window->base.font_manager, font_id, text);
             widget->text_offset.x += 0.5f * ((float) content_width - text_width);
         } break;
 
         case CUI_GRAVITY_END:
         {
             CuiString text = cui_text_input_to_string(widget->text_input);
-            float text_width = _cui_font_get_string_width(&window->base.font_manager, window->font_id, text);
+            float text_width = _cui_font_get_string_width(&window->base.font_manager, font_id, text);
             widget->text_offset.x += (float) content_width - text_width;
         } break;
     }
@@ -636,6 +643,18 @@ cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale)
 }
 
 void
+cui_widget_set_font(CuiWidget *widget, CuiFontId font_id)
+{
+    widget->font_id = font_id;
+}
+
+void
+cui_widget_set_color_theme(CuiWidget *widget, const CuiColorTheme *color_theme)
+{
+    widget->color_theme = color_theme;
+}
+
+void
 cui_widget_relayout_parent(CuiWidget *widget)
 {
     CuiWidget *parent = widget->parent;
@@ -656,6 +675,13 @@ cui_widget_get_preferred_size(CuiWidget *widget)
 
     CuiAssert(widget->window);
     CuiWindow *window = widget->window;
+
+    CuiFontId font_id = widget->font_id;
+
+    if (font_id.value == 0)
+    {
+        font_id = window->font_id;
+    }
 
     switch (widget->type)
     {
@@ -740,14 +766,14 @@ cui_widget_get_preferred_size(CuiWidget *widget)
         case CUI_WIDGET_TYPE_LABEL:
         case CUI_WIDGET_TYPE_BUTTON:
         {
-            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, window->font_id);
+            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
 
             int32_t label_width  = 0;
             int32_t label_height = 0;
 
             if (widget->label.count)
             {
-                label_width  = (int32_t) ceilf(_cui_font_get_string_width(&window->base.font_manager, window->font_id, widget->label));
+                label_width  = (int32_t) ceilf(_cui_font_get_string_width(&window->base.font_manager, font_id, widget->label));
                 label_height = font->line_height;
             }
 
@@ -786,9 +812,9 @@ cui_widget_get_preferred_size(CuiWidget *widget)
 
         case CUI_WIDGET_TYPE_CHECKBOX:
         {
-            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, window->font_id);
+            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
 
-            int32_t label_width  = (int32_t) ceilf(_cui_font_get_string_width(&window->base.font_manager, window->font_id, widget->label));
+            int32_t label_width  = (int32_t) ceilf(_cui_font_get_string_width(&window->base.font_manager, font_id, widget->label));
             int32_t label_height = font->line_height;
 
             int32_t checkmark_width  = widget->effective_icon_size.x;
@@ -805,9 +831,9 @@ cui_widget_get_preferred_size(CuiWidget *widget)
 
         case CUI_WIDGET_TYPE_TEXTINPUT:
         {
-            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, window->font_id);
+            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
 
-            int32_t label_width  = (int32_t) ceilf(_cui_font_get_string_width(&window->base.font_manager, window->font_id, widget->label));
+            int32_t label_width  = (int32_t) ceilf(_cui_font_get_string_width(&window->base.font_manager, font_id, widget->label));
             int32_t label_height = font->line_height;
 
             int32_t icon_width  = widget->effective_icon_size.x;
@@ -860,6 +886,13 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
 
     CuiAssert(widget->window);
     CuiWindow *window = widget->window;
+
+    CuiFontId font_id = widget->font_id;
+
+    if (font_id.value == 0)
+    {
+        font_id = window->font_id;
+    }
 
     switch (widget->type)
     {
@@ -1196,7 +1229,7 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
             int32_t content_width  = cui_rect_get_width(widget->rect) - (padding_x + border_width_x);
             int32_t content_height = cui_rect_get_height(widget->rect) - (padding_y + border_width_y);
 
-            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, window->font_id);
+            CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
 
             widget->label_offset = cui_make_float_point((float) (widget->effective_padding.min.x + widget->effective_border_width.min.x),
                                                         (float) (widget->effective_padding.min.y + widget->effective_border_width.min.y) + font->baseline_offset);
@@ -1218,13 +1251,13 @@ cui_widget_layout(CuiWidget *widget, CuiRect rect)
 
                 case CUI_GRAVITY_CENTER:
                 {
-                    float label_width = _cui_font_get_string_width(&window->base.font_manager, window->font_id, widget->label);
+                    float label_width = _cui_font_get_string_width(&window->base.font_manager, font_id, widget->label);
                     widget->label_offset.x += 0.5f * ((float) content_width - label_width);
                 } break;
 
                 case CUI_GRAVITY_END:
                 {
-                    float label_width = _cui_font_get_string_width(&window->base.font_manager, window->font_id, widget->label);
+                    float label_width = _cui_font_get_string_width(&window->base.font_manager, font_id, widget->label);
                     widget->label_offset.x += (float) content_width - label_width;
                 } break;
             }
@@ -1263,6 +1296,13 @@ cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme 
 
     CuiAssert(widget->window);
     CuiWindow *window = widget->window;
+
+    CuiFontId font_id = widget->font_id;
+
+    if (font_id.value == 0)
+    {
+        font_id = window->font_id;
+    }
 
     switch (widget->type)
     {
@@ -1341,7 +1381,7 @@ cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme 
 #endif
 
             cui_draw_fill_icon(ctx, (float) widget->rect.min.x + widget->icon_offset.x, (float) widget->rect.min.y + widget->icon_offset.y, widget->ui_scale, widget->icon_type, cui_color_theme_get_color(color_theme, widget->color_normal_icon));
-            cui_draw_fill_string(ctx, window->font_id, (float) widget->rect.min.x + widget->label_offset.x,
+            cui_draw_fill_string(ctx, font_id, (float) widget->rect.min.x + widget->label_offset.x,
                                  (float) widget->rect.min.y + widget->label_offset.y, widget->label, cui_color_theme_get_color(color_theme, widget->color_normal_text));
         } break;
 
@@ -1368,7 +1408,7 @@ cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme 
                 cui_draw_fill_shape(ctx, x, y, CUI_SHAPE_CHECKBOX_INNER_16, widget->ui_scale, cui_make_color(0.184f, 0.200f, 0.239f, 1.0f));
             }
 
-            cui_draw_fill_string(ctx, window->font_id, (float) widget->rect.min.x + widget->label_offset.x,
+            cui_draw_fill_string(ctx, font_id, (float) widget->rect.min.x + widget->label_offset.x,
                                  (float) widget->rect.min.y + widget->label_offset.y, widget->label, cui_color_theme_get_color(color_theme, widget->color_normal_text));
         } break;
 
@@ -1397,18 +1437,18 @@ cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme 
 
             if ((str.count == 0) && !(widget->state & CUI_WIDGET_STATE_FOCUSED))
             {
-                cui_draw_fill_string(ctx, window->font_id, (float) widget->rect.min.x + widget->label_offset.x,
+                cui_draw_fill_string(ctx, font_id, (float) widget->rect.min.x + widget->label_offset.x,
                                      (float) widget->rect.min.y + widget->label_offset.y, widget->label, cui_color_theme_get_color(color_theme, widget->color_normal_text));
             }
             else
             {
-                CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, window->font_id);
+                CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
 
-                float cursor_end = _cui_font_get_substring_width(&window->base.font_manager, window->font_id, str, widget->text_input.cursor_end);
+                float cursor_end = _cui_font_get_substring_width(&window->base.font_manager, font_id, str, widget->text_input.cursor_end);
 
                 if ((widget->state & CUI_WIDGET_STATE_FOCUSED) && (widget->text_input.cursor_start != widget->text_input.cursor_end))
                 {
-                    float cursor_start = _cui_font_get_substring_width(&window->base.font_manager, window->font_id, str, widget->text_input.cursor_start);
+                    float cursor_start = _cui_font_get_substring_width(&window->base.font_manager, font_id, str, widget->text_input.cursor_start);
 
                     int32_t a = widget->rect.min.x + lroundf(widget->text_offset.x + cursor_start);
                     int32_t b = widget->rect.min.x + lroundf(widget->text_offset.x + cursor_end);
@@ -1422,7 +1462,7 @@ cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme 
                     cui_draw_fill_rect(ctx, cui_make_rect(cursor_x0, cursor_y0, cursor_x1, cursor_y1), cui_make_color(0.337f, 0.541f, 0.949f, 0.75f));
                 }
 
-                cui_draw_fill_string(ctx, window->font_id, (float) widget->rect.min.x + widget->text_offset.x,
+                cui_draw_fill_string(ctx, font_id, (float) widget->rect.min.x + widget->text_offset.x,
                                      (float) widget->rect.min.y + widget->text_offset.y, str, cui_color_theme_get_color(color_theme, widget->color_normal_text));
 
                 if ((widget->state & CUI_WIDGET_STATE_FOCUSED) && (widget->text_input.cursor_start == widget->text_input.cursor_end))

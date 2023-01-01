@@ -1044,7 +1044,8 @@ struct CuiWidget
 
     float ui_scale;
 
-    CuiColorTheme *color_theme;
+    CuiFontId font_id;
+    const CuiColorTheme *color_theme;
 
     CuiString label; // NOTE: This is also the placeholder text for text inputs
     CuiIconType icon_type;
@@ -1346,6 +1347,8 @@ void cui_widget_set_border_width(CuiWidget *widget, float border_top, float bord
 void cui_widget_set_border_radius(CuiWidget *widget, float topleft, float topright, float bottomright, float bottomleft);
 void cui_widget_set_box_shadow(CuiWidget *widget, float x_offset, float y_offset, float blur_radius);
 void cui_widget_set_ui_scale(CuiWidget *widget, float ui_scale);
+void cui_widget_set_font(CuiWidget *widget, CuiFontId font_id);
+void cui_widget_set_color_theme(CuiWidget *widget, const CuiColorTheme *color_theme);
 void cui_widget_relayout_parent(CuiWidget *widget);
 CuiPoint cui_widget_get_preferred_size(CuiWidget *widget);
 void cui_widget_layout(CuiWidget *widget, CuiRect rect);
