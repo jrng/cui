@@ -737,6 +737,16 @@ _cui_wayland_commit_frame(CuiWindow *window)
     xdg_surface_set_window_geometry(window->wayland_xdg_surface, window->wayland_window_rect.min.x, window->wayland_window_rect.min.y,
                                     cui_rect_get_width(window->wayland_window_rect), cui_rect_get_height(window->wayland_window_rect));
 
+    if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE)
+    {
+        xdg_toplevel_set_min_size(window->wayland_xdg_toplevel,
+                                  cui_rect_get_width(window->wayland_window_rect),
+                                  cui_rect_get_height(window->wayland_window_rect));
+        xdg_toplevel_set_max_size(window->wayland_xdg_toplevel,
+                                  cui_rect_get_width(window->wayland_window_rect),
+                                  cui_rect_get_height(window->wayland_window_rect));
+    }
+
     struct wl_region *input_region = wl_compositor_create_region(_cui_context.wayland_compositor);
     wl_region_add(input_region, window->wayland_input_rect.min.x, window->wayland_input_rect.min.y,
                   cui_rect_get_width(window->wayland_input_rect), cui_rect_get_height(window->wayland_input_rect));
@@ -1855,6 +1865,30 @@ _cui_wayland_handle_pointer_button(void *data, struct wl_pointer *pointer, uint3
                         window->last_left_click_time = (int64_t) time;
                     }
                 } break;
+
+                case BTN_RIGHT:
+                {
+                    enum xdg_toplevel_resize_edge resize_edge = _cui_wayland_get_toplevel_resize_edge(window, _cui_context.wayland_platform_mouse_position);
+
+                    if (resize_edge == XDG_TOPLEVEL_RESIZE_EDGE_NONE)
+                    {
+                        if (window->title && (window->base.hovered_widget == window->title))
+                        {
+                            xdg_toplevel_show_window_menu(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial,
+                                                          _cui_context.wayland_platform_mouse_position.x,
+                                                          _cui_context.wayland_platform_mouse_position.y);
+                        }
+                        else
+                        {
+#if 0
+                            window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
+                            window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+
+                            cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_DOWN);
+#endif
+                        }
+                    }
+                } break;
             }
         } break;
 
@@ -1868,6 +1902,16 @@ _cui_wayland_handle_pointer_button(void *data, struct wl_pointer *pointer, uint3
                     window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
 
                     cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_UP);
+                } break;
+
+                case BTN_RIGHT:
+                {
+#if 0
+                    window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
+                    window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+
+                    cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
+#endif
                 } break;
             }
         } break;
