@@ -1032,6 +1032,11 @@ _cui_font_file_init(CuiFontFile *font_file, void *data, int64_t count)
         uint32_t tag    = cui_read_u32_be(font_file->contents.data, table_offset +  0);
         uint32_t offset = cui_read_u32_be(font_file->contents.data, table_offset +  8);
 
+#if 0
+        printf("tag '%c%c%c%c' = %u\n", ((uint8_t *) &tag)[3], ((uint8_t *) &tag)[2],
+               ((uint8_t *) &tag)[1], ((uint8_t *) &tag)[0], offset);
+#endif
+
         switch (tag)
         {
             case 0x636D6170: // cmap
@@ -1082,6 +1087,16 @@ _cui_font_file_init(CuiFontFile *font_file, void *data, int64_t count)
 
         table_offset += 16;
     }
+
+#if 0
+    printf("cmap = %p\n", (void *) font_file->cmap);
+    printf("glyf = %p\n", (void *) font_file->glyf);
+    printf("head = %p\n", (void *) head);
+    printf("hhea = %p\n", (void *) hhea);
+    printf("hmtx = %p\n", (void *) font_file->hmtx);
+    printf("loca = %p\n", (void *) font_file->loca);
+    printf("maxp = %p\n", (void *) maxp);
+#endif
 
     if (!font_file->cmap || !font_file->glyf || !head || !hhea || !font_file->hmtx || !font_file->loca || !maxp)
     {
