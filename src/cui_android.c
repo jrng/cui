@@ -786,6 +786,14 @@ cui_window_show(CuiWindow *window)
     (void) window;
 }
 
+float
+cui_window_get_titlebar_height(CuiWindow *window)
+{
+    (void) window;
+
+    return 0.0f;
+}
+
 void
 cui_window_close(CuiWindow *window)
 {

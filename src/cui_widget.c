@@ -1572,7 +1572,9 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                         }
                     }
 
-                    if (!result && (widget->flags & CUI_WIDGET_FLAG_DRAW_BACKGROUND))
+                    // TODO: use a separate flag for consuming mouse input
+                    // if (!result && (widget->flags & CUI_WIDGET_FLAG_DRAW_BACKGROUND))
+                    if (false)
                     {
                         cui_window_set_pressed(window, widget);
                         result = true;

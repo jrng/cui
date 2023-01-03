@@ -3821,6 +3821,14 @@ cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
     }
 }
 
+float
+cui_window_get_titlebar_height(CuiWindow *window)
+{
+    (void) window;
+
+    return 0.0f;
+}
+
 void
 cui_window_close(CuiWindow *window)
 {

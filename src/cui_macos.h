@@ -31,6 +31,7 @@ struct CuiWindow
     int32_t height;
 
     int32_t backbuffer_scale;
+    float titlebar_height;
 
     CuiFontId font_id;
 
@@ -40,6 +41,7 @@ struct CuiWindow
 
     AppKitView *appkit_view;
     AppKitWindow *appkit_window;
+    NSToolbar *appkit_toolbar;
 
     NSTrackingArea *tracking_area;
 

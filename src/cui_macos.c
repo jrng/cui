@@ -160,45 +160,6 @@
 
 @end
 
-@implementation AppKitWindowDelegate
-
-- (instancetype) initWithCuiWindow: (CuiWindow *) window
-{
-    self = [super init];
-
-    if (self)
-    {
-        cui_window = window;
-        [cui_window->appkit_window setDelegate: self];
-    }
-
-    return self;
-}
-
-- (BOOL) windowShouldClose: (NSWindow *) sender
-{
-    return YES;
-}
-
-- (void) windowWillClose: (NSNotification *) sender
-{
-    [cui_window->appkit_view clearCuiWindow];
-    cui_window_destroy(cui_window);
-    cui_window = 0;
-}
-
-- (void) windowDidEnterFullScreen: (NSNotification *) sender
-{
-    cui_window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
-}
-
-- (void) windowDidExitFullScreen: (NSNotification *) sender
-{
-    cui_window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
-}
-
-@end
-
 #if CUI_RENDERER_SOFTWARE_ENABLED
 
 static void
@@ -431,6 +392,159 @@ _cui_window_draw(CuiWindow *window)
 
 }
 
+@implementation AppKitWindowDelegate
+
+- (instancetype) initWithCuiWindow: (CuiWindow *) window
+{
+    self = [super init];
+
+    if (self)
+    {
+        cui_window = window;
+        [cui_window->appkit_window setDelegate: self];
+    }
+
+    return self;
+}
+
+- (BOOL) windowShouldClose: (NSWindow *) sender
+{
+    return YES;
+}
+
+- (void) windowWillClose: (NSNotification *) sender
+{
+    [cui_window->appkit_view clearCuiWindow];
+    cui_window_destroy(cui_window);
+    cui_window = 0;
+}
+
+- (void) windowWillEnterFullScreen: (NSNotification *) sender
+{
+    if (cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR)
+    {
+        cui_window->appkit_window.toolbar = nil;
+    }
+
+    if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
+        !(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR))
+    {
+        cui_widget_set_preferred_size(cui_window->titlebar, 0.0f, 0.0f);
+    }
+}
+
+- (void) windowDidEnterFullScreen: (NSNotification *) sender
+{
+    cui_window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
+}
+
+- (void) windowWillExitFullScreen: (NSNotification *) sender
+{
+    if (cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR)
+    {
+        NSButton *close_button    = [cui_window->appkit_window standardWindowButton: NSWindowCloseButton];
+        NSButton *minimize_button = [cui_window->appkit_window standardWindowButton: NSWindowMiniaturizeButton];
+        NSButton *maximize_button = [cui_window->appkit_window standardWindowButton: NSWindowZoomButton];
+
+        CuiAssert(close_button);
+        CuiAssert(minimize_button);
+        CuiAssert(maximize_button);
+
+        close_button.hidden    = YES;
+        minimize_button.hidden = YES;
+        maximize_button.hidden = YES;
+    }
+
+    if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
+        !(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR))
+    {
+        cui_widget_set_preferred_size(cui_window->titlebar, 0.0f, cui_window->titlebar_height);
+    }
+}
+
+- (void) windowDidExitFullScreen: (NSNotification *) sender
+{
+    cui_window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
+
+    if (cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR)
+    {
+        NSButton *close_button    = [cui_window->appkit_window standardWindowButton: NSWindowCloseButton];
+        NSButton *minimize_button = [cui_window->appkit_window standardWindowButton: NSWindowMiniaturizeButton];
+        NSButton *maximize_button = [cui_window->appkit_window standardWindowButton: NSWindowZoomButton];
+
+        CuiAssert(close_button);
+        CuiAssert(minimize_button);
+        CuiAssert(maximize_button);
+
+        close_button.hidden    = NO;
+        minimize_button.hidden = NO;
+        maximize_button.hidden = NO;
+
+        cui_window->appkit_window.toolbar = cui_window->appkit_toolbar;
+    }
+}
+
+- (void) windowDidResize: (NSNotification *) notification
+{
+    [self updateWindowSize];
+}
+
+- (void) updateWindowSize
+{
+    AppKitWindow *appkit_window = cui_window->appkit_window;
+
+    NSRect window_rect = appkit_window.contentView.frame;
+    window_rect = [appkit_window convertRectToBacking: window_rect];
+
+    int32_t new_width = lround(window_rect.size.width);
+    int32_t new_height = lround(window_rect.size.height);
+
+    if ((cui_window->width != new_width) || (cui_window->height != new_height))
+    {
+        cui_window->width = new_width;
+        cui_window->height = new_height;
+
+        if (cui_window->base.platform_root_widget)
+        {
+            CuiRect rect = cui_make_rect(0, 0, cui_window->width, cui_window->height);
+            cui_widget_layout(cui_window->base.platform_root_widget, rect);
+        }
+
+        _cui_window_draw(cui_window);
+
+        switch (cui_window->base.renderer_type)
+        {
+            case CUI_RENDERER_TYPE_SOFTWARE:
+            {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+                [cui_window->appkit_view setNeedsDisplay: YES];
+#else
+                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+            } break;
+
+            case CUI_RENDERER_TYPE_OPENGLES2:
+            {
+                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+            } break;
+
+            case CUI_RENDERER_TYPE_METAL:
+            {
+#if !CUI_RENDERER_METAL_ENABLED
+                CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
+#endif
+            } break;
+
+            case CUI_RENDERER_TYPE_DIRECT3D11:
+            {
+                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+            } break;
+        }
+    }
+}
+
+@end
+
 @implementation AppKitView
 
 - (instancetype) initWithFrame: (NSRect) frame_rect
@@ -490,86 +604,6 @@ _cui_window_draw(CuiWindow *window)
     self.layer.contents = (id) image;
     CGImageRelease(image);
 #endif
-}
-
-- (void) updateWindowSize
-{
-    if (!cui_window) return;
-
-    NSRect window_rect  = self.frame;
-    NSRect content_rect = cui_window->appkit_window.contentLayoutRect;
-
-    float titlebar_height;
-
-    if (_cui_context.common.scale_factor == 0)
-    {
-        titlebar_height = ceilf((float) (window_rect.size.height - content_rect.size.height));
-    }
-    else
-    {
-        float factor = (float) cui_window->backbuffer_scale / (float) _cui_context.common.scale_factor;
-        titlebar_height = ceilf((float) (window_rect.size.height - content_rect.size.height) * factor);
-    }
-
-    window_rect  = [self convertRectToBacking: window_rect];
-    content_rect = [self convertRectToBacking: content_rect];
-
-    int32_t new_width = lround(window_rect.size.width);
-    int32_t new_height = lround(window_rect.size.height);
-
-    if ((cui_window->width != new_width) || (cui_window->height != new_height))
-    {
-        cui_window->width = new_width;
-        cui_window->height = new_height;
-
-        if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
-        {
-            cui_widget_set_preferred_size(cui_window->titlebar, 0.0f, titlebar_height);
-        }
-
-        if (cui_window->base.platform_root_widget)
-        {
-            CuiRect rect = cui_make_rect(0, 0, cui_window->width, cui_window->height);
-            cui_widget_layout(cui_window->base.platform_root_widget, rect);
-        }
-
-        _cui_window_draw(cui_window);
-
-        switch (cui_window->base.renderer_type)
-        {
-            case CUI_RENDERER_TYPE_SOFTWARE:
-            {
-#if CUI_RENDERER_SOFTWARE_ENABLED
-                [cui_window->appkit_view setNeedsDisplay: YES];
-#else
-                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#endif
-            } break;
-
-            case CUI_RENDERER_TYPE_OPENGLES2:
-            {
-                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
-            } break;
-
-            case CUI_RENDERER_TYPE_METAL:
-            {
-#if !CUI_RENDERER_METAL_ENABLED
-                CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
-#endif
-            } break;
-
-            case CUI_RENDERER_TYPE_DIRECT3D11:
-            {
-                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-            } break;
-        }
-    }
-}
-
-- (void) setFrameSize: (NSSize) size
-{
-    [super setFrameSize: size];
-    [self updateWindowSize];
 }
 
 - (BOOL) acceptsFirstResponder
@@ -661,16 +695,45 @@ _cui_window_draw(CuiWindow *window)
                                       fromView: nil];
     NSPoint point_in_backing = [self convertPointToBacking: point_in_view];
 
+    // printf("mouse down (%f, %f)\n", point_in_backing.x, (double) cui_window->height - point_in_backing.y);
+
+    bool mouse_is_in_titlebar = false;
+
+    if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
+    {
+        NSRect window_rect = cui_window->appkit_window.contentView.frame;
+        NSRect content_rect = cui_window->appkit_window.contentLayoutRect;
+
+        if (NSPointInRect(point_in_view, window_rect) && !NSPointInRect(point_in_view, content_rect))
+        {
+            mouse_is_in_titlebar = true;
+        }
+    }
+
     cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
     cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
 
     if (([ev clickCount] % 2) == 0)
     {
-        cui_window_handle_event(cui_window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+        bool handled = cui_window_handle_event(cui_window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+
+        if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE) &&
+            !(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
+            mouse_is_in_titlebar && !handled)
+        {
+            [cui_window->appkit_window zoom: nil];
+        }
     }
     else
     {
-        cui_window_handle_event(cui_window, CUI_EVENT_TYPE_LEFT_DOWN);
+        bool handled = cui_window_handle_event(cui_window, CUI_EVENT_TYPE_LEFT_DOWN);
+
+        if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
+            (cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR) &&
+            mouse_is_in_titlebar && !handled)
+        {
+            [cui_window->appkit_window performWindowDragWithEvent: ev];
+        }
     }
 }
 
@@ -1162,20 +1225,17 @@ cui_window_create(uint32_t creation_flags)
 
     window->backbuffer_scale = _cui_context.desktop_scale;
 
-    int32_t window_width;
-    int32_t window_height;
-
     if (_cui_context.common.scale_factor == 0)
     {
         window->base.ui_scale = (float) window->backbuffer_scale;
-        window_width  = window->backbuffer_scale * CUI_DEFAULT_WINDOW_WIDTH;
-        window_height = window->backbuffer_scale * CUI_DEFAULT_WINDOW_HEIGHT;
+        window->width  = window->backbuffer_scale * CUI_DEFAULT_WINDOW_WIDTH;
+        window->height = window->backbuffer_scale * CUI_DEFAULT_WINDOW_HEIGHT;
     }
     else
     {
         window->base.ui_scale = (float) _cui_context.common.scale_factor;
-        window_width  = _cui_context.common.scale_factor * CUI_DEFAULT_WINDOW_WIDTH;
-        window_height = _cui_context.common.scale_factor * CUI_DEFAULT_WINDOW_HEIGHT;
+        window->width  = _cui_context.common.scale_factor * CUI_DEFAULT_WINDOW_WIDTH;
+        window->height = _cui_context.common.scale_factor * CUI_DEFAULT_WINDOW_HEIGHT;
     }
 
     window->font_id = _cui_font_manager_find_font(&window->base.temporary_memory, &window->base.font_manager, window->base.ui_scale,
@@ -1184,7 +1244,8 @@ cui_window_create(uint32_t creation_flags)
 
     cui_arena_allocate(&window->arena, CuiKiB(4));
 
-    if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
+    if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
+        !(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR))
     {
         CuiWidget *root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
 
@@ -1211,11 +1272,8 @@ cui_window_create(uint32_t creation_flags)
 
         window->base.user_root_widget = dummy_user_root_widget;
 
-        CuiRect rect = cui_make_rect(0, 0, window_width, window_height);
-
         cui_widget_set_window(root_widget, window);
         cui_widget_set_ui_scale(root_widget, window->base.ui_scale);
-        cui_widget_layout(root_widget, rect);
 
         window->base.platform_root_widget = root_widget;
     }
@@ -1264,7 +1322,7 @@ cui_window_create(uint32_t creation_flags)
         return 0;
     }
 
-    NSRect backing_rect = NSMakeRect(0.0, 0.0, (double) window_width, (double) window_height);
+    NSRect backing_rect = NSMakeRect(0.0, 0.0, (double) window->width, (double) window->height);
     NSRect content_rect = [_cui_context.main_screen convertRectFromBacking: backing_rect];
     NSRect screen_rect  = [_cui_context.main_screen frame];
     NSRect window_rect  = NSMakeRect(0.5 * (screen_rect.size.width - content_rect.size.width),
@@ -1290,10 +1348,57 @@ cui_window_create(uint32_t creation_flags)
                                                               backing: NSBackingStoreBuffered
                                                                 defer: NO];
 
-    // window->appkit_window.titleVisibility = NSWindowTitleHidden;
+    if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR)
+    {
+        window->appkit_toolbar = [NSToolbar new];
+        window->appkit_window.toolbar = window->appkit_toolbar;
+        window->appkit_window.toolbar.showsBaselineSeparator = NO;
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 110000
+        // window->appkit_window.toolbarStyle = NSWindowToolbarStyleUnified;
+        window->appkit_window.toolbarStyle = NSWindowToolbarStyleUnifiedCompact;
+#endif
+
+        if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
+        {
+            window->appkit_window.movable = NO;
+            window->appkit_window.titleVisibility = NSWindowTitleHidden;
+        }
+    }
+
     if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
     {
         window->appkit_window.titlebarAppearsTransparent = YES;
+
+        NSRect window_rect = window->appkit_window.contentView.frame;
+        NSRect content_rect = window->appkit_window.contentLayoutRect;
+
+        if (_cui_context.common.scale_factor == 0)
+        {
+            window->titlebar_height = ceilf((float) (window_rect.size.height - content_rect.size.height));
+        }
+        else
+        {
+            float factor = (float) window->backbuffer_scale / (float) _cui_context.common.scale_factor;
+            window->titlebar_height = ceilf((float) (window_rect.size.height - content_rect.size.height) * factor);
+        }
+
+        window_rect.size.height = 2 * window_rect.size.height - content_rect.size.height;
+
+        [window->appkit_window setContentSize: window_rect.size];
+
+        window_rect = [window->appkit_window convertRectToBacking: window_rect];
+
+        window->width = lround(window_rect.size.width);
+        window->height = lround(window_rect.size.height);
+
+        if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR))
+        {
+            cui_widget_set_preferred_size(window->titlebar, 0.0f, window->titlebar_height);
+
+            CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+            cui_widget_layout(window->base.platform_root_widget, rect);
+        }
     }
 
     NSAppearance *appearance = [NSAppearance appearanceNamed: NSAppearanceNameDarkAqua];
@@ -1331,7 +1436,8 @@ cui_window_resize(CuiWindow *window, int32_t width, int32_t height)
 {
     NSRect backing_rect = NSMakeRect(0.0, 0.0, (CGFloat) width, (CGFloat) height);
 
-    if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION))
+    if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
+        !(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR))
     {
         CuiPoint titlebar_size = cui_widget_get_preferred_size(window->titlebar);
         backing_rect.size.height += (CGFloat) titlebar_size.y;
@@ -1348,6 +1454,13 @@ cui_window_resize(CuiWindow *window, int32_t width, int32_t height)
 }
 
 void
+cui_window_show(CuiWindow *window)
+{
+    [window->appkit_window makeKeyAndOrderFront: nil];
+    window->base.needs_redraw = true;
+}
+
+void
 cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
 {
     if ((window->base.state & CUI_WINDOW_STATE_FULLSCREEN) != (fullscreen ? CUI_WINDOW_STATE_FULLSCREEN : 0))
@@ -1356,11 +1469,10 @@ cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
     }
 }
 
-void
-cui_window_show(CuiWindow *window)
+float
+cui_window_get_titlebar_height(CuiWindow *window)
 {
-    [window->appkit_window makeKeyAndOrderFront: nil];
-    window->base.needs_redraw = true;
+    return window->titlebar_height;
 }
 
 void
@@ -1418,7 +1530,8 @@ cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
 {
     CuiAssert(widget);
 
-    if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION)
+    if ((window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) ||
+        (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR))
     {
         window->base.platform_root_widget = widget;
     }

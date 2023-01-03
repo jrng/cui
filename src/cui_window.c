@@ -167,9 +167,11 @@ cui_window_set_color_theme(CuiWindow *window, const CuiColorTheme *color_theme)
     window_base->color_theme = color_theme;
 }
 
-void
+bool
 cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
 {
+    bool result = false;
+
     CuiWindowBase *window_base = &window->base;
 
     switch (event_type)
@@ -219,7 +221,7 @@ cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
         {
             if (window_base->platform_root_widget)
             {
-                cui_widget_handle_event(window_base->platform_root_widget, CUI_EVENT_TYPE_LEFT_DOWN);
+                result = cui_widget_handle_event(window_base->platform_root_widget, CUI_EVENT_TYPE_LEFT_DOWN);
             }
         } break;
 
@@ -238,7 +240,7 @@ cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
         {
             if (window_base->platform_root_widget)
             {
-                cui_widget_handle_event(window_base->platform_root_widget, CUI_EVENT_TYPE_DOUBLE_CLICK);
+                result = cui_widget_handle_event(window_base->platform_root_widget, CUI_EVENT_TYPE_DOUBLE_CLICK);
             }
         } break;
 
@@ -309,6 +311,8 @@ cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
             CuiAssert(!"Event type not allowed for windows");
         } break;
     }
+
+    return result;
 }
 
 int32_t

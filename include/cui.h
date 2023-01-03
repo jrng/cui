@@ -1013,6 +1013,13 @@ typedef enum CuiWindowCreationFlags
     // all platforms
     CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION = (1 << 0),
     CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE       = (1 << 1),
+
+    // macos
+    /* This creates a full height titlebar without a title
+     * and puts your apps content inside the titlebar area.
+     * Use cui_window_get_titlebar_height() to adjust your content.
+     */
+    CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR   = (1 << 2),
 } CuiWindowCreationFlags;
 
 typedef struct CuiWindow CuiWindow;
@@ -1288,10 +1295,11 @@ bool cui_window_is_maximized(CuiWindow *window);
 bool cui_window_is_fullscreen(CuiWindow *window);
 bool cui_window_is_tiled(CuiWindow *window);
 float cui_window_get_ui_scale(CuiWindow *window);
+float cui_window_get_titlebar_height(CuiWindow *window);
 void cui_window_close(CuiWindow *window);
 void cui_window_destroy(CuiWindow *window);
 void cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget);
-void cui_window_handle_event(CuiWindow *window, CuiEventType event_type);
+bool cui_window_handle_event(CuiWindow *window, CuiEventType event_type);
 void cui_window_set_hovered(CuiWindow *window, CuiWidget *widget);
 void cui_window_set_pressed(CuiWindow *window, CuiWidget *widget);
 void cui_window_set_focused(CuiWindow *window, CuiWidget *widget);
