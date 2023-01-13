@@ -260,6 +260,7 @@ _cui_window_draw(CuiWindow *window)
     }
 
 #if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+
     CuiArena screenshot_arena;
     CuiBitmap screenshot_bitmap;
 
@@ -267,6 +268,7 @@ _cui_window_draw(CuiWindow *window)
     {
         cui_arena_allocate(&screenshot_arena, CuiMiB(32));
     }
+
 #endif
 
     switch (window->base.renderer_type)
@@ -305,7 +307,7 @@ _cui_window_draw(CuiWindow *window)
         {
 #if CUI_RENDERER_DIRECT3D11_ENABLED
             _cui_direct3d11_renderer_render(window->renderer.direct3d11.renderer_direct3d11, command_buffer,
-                                            window->width, window->height, CuiHexColor(0xFFFFFFFF));
+                                            window->width, window->height, CuiHexColor(0xFF000000));
 
 #  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
             if (window->take_screenshot)
@@ -340,6 +342,7 @@ _cui_window_draw(CuiWindow *window)
     }
 
 #endif
+
 }
 
 static inline bool
@@ -416,6 +419,49 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
             {
                 result = DefWindowProc(window_handle, message, w_param, l_param);
             }
+
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+
+            if ((window->base.renderer_type == CUI_RENDERER_TYPE_DIRECT3D11) &&
+                window->renderer.direct3d11.renderer_direct3d11)
+            {
+                RECT *client_rect;
+
+                if (w_param)
+                {
+                    client_rect = ((NCCALCSIZE_PARAMS *) l_param)->rgrc;
+                }
+                else
+                {
+                    client_rect = (RECT *) l_param;
+                }
+
+                int32_t width = client_rect->right - client_rect->left;
+                int32_t height = client_rect->bottom - client_rect->top;
+
+                if ((window->width != width) || (window->height != height))
+                {
+                    window->width = width;
+                    window->height = height;
+
+                    if (window->base.platform_root_widget)
+                    {
+                        CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+                        cui_widget_layout(window->base.platform_root_widget, rect);
+                    }
+
+                    _cui_window_draw(window);
+
+                    // TODO: check for errors
+                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 0, DXGI_PRESENT_RESTART);
+                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 1, DXGI_PRESENT_DO_NOT_SEQUENCE);
+
+                    window->base.needs_redraw = false;
+                }
+            }
+
+#endif
+
         } break;
 
         case WM_NCHITTEST:
@@ -1510,16 +1556,21 @@ cui_window_create(uint32_t creation_flags)
 
     if (window->use_custom_decoration)
     {
-        window_style = WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
+        window_style = WS_SYSMENU | WS_MINIMIZEBOX;
     }
     else
     {
-        window_style = WS_OVERLAPPEDWINDOW;
+        window_style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    }
+
+    if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+    {
+        window_style |= WS_THICKFRAME | WS_MAXIMIZEBOX;
     }
 
     // TODO: WS_EX_NOREDIRECTIONBITMAP for direct3d11 ??? This breaks the software rendering.
     //       Maybe that is because there is only one framebuffer used. Change to a swapchain like on linux.
-    window->window_handle = CreateWindowEx(0, _cui_context.window_class_name, L"", window_style,
+    window->window_handle = CreateWindowEx(WS_EX_APPWINDOW, _cui_context.window_class_name, L"Window", window_style,
                                            CW_USEDEFAULT, CW_USEDEFAULT, window->width, window->height, 0, 0, GetModuleHandle(0), window);
 
     if (!window->window_handle)
@@ -1854,7 +1905,8 @@ cui_step(void)
                 {
 #if CUI_RENDERER_DIRECT3D11_ENABLED
                     // TODO: check for errors
-                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 1, 0);
+                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 0, DXGI_PRESENT_RESTART);
+                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 1, DXGI_PRESENT_DO_NOT_SEQUENCE);
 #else
                     CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
 #endif
