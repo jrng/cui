@@ -1142,6 +1142,7 @@ char * cui_to_c_string(CuiArena *arena, CuiString str);
 //
 
 bool cui_unicode_is_digit(uint32_t c);
+bool cui_unicode_is_printable(uint32_t c);
 
 CuiUnicodeResult cui_utf8_decode(CuiString str, int64_t index);
 int64_t cui_utf8_encode(CuiString str, int64_t index, uint32_t codepoint);

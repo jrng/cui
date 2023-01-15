@@ -1,6 +1,14 @@
-bool cui_unicode_is_digit(uint32_t c)
+bool
+cui_unicode_is_digit(uint32_t c)
 {
     return ((c >= '0') && (c <= '9'));
+}
+
+bool
+cui_unicode_is_printable(uint32_t c)
+{
+    // TODO: is this complete?
+    return ((c >= 32) && (c != 127));
 }
 
 CuiUnicodeResult

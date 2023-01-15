@@ -1,9 +1,3 @@
-static inline bool
-_cui_is_printable_codepoint(uint32_t codepoint)
-{
-    return ((codepoint >= 32) && (codepoint != 127));
-}
-
 static void
 _cui_widget_draw_box_shadow(CuiGraphicsContext *ctx, CuiWidget *widget, const CuiColorTheme *color_theme)
 {
@@ -2204,7 +2198,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                             } break;
                         }
                     }
-                    else if (_cui_is_printable_codepoint(window->base.event.key.codepoint))
+                    else if (cui_unicode_is_printable(window->base.event.key.codepoint))
                     {
                         cui_text_input_insert_codepoint(&widget->text_input, window->base.event.key.codepoint);
                         _cui_widget_update_text_offset(widget);
