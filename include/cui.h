@@ -78,6 +78,9 @@
 // NOTE: this only works for powers of two
 #define CuiAlign(value, alignment) (((value) + (alignment) - (int64_t) 1) & ~((alignment) - (int64_t) 1))
 
+#define CuiAlignUp(value, alignment) ((((value) + (alignment) - 1ll) / (alignment)) * (alignment))
+#define CuiAlignDown(value, alignment) (((value) / (alignment)) * (alignment))
+
 #define CuiForEachWidget(iter, sentinel)                    \
     for (CuiWidget *iter =                                  \
          CuiContainerOf((sentinel)->next, CuiWidget, list); \
