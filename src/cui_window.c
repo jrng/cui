@@ -104,6 +104,36 @@ cui_event_pointer_is_inside_widget(CuiWindow *window, CuiWidget *widget)
     return cui_rect_has_point_inside(widget->rect, cui_make_point(window->base.event.pointer.x, window->base.event.pointer.y));
 }
 
+bool
+cui_window_event_is_alt_down(CuiWindow *window)
+{
+    return window->base.event.key.alt_is_down;
+}
+
+bool
+cui_window_event_is_ctrl_down(CuiWindow *window)
+{
+    return window->base.event.key.ctrl_is_down;
+}
+
+bool
+cui_window_event_is_shift_down(CuiWindow *window)
+{
+    return window->base.event.key.shift_is_down;
+}
+
+bool
+cui_window_event_is_command_down(CuiWindow *window)
+{
+    return window->base.event.key.command_is_down;
+}
+
+uint32_t
+cui_window_event_get_codepoint(CuiWindow *window)
+{
+    return window->base.event.key.codepoint;
+}
+
 float
 cui_window_get_ui_scale(CuiWindow *window)
 {

@@ -937,6 +937,7 @@ typedef enum CuiKeyId
 } CuiKeyId;
 
 // TODO: maybe make this a union
+// TODO: do we need this to be public?
 typedef struct CuiEvent
 {
     CuiPoint mouse;
@@ -1316,6 +1317,8 @@ int32_t cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id);
 float cui_window_get_font_baseline_offset(CuiWindow *window, CuiFontId font_id);
 float cui_window_get_string_width(CuiWindow *window, CuiFontId font_id, CuiString str);
 
+// TODO: change prefix to 'cui_window_event_'
+// TODO: group by event type
 bool cui_window_is_precise_scrolling(CuiWindow *window);
 float cui_window_get_wheel_dx(CuiWindow *window);
 float cui_window_get_wheel_dy(CuiWindow *window);
@@ -1326,6 +1329,16 @@ void cui_window_set_pointer_capture(CuiWindow *window, CuiWidget *widget, int32_
 
 bool cui_event_is_inside_widget(CuiWindow *window, CuiWidget *widget);
 bool cui_event_pointer_is_inside_widget(CuiWindow *window, CuiWidget *widget);
+
+//
+// key event
+//
+
+bool cui_window_event_is_alt_down(CuiWindow *window);
+bool cui_window_event_is_ctrl_down(CuiWindow *window);
+bool cui_window_event_is_shift_down(CuiWindow *window);
+bool cui_window_event_is_command_down(CuiWindow *window);
+uint32_t cui_window_event_get_codepoint(CuiWindow *window);
 
 //
 // widget
