@@ -397,6 +397,20 @@ cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id)
     return font->line_height;
 }
 
+int32_t
+cui_window_get_font_cursor_offset(CuiWindow *window, CuiFontId font_id)
+{
+    CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
+    return font->cursor_offset;
+}
+
+int32_t
+cui_window_get_font_cursor_height(CuiWindow *window, CuiFontId font_id)
+{
+    CuiFont *font = _cui_font_manager_get_font_from_id(&window->base.font_manager, font_id);
+    return font->cursor_height;
+}
+
 float
 cui_window_get_font_baseline_offset(CuiWindow *window, CuiFontId font_id)
 {
@@ -405,7 +419,19 @@ cui_window_get_font_baseline_offset(CuiWindow *window, CuiFontId font_id)
 }
 
 float
+cui_window_get_codepoint_width(CuiWindow *window, CuiFontId font_id, uint32_t codepoint)
+{
+    return _cui_font_get_codepoint_width(&window->base.font_manager, font_id, codepoint);
+}
+
+float
 cui_window_get_string_width(CuiWindow *window, CuiFontId font_id, CuiString str)
 {
     return _cui_font_get_string_width(&window->base.font_manager, font_id, str);
+}
+
+float
+cui_window_get_string_width_until_character(CuiWindow *window, CuiFontId font_id, CuiString str, int64_t character_index)
+{
+    return _cui_font_get_substring_width(&window->base.font_manager, font_id, str, character_index);
 }

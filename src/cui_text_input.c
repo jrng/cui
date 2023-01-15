@@ -1,4 +1,41 @@
 void
+cui_text_input_allocate(CuiTextInput *input, int64_t capacity)
+{
+    input->cursor_start = 0;
+    input->cursor_end = 0;
+    input->count = 0;
+    input->capacity = capacity;
+    input->data = cui_platform_allocate(input->capacity);
+}
+
+void
+cui_text_input_clear(CuiTextInput *input)
+{
+    input->cursor_start = 0;
+    input->cursor_end = 0;
+    input->count = 0;
+}
+
+void
+cui_text_input_set_string_value(CuiTextInput *input, CuiString str, int64_t cursor_start, int64_t cursor_end)
+{
+    CuiAssert(str.count <= input->capacity);
+
+    input->count = str.count;
+
+    uint8_t *dst = input->data;
+    uint8_t *src = str.data;
+
+    for (int64_t index = 0; index < str.count; index += 1)
+    {
+        *dst++ = *src++;
+    }
+
+    input->cursor_start = cursor_start;
+    input->cursor_end   = cursor_end;
+}
+
+void
 cui_text_input_select_all(CuiTextInput *input)
 {
     input->cursor_start = 0;

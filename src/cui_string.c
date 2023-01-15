@@ -25,6 +25,22 @@ cui_parse_int32(CuiString str)
 }
 
 CuiString
+cui_string_trim(CuiString str)
+{
+    while ((str.count > 0) && cui_unicode_is_whitespace(str.data[str.count - 1]))
+    {
+        str.count -= 1;
+    }
+
+    while ((str.count > 0) && cui_unicode_is_whitespace(str.data[0]))
+    {
+        cui_string_advance(&str, 1);
+    }
+
+    return str;
+}
+
+CuiString
 cui_copy_string(CuiArena *arena, CuiString str)
 {
     CuiString result = { 0 };

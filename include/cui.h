@@ -1135,6 +1135,7 @@ extern "C" {
 
 int32_t cui_parse_int32(CuiString str);
 
+CuiString cui_string_trim(CuiString str);
 CuiString cui_copy_string(CuiArena *arena, CuiString str);
 CuiString cui_string_concat_n(CuiArena *arena, int32_t n, ...);
 CuiString cui_path_concat(CuiArena *arena, CuiString a, CuiString b);
@@ -1146,6 +1147,7 @@ char * cui_to_c_string(CuiArena *arena, CuiString str);
 //
 
 bool cui_unicode_is_digit(uint32_t c);
+bool cui_unicode_is_whitespace(uint32_t c);
 bool cui_unicode_is_printable(uint32_t c);
 
 CuiUnicodeResult cui_utf8_decode(CuiString str, int64_t index);
@@ -1161,6 +1163,9 @@ int64_t cui_utf8_get_character_byte_offset(CuiString str, int64_t character_inde
 // text input
 //
 
+void cui_text_input_allocate(CuiTextInput *input, int64_t capacity);
+void cui_text_input_clear(CuiTextInput *input);
+void cui_text_input_set_string_value(CuiTextInput *input, CuiString str, int64_t cursor_start, int64_t cursor_end);
 void cui_text_input_select_all(CuiTextInput *input);
 void cui_text_input_delete_range(CuiTextInput *input, int64_t start, int64_t end);
 void cui_text_input_delete_selected_range(CuiTextInput *input);
@@ -1317,8 +1322,12 @@ void cui_window_deallocate_texture_id(CuiWindow *window, int32_t texture_id);
 
 CuiFontId cui_window_find_font_n(CuiWindow *window, const uint32_t n, ...);
 int32_t cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id);
+int32_t cui_window_get_font_cursor_offset(CuiWindow *window, CuiFontId font_id);
+int32_t cui_window_get_font_cursor_height(CuiWindow *window, CuiFontId font_id);
 float cui_window_get_font_baseline_offset(CuiWindow *window, CuiFontId font_id);
+float cui_window_get_codepoint_width(CuiWindow *window, CuiFontId font_id, uint32_t codepoint);
 float cui_window_get_string_width(CuiWindow *window, CuiFontId font_id, CuiString str);
+float cui_window_get_string_width_until_character(CuiWindow *window, CuiFontId font_id, CuiString str, int64_t character_index);
 
 // TODO: change prefix to 'cui_window_event_'
 // TODO: group by event type

@@ -142,6 +142,41 @@ _cui_sized_font_update(CuiSizedFont *sized_font, CuiFontFileManager *font_file_m
     font->line_height     = (int32_t) ceilf(font_height * sized_font->line_height);
     font->baseline_offset = 0.5f * ((float) font->line_height - font_height) +
                             (font_file->ascent * font->font_scale);
+    font->cursor_offset   = (int32_t) floorf(0.5f * ((float) font->line_height - font_height));
+    font->cursor_height   = font->line_height - 2 * font->cursor_offset;
+}
+
+static float
+_cui_font_get_codepoint_width(CuiFontManager *font_manager, CuiFontId font_id, uint32_t codepoint)
+{
+    CuiAssert(font_id.value > 0);
+
+    CuiFont *font = _cui_font_manager_get_font_from_id(font_manager, font_id);
+
+    CuiAssert(font);
+
+    uint32_t glyph_index = 0;
+    CuiFont *used_font = font;
+
+    while (used_font)
+    {
+        CuiFontFile *font_file = _cui_font_file_manager_get_font_file_from_id(font_manager->font_file_manager, used_font->file_id);
+        glyph_index = _cui_font_file_get_glyph_index_from_codepoint(font_file, codepoint);
+
+        if (glyph_index) break;
+
+        used_font = _cui_font_manager_get_font_from_id(font_manager, used_font->fallback_id);
+    }
+
+    if (!used_font)
+    {
+        used_font = font;
+        glyph_index = 0;
+    }
+
+    CuiFontFile *used_font_file = _cui_font_file_manager_get_font_file_from_id(font_manager->font_file_manager, used_font->file_id);
+
+    return used_font->font_scale * (float) _cui_font_file_get_glyph_advance(used_font_file, glyph_index);
 }
 
 static float

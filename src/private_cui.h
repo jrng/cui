@@ -119,8 +119,11 @@ typedef struct CuiFontFile
 typedef struct CuiFont
 {
     float font_scale;
-    int32_t line_height;
     float baseline_offset;
+
+    int32_t line_height;
+    int32_t cursor_offset;
+    int32_t cursor_height;
 
     CuiFontFileId file_id;
     CuiFontId fallback_id;

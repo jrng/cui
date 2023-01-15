@@ -5,6 +5,12 @@ cui_unicode_is_digit(uint32_t c)
 }
 
 bool
+cui_unicode_is_whitespace(uint32_t c)
+{
+    return ((c == ' ') || (c == '\t') || (c == '\r') || (c == '\n'));
+}
+
+bool
 cui_unicode_is_printable(uint32_t c)
 {
     // TODO: is this complete?
