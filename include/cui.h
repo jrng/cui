@@ -1333,6 +1333,7 @@ float cui_window_get_string_width_until_character(CuiWindow *window, CuiFontId f
 
 // TODO: change prefix to 'cui_window_event_'
 // TODO: group by event type
+CuiPoint cui_window_get_mouse_point(CuiWindow *window);
 bool cui_window_is_precise_scrolling(CuiWindow *window);
 float cui_window_get_wheel_dx(CuiWindow *window);
 float cui_window_get_wheel_dy(CuiWindow *window);

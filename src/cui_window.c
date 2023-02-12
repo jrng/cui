@@ -47,6 +47,12 @@ cui_window_is_tiled(CuiWindow *window)
                                   CUI_WINDOW_STATE_TILED_TOP | CUI_WINDOW_STATE_TILED_BOTTOM)) ? true : false;
 }
 
+CuiPoint
+cui_window_get_mouse_point(CuiWindow *window)
+{
+    return window->base.event.mouse;
+}
+
 bool
 cui_window_is_precise_scrolling(CuiWindow *window)
 {
