@@ -826,32 +826,33 @@ typedef enum CuiIconType
 
 typedef enum CuiShapeType
 {
-    CUI_SHAPE_ROUNDED_CORNER    = 0,
-    CUI_SHAPE_SHADOW_CORNER     = 1,
-    CUI_SHAPE_SHADOW_HORIZONTAL = 2,
-    CUI_SHAPE_SHADOW_VERTICAL   = 3,
-    CUI_SHAPE_WINDOWS_MINIMIZE  = 4,
-    CUI_SHAPE_WINDOWS_MAXIMIZE  = 5,
-    CUI_SHAPE_WINDOWS_CLOSE     = 6,
-    CUI_SHAPE_CHECKBOX_OUTER_16 = 7,
-    CUI_SHAPE_CHECKBOX_INNER_16 = 8,
-    CUI_SHAPE_CHECKMARK_16      = 9,
-    CUI_SHAPE_ANGLE_UP_12       = 10,
-    CUI_SHAPE_ANGLE_RIGHT_12    = 11,
-    CUI_SHAPE_ANGLE_DOWN_12     = 12,
-    CUI_SHAPE_ANGLE_LEFT_12     = 13,
-    CUI_SHAPE_INFO_12           = 14,
-    CUI_SHAPE_EXPAND_12         = 15,
-    CUI_SHAPE_SEARCH_12         = 16,
-    CUI_SHAPE_UPPERCASE_A_12    = 17,
-    CUI_SHAPE_UPPERCASE_B_12    = 18,
-    CUI_SHAPE_UPPERCASE_G_12    = 19,
-    CUI_SHAPE_UPPERCASE_H_12    = 20,
-    CUI_SHAPE_UPPERCASE_L_12    = 21,
-    CUI_SHAPE_UPPERCASE_R_12    = 22,
-    CUI_SHAPE_UPPERCASE_S_12    = 23,
-    CUI_SHAPE_UPPERCASE_V_12    = 24,
-    CUI_SHAPE_PLUS_12           = 25,
+    CUI_SHAPE_ROUNDED_CORNER            = 0,
+    CUI_SHAPE_INVERTED_ROUNDED_CORNER   = 1,
+    CUI_SHAPE_SHADOW_CORNER             = 2,
+    CUI_SHAPE_SHADOW_HORIZONTAL         = 3,
+    CUI_SHAPE_SHADOW_VERTICAL           = 4,
+    CUI_SHAPE_WINDOWS_MINIMIZE          = 5,
+    CUI_SHAPE_WINDOWS_MAXIMIZE          = 6,
+    CUI_SHAPE_WINDOWS_CLOSE             = 7,
+    CUI_SHAPE_CHECKBOX_OUTER_16         = 8,
+    CUI_SHAPE_CHECKBOX_INNER_16         = 9,
+    CUI_SHAPE_CHECKMARK_16              = 10,
+    CUI_SHAPE_ANGLE_UP_12               = 11,
+    CUI_SHAPE_ANGLE_RIGHT_12            = 12,
+    CUI_SHAPE_ANGLE_DOWN_12             = 13,
+    CUI_SHAPE_ANGLE_LEFT_12             = 14,
+    CUI_SHAPE_INFO_12                   = 15,
+    CUI_SHAPE_EXPAND_12                 = 16,
+    CUI_SHAPE_SEARCH_12                 = 17,
+    CUI_SHAPE_UPPERCASE_A_12            = 18,
+    CUI_SHAPE_UPPERCASE_B_12            = 19,
+    CUI_SHAPE_UPPERCASE_G_12            = 20,
+    CUI_SHAPE_UPPERCASE_H_12            = 21,
+    CUI_SHAPE_UPPERCASE_L_12            = 22,
+    CUI_SHAPE_UPPERCASE_R_12            = 23,
+    CUI_SHAPE_UPPERCASE_S_12            = 24,
+    CUI_SHAPE_UPPERCASE_V_12            = 25,
+    CUI_SHAPE_PLUS_12                   = 26,
 } CuiShapeType;
 
 typedef enum CuiAxis
@@ -1409,8 +1410,10 @@ void cui_draw_fill_rounded_rect_8(CuiGraphicsContext *ctx, CuiRect rect, float t
                                   float bottom_right_radius_y, float bottom_left_radius_x, float bottom_left_radius_y, CuiColor color);
 void cui_draw_stroke_rounded_rect_4(CuiGraphicsContext *ctx, CuiRect rect, float top_left_radius, float top_right_radius,
                                     float bottom_right_radius, float bottom_left_radius, int32_t stroke_width, CuiColor color);
+void cui_draw_fill_inverted_rounded_rect_1(CuiGraphicsContext *ctx, CuiRect rect, float radius, CuiColor color);
 void cui_draw_fill_shadow(CuiGraphicsContext *ctx, int32_t x, int32_t y, int32_t max, int32_t blur_radius, CuiDirection direction, CuiColor color);
 void cui_draw_fill_shadow_corner(CuiGraphicsContext *ctx, int32_t x, int32_t y, int32_t radius, int32_t blur_radius, CuiDirection direction_x, CuiDirection direction_y, CuiColor color);
+void cui_draw_fill_codepoint(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, uint32_t codepoint, CuiColor color);
 void cui_draw_fill_string(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, CuiString str, CuiColor color);
 void cui_draw_fill_shape(CuiGraphicsContext *ctx, float x, float y, CuiShapeType shape_type, float scale, CuiColor color);
 void cui_draw_fill_icon(CuiGraphicsContext *ctx, float x, float y, float scale, CuiIconType icon_type, CuiColor color);

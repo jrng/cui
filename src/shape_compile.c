@@ -129,13 +129,14 @@ int main()
                       "\n"
                       "        switch (shape_type)\n"
                       "        {\n"
-                      "            case CUI_SHAPE_ROUNDED_CORNER:    { CuiAssert(!\"unsupported\"); } break;\n"
-                      "            case CUI_SHAPE_SHADOW_CORNER:     { CuiAssert(!\"unsupported\"); } break;\n"
-                      "            case CUI_SHAPE_SHADOW_HORIZONTAL: { CuiAssert(!\"unsupported\"); } break;\n"
-                      "            case CUI_SHAPE_SHADOW_VERTICAL:   { CuiAssert(!\"unsupported\"); } break;\n"
-                      "            case CUI_SHAPE_WINDOWS_MINIMIZE:  { CuiAssert(!\"unsupported\"); } break;\n"
-                      "            case CUI_SHAPE_WINDOWS_MAXIMIZE:  { CuiAssert(!\"unsupported\"); } break;\n"
-                      "            case CUI_SHAPE_WINDOWS_CLOSE:     { CuiAssert(!\"unsupported\"); } break;\n");
+                      "            case CUI_SHAPE_ROUNDED_CORNER:           { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_INVERTED_ROUNDED_CORNER:  { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_SHADOW_CORNER:            { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_SHADOW_HORIZONTAL:        { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_SHADOW_VERTICAL:          { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_WINDOWS_MINIMIZE:         { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_WINDOWS_MAXIMIZE:         { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_WINDOWS_CLOSE:            { CuiAssert(!\"unsupported\"); } break;\n");
 
         for (unsigned int i = 0; i < ArrayCount(shapes); i += 1)
         {
