@@ -390,6 +390,26 @@ cui_window_find_font_n(CuiWindow *window, const uint32_t n, ...)
     return result;
 }
 
+void
+cui_window_update_font(CuiWindow *window, CuiFontId font_id, float size, float line_height)
+{
+    while (font_id.value > 0)
+    {
+        int32_t index = (int32_t) font_id.value - 1;
+
+        CuiAssert(index < cui_array_count(window->base.font_manager.sized_fonts));
+
+        CuiSizedFont *sized_font = window->base.font_manager.sized_fonts + index;
+
+        sized_font->size = size;
+        sized_font->line_height = line_height;
+
+        _cui_sized_font_update(sized_font, window->base.font_manager.font_file_manager, window->base.ui_scale);
+
+        font_id = sized_font->font.fallback_id;
+    }
+}
+
 int32_t
 cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id)
 {

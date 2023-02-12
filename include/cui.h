@@ -1322,6 +1322,7 @@ void cui_window_deallocate_texture_id(CuiWindow *window, int32_t texture_id);
 #define cui_window_find_font(window, ...) cui_window_find_font_n(window, CuiNArgs(__VA_ARGS__), __VA_ARGS__)
 
 CuiFontId cui_window_find_font_n(CuiWindow *window, const uint32_t n, ...);
+void cui_window_update_font(CuiWindow *window, CuiFontId font_id, float size, float line_height);
 int32_t cui_window_get_font_line_height(CuiWindow *window, CuiFontId font_id);
 int32_t cui_window_get_font_cursor_offset(CuiWindow *window, CuiFontId font_id);
 int32_t cui_window_get_font_cursor_height(CuiWindow *window, CuiFontId font_id);
