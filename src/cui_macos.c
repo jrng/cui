@@ -782,13 +782,12 @@ _cui_window_draw(CuiWindow *window)
     if (ev.hasPreciseScrollingDeltas)
     {
         cui_window->base.event.wheel.is_precise_scrolling = true;
-        cui_window->base.event.wheel.dx = cui_window->base.ui_scale * (float) ev.scrollingDeltaX;
-        cui_window->base.event.wheel.dy = cui_window->base.ui_scale * (float) ev.scrollingDeltaY;
+        cui_window->base.event.wheel.dx = cui_window->backbuffer_scale * (float) ev.scrollingDeltaX;
+        cui_window->base.event.wheel.dy = cui_window->backbuffer_scale * (float) ev.scrollingDeltaY;
     }
     else
     {
         cui_window->base.event.wheel.is_precise_scrolling = false;
-        // TODO: multiply by line height
         cui_window->base.event.wheel.dx = (float) ev.scrollingDeltaX;
         cui_window->base.event.wheel.dy = (float) ev.scrollingDeltaY;
     }
