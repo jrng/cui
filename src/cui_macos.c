@@ -245,6 +245,10 @@ _cui_window_draw(CuiWindow *window)
             _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
                                         cui_window_allocate_texture_id(window));
         }
+        else
+        {
+            _cui_glyph_cache_maybe_reset(&window->base.glyph_cache, command_buffer);
+        }
 
         CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
 

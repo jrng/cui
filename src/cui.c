@@ -548,6 +548,7 @@ static void
 _cui_glyph_cache_reset(CuiGlyphCache *cache, CuiCommandBuffer *command_buffer)
 {
     cache->count = 0;
+    cache->insertion_failure_count = 0;
 
     for (uint32_t index = 0; index < cache->allocated; index++)
     {
@@ -569,6 +570,19 @@ _cui_glyph_cache_reset(CuiGlyphCache *cache, CuiCommandBuffer *command_buffer)
     texture_op->type = CUI_TEXTURE_OPERATION_UPDATE;
     texture_op->texture_id = cache->texture_id;
     texture_op->payload.rect = cui_make_rect(0, 0, 1, 1);
+}
+
+static void
+_cui_glyph_cache_maybe_reset(CuiGlyphCache *cache, CuiCommandBuffer *command_buffer)
+{
+    float hash_map_fill_rate = (float) cache->count / (float) cache->allocated;
+    float texture_fill_rate = (float) cache->y / (float) cache->texture.height;
+
+    if ((cache->insertion_failure_count > 0) ||
+        (hash_map_fill_rate > 0.75f) || (texture_fill_rate > 0.8f))
+    {
+        _cui_glyph_cache_reset(cache, command_buffer);
+    }
 }
 
 static void
@@ -726,6 +740,10 @@ _cui_glyph_cache_allocate_texture(CuiGlyphCache *cache, int32_t width, int32_t h
             texture_op->texture_id = cache->texture_id;
             texture_op->payload.rect = result;
         }
+    }
+    else
+    {
+        cache->insertion_failure_count += 1;
     }
 
     return result;

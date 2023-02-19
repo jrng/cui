@@ -242,6 +242,8 @@ typedef struct CuiGlyphCache
     uint32_t count;
     uint32_t allocated;
 
+    uint32_t insertion_failure_count;
+
     uint32_t *hashes;
     CuiGlyphKey *keys;
     CuiRect *rects;
