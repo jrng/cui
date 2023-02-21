@@ -65,6 +65,34 @@ typedef struct CuiWaylandCursorTheme
     struct wl_cursor *wayland_cursor_resize_bottom_right;
 } CuiWaylandCursorTheme;
 
+typedef enum CuiWaylandPointerEventFlags
+{
+    CUI_WAYLAND_POINTER_EVENT_ENTER         = (1 << 0),
+    CUI_WAYLAND_POINTER_EVENT_LEAVE         = (1 << 1),
+    CUI_WAYLAND_POINTER_EVENT_MOTION        = (1 << 2),
+    CUI_WAYLAND_POINTER_EVENT_BUTTON        = (1 << 3),
+    CUI_WAYLAND_POINTER_EVENT_AXIS          = (1 << 4),
+    CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE = (1 << 5),
+} CuiWaylandPointerEventFlags;
+
+typedef struct CuiWaylandPointerEvent
+{
+    uint32_t flags;
+    uint32_t serial;
+    uint32_t time;
+
+    uint32_t button;
+    uint32_t state;
+
+    uint32_t axis_source;
+
+    wl_fixed_t x, y;
+    float axis_x, axis_y;
+    int32_t axis_discrete_x, axis_discrete_y;
+
+    CuiWindow *window;
+} CuiWaylandPointerEvent;
+
 #endif
 
 typedef enum CuiLinuxBackend
@@ -287,6 +315,8 @@ typedef struct CuiContext
 
 #if CUI_BACKEND_WAYLAND_ENABLED
 
+    CuiWaylandPointerEvent wayland_pointer_event;
+
     int32_t wayland_keyboard_repeat_period;
     int32_t wayland_keyboard_repeat_delay;
 
@@ -295,6 +325,8 @@ typedef struct CuiContext
 
     CuiPoint wayland_platform_mouse_position;
     CuiPoint wayland_application_mouse_position;
+
+    uint32_t wayland_seat_version;
 
     struct wl_display *wayland_display;
     struct wl_compositor *wayland_compositor;

@@ -247,6 +247,12 @@ cui_max_u16(uint16_t a, uint16_t b)
     return (a > b) ? a : b;
 }
 
+static inline uint32_t
+cui_min_uint32(uint32_t a, uint32_t b)
+{
+    return (a < b) ? a : b;
+}
+
 static inline int32_t
 cui_min_int32(int32_t a, int32_t b)
 {

@@ -1727,14 +1727,8 @@ static const struct wl_touch_listener _cui_wayland_touch_listener = {
 };
 
 static void
-_cui_wayland_handle_pointer_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y)
+_cui_handle_pointer_enter(CuiWindow *window, uint32_t serial, wl_fixed_t x, wl_fixed_t y)
 {
-    (void) data;
-    (void) pointer;
-
-    CuiWindow *window =_cui_wayland_get_window_from_surface(surface);
-    CuiAssert(window);
-
     _cui_context.wayland_pointer_serial = serial;
     _cui_context.wayland_window_under_cursor = window;
 
@@ -1751,13 +1745,8 @@ _cui_wayland_handle_pointer_enter(void *data, struct wl_pointer *pointer, uint32
 }
 
 static void
-_cui_wayland_handle_pointer_leave(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface)
+_cui_handle_pointer_leave(CuiWindow *window)
 {
-    (void) data;
-    (void) pointer;
-    (void) serial;
-
-    CuiWindow *window =_cui_wayland_get_window_from_surface(surface);
     CuiAssert(_cui_context.wayland_window_under_cursor == window);
 
     _cui_context.current_cursor = (CuiCursorType) 0;
@@ -1771,15 +1760,8 @@ _cui_wayland_handle_pointer_leave(void *data, struct wl_pointer *pointer, uint32
 }
 
 static void
-_cui_wayland_handle_pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time, wl_fixed_t x, wl_fixed_t y)
+_cui_handle_pointer_motion(CuiWindow *window, wl_fixed_t x, wl_fixed_t y)
 {
-    (void) data;
-    (void) pointer;
-    (void) time;
-
-    CuiWindow *window = _cui_context.wayland_window_under_cursor;
-    CuiAssert(window);
-
     _cui_context.wayland_platform_mouse_position    = cui_make_point(wl_fixed_to_int(x), wl_fixed_to_int(y));
     _cui_context.wayland_application_mouse_position = cui_make_point(wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(x))),
                                                                      wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(y))));
@@ -1793,14 +1775,8 @@ _cui_wayland_handle_pointer_motion(void *data, struct wl_pointer *pointer, uint3
 }
 
 static void
-_cui_wayland_handle_pointer_button(void *data, struct wl_pointer *pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
+_cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
-    (void) data;
-    (void) pointer;
-
-    CuiWindow *window = _cui_context.wayland_window_under_cursor;
-    CuiAssert(window);
-
     switch (state)
     {
         case WL_POINTER_BUTTON_STATE_PRESSED:
@@ -1919,6 +1895,142 @@ _cui_wayland_handle_pointer_button(void *data, struct wl_pointer *pointer, uint3
 }
 
 static void
+_cui_handle_pointer_axis(CuiWindow *window, float dx, float dy)
+{
+    window->base.event.wheel.is_precise_scrolling = true;
+    window->base.event.wheel.dx = dx;
+    window->base.event.wheel.dy = dy;
+    cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+}
+
+static void
+_cui_handle_pointer_axis_discrete(CuiWindow *window, int32_t dx, int32_t dy)
+{
+    window->base.event.wheel.is_precise_scrolling = false;
+    window->base.event.wheel.dx = (float) dx;
+    window->base.event.wheel.dy = (float) dy;
+    cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+}
+
+static void
+_cui_wayland_handle_pointer_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y)
+{
+    (void) data;
+    (void) pointer;
+
+    CuiWindow *window =_cui_wayland_get_window_from_surface(surface);
+    CuiAssert(window);
+
+    if (_cui_context.wayland_seat_version == 4)
+    {
+        _cui_handle_pointer_enter(window, serial, x, y);
+    }
+    else
+    {
+        CuiAssert(_cui_context.wayland_seat_version == 5);
+
+        if (_cui_context.wayland_pointer_event.flags)
+        {
+            printf("error (pointer_enter): event flags should not be set.\n");
+        }
+
+        _cui_context.wayland_pointer_event.flags  = CUI_WAYLAND_POINTER_EVENT_ENTER;
+        _cui_context.wayland_pointer_event.serial = serial;
+        _cui_context.wayland_pointer_event.x      = x;
+        _cui_context.wayland_pointer_event.y      = y;
+        _cui_context.wayland_pointer_event.window = window;
+    }
+}
+
+static void
+_cui_wayland_handle_pointer_leave(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface)
+{
+    (void) data;
+    (void) pointer;
+    (void) serial;
+
+    CuiWindow *window =_cui_wayland_get_window_from_surface(surface);
+
+    if (_cui_context.wayland_seat_version == 4)
+    {
+        _cui_handle_pointer_leave(window);
+    }
+    else
+    {
+        CuiAssert(_cui_context.wayland_seat_version == 5);
+
+        if (_cui_context.wayland_pointer_event.flags)
+        {
+            printf("error (pointer_leave): event flags should not be set.\n");
+        }
+
+        _cui_context.wayland_pointer_event.flags  = CUI_WAYLAND_POINTER_EVENT_LEAVE;
+        _cui_context.wayland_pointer_event.window = window;
+    }
+}
+
+static void
+_cui_wayland_handle_pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time, wl_fixed_t x, wl_fixed_t y)
+{
+    (void) data;
+    (void) pointer;
+    (void) time;
+
+    CuiWindow *window = _cui_context.wayland_window_under_cursor;
+    CuiAssert(window);
+
+    if (_cui_context.wayland_seat_version == 4)
+    {
+        _cui_handle_pointer_motion(window, x, y);
+    }
+    else
+    {
+        CuiAssert(_cui_context.wayland_seat_version == 5);
+
+        if (_cui_context.wayland_pointer_event.flags)
+        {
+            printf("error (pointer_motion): event flags should not be set.\n");
+        }
+
+        _cui_context.wayland_pointer_event.flags  = CUI_WAYLAND_POINTER_EVENT_MOTION;
+        _cui_context.wayland_pointer_event.x      = x;
+        _cui_context.wayland_pointer_event.y      = y;
+        _cui_context.wayland_pointer_event.window = window;
+    }
+}
+
+static void
+_cui_wayland_handle_pointer_button(void *data, struct wl_pointer *pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
+{
+    (void) data;
+    (void) pointer;
+
+    CuiWindow *window = _cui_context.wayland_window_under_cursor;
+    CuiAssert(window);
+
+    if (_cui_context.wayland_seat_version == 4)
+    {
+        _cui_handle_pointer_button(window, serial, time, button, state);
+    }
+    else
+    {
+        CuiAssert(_cui_context.wayland_seat_version == 5);
+
+        if (_cui_context.wayland_pointer_event.flags)
+        {
+            printf("error (pointer_button): event flags should not be set.\n");
+        }
+
+        _cui_context.wayland_pointer_event.flags  = CUI_WAYLAND_POINTER_EVENT_BUTTON;
+        _cui_context.wayland_pointer_event.serial = serial;
+        _cui_context.wayland_pointer_event.time   = time;
+        _cui_context.wayland_pointer_event.button = button;
+        _cui_context.wayland_pointer_event.state  = state;
+        _cui_context.wayland_pointer_event.window = window;
+    }
+}
+
+static void
 _cui_wayland_handle_pointer_axis(void *data, struct wl_pointer *pointer, uint32_t time, uint32_t axis, wl_fixed_t value)
 {
     (void) data;
@@ -1928,25 +2040,47 @@ _cui_wayland_handle_pointer_axis(void *data, struct wl_pointer *pointer, uint32_
     CuiWindow *window = _cui_context.wayland_window_under_cursor;
     CuiAssert(window);
 
-    switch (axis)
-    {
-        case WL_POINTER_AXIS_VERTICAL_SCROLL:
-        {
-            window->base.event.wheel.is_precise_scrolling = false;
-            // TODO: is backbuffer_scale correct here?
-            // TODO: this needs to be multiplied with some line height
-            window->base.event.wheel.dy = -((float) wl_fixed_to_double(value) * window->backbuffer_scale);
-            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
-        } break;
+    float delta = -((float) wl_fixed_to_double(value) * window->backbuffer_scale);
 
-        case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
+    if (_cui_context.wayland_seat_version == 4)
+    {
+        switch (axis)
         {
-            window->base.event.wheel.is_precise_scrolling = false;
-            // TODO: is backbuffer_scale correct here?
-            // TODO: this needs to be multiplied with some line height
-            window->base.event.wheel.dx = -((float) wl_fixed_to_double(value) * window->backbuffer_scale);
-            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
-        } break;
+            case WL_POINTER_AXIS_VERTICAL_SCROLL:
+            {
+                _cui_handle_pointer_axis(window, 0.0f, delta);
+            } break;
+
+            case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
+            {
+                _cui_handle_pointer_axis(window, delta, 0.0f);
+            } break;
+        }
+    }
+    else
+    {
+        CuiAssert(_cui_context.wayland_seat_version == 5);
+
+        if (_cui_context.wayland_pointer_event.flags & ~(CUI_WAYLAND_POINTER_EVENT_AXIS | CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE))
+        {
+            printf("error (pointer_axis): event flags should not be set.\n");
+        }
+
+        switch (axis)
+        {
+            case WL_POINTER_AXIS_VERTICAL_SCROLL:
+            {
+                _cui_context.wayland_pointer_event.axis_y += delta;
+            } break;
+
+            case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
+            {
+                _cui_context.wayland_pointer_event.axis_x += delta;
+            } break;
+        }
+
+        _cui_context.wayland_pointer_event.flags |= CUI_WAYLAND_POINTER_EVENT_AXIS;
+        _cui_context.wayland_pointer_event.window = window;
     }
 }
 
@@ -1955,7 +2089,15 @@ _cui_wayland_handle_pointer_axis_source(void *data, struct wl_pointer *pointer, 
 {
     (void) data;
     (void) pointer;
-    (void) axis_source;
+
+    CuiAssert(_cui_context.wayland_seat_version == 5);
+
+    if (_cui_context.wayland_pointer_event.flags & ~(CUI_WAYLAND_POINTER_EVENT_AXIS | CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE))
+    {
+        printf("error (pointer_axis_source): event flags should not be set.\n");
+    }
+
+    _cui_context.wayland_pointer_event.axis_source = axis_source;
 }
 
 static void
@@ -1972,8 +2114,32 @@ _cui_wayland_handle_pointer_axis_discrete(void *data, struct wl_pointer *pointer
 {
     (void) data;
     (void) pointer;
-    (void) axis;
-    (void) discrete;
+
+    CuiWindow *window = _cui_context.wayland_window_under_cursor;
+    CuiAssert(window);
+
+    CuiAssert(_cui_context.wayland_seat_version == 5);
+
+    if (_cui_context.wayland_pointer_event.flags & ~(CUI_WAYLAND_POINTER_EVENT_AXIS | CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE))
+    {
+        printf("error (pointer_axis_discrete): event flags should not be set.\n");
+    }
+
+    switch (axis)
+    {
+        case WL_POINTER_AXIS_VERTICAL_SCROLL:
+        {
+            _cui_context.wayland_pointer_event.axis_discrete_y -= 3 * discrete;
+        } break;
+
+        case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
+        {
+            _cui_context.wayland_pointer_event.axis_discrete_x -= 3 * discrete;
+        } break;
+    }
+
+    _cui_context.wayland_pointer_event.flags |= CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE;
+    _cui_context.wayland_pointer_event.window = window;
 }
 
 static void
@@ -1981,6 +2147,93 @@ _cui_wayland_handle_pointer_frame(void *data, struct wl_pointer *pointer)
 {
     (void) data;
     (void) pointer;
+
+    if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_ENTER)
+    {
+        _cui_handle_pointer_enter(_cui_context.wayland_pointer_event.window,
+                                  _cui_context.wayland_pointer_event.serial,
+                                  _cui_context.wayland_pointer_event.x,
+                                  _cui_context.wayland_pointer_event.y);
+    }
+    else if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_LEAVE)
+    {
+        _cui_handle_pointer_leave(_cui_context.wayland_pointer_event.window);
+    }
+    else if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_MOTION)
+    {
+        _cui_handle_pointer_motion(_cui_context.wayland_pointer_event.window,
+                                   _cui_context.wayland_pointer_event.x,
+                                   _cui_context.wayland_pointer_event.y);
+    }
+    else if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_BUTTON)
+    {
+        _cui_handle_pointer_button(_cui_context.wayland_pointer_event.window,
+                                   _cui_context.wayland_pointer_event.serial,
+                                   _cui_context.wayland_pointer_event.time,
+                                   _cui_context.wayland_pointer_event.button,
+                                   _cui_context.wayland_pointer_event.state);
+    }
+    else if (_cui_context.wayland_pointer_event.flags & (CUI_WAYLAND_POINTER_EVENT_AXIS | CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE))
+    {
+        switch (_cui_context.wayland_pointer_event.axis_source)
+        {
+            case WL_POINTER_AXIS_SOURCE_WHEEL:
+            {
+                if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE)
+                {
+                    _cui_handle_pointer_axis_discrete(_cui_context.wayland_pointer_event.window,
+                                                      _cui_context.wayland_pointer_event.axis_discrete_x,
+                                                      _cui_context.wayland_pointer_event.axis_discrete_y);
+                }
+                else
+                {
+                    _cui_handle_pointer_axis(_cui_context.wayland_pointer_event.window,
+                                             _cui_context.wayland_pointer_event.axis_x,
+                                             _cui_context.wayland_pointer_event.axis_y);
+                }
+            } break;
+
+            case WL_POINTER_AXIS_SOURCE_FINGER:
+            {
+                _cui_handle_pointer_axis(_cui_context.wayland_pointer_event.window,
+                                         _cui_context.wayland_pointer_event.axis_x,
+                                         _cui_context.wayland_pointer_event.axis_y);
+            } break;
+
+            case WL_POINTER_AXIS_SOURCE_CONTINUOUS:
+            {
+                _cui_handle_pointer_axis(_cui_context.wayland_pointer_event.window,
+                                         _cui_context.wayland_pointer_event.axis_x,
+                                         _cui_context.wayland_pointer_event.axis_y);
+            } break;
+
+            case WL_POINTER_AXIS_SOURCE_WHEEL_TILT:
+            {
+                CuiAssert(!"This should not appear as we're using version 4 or 5.");
+            } break;
+
+            default:
+            {
+                CuiAssert(_cui_context.wayland_pointer_event.axis_source == 0xFFFFFFFF);
+
+                if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE)
+                {
+                    _cui_handle_pointer_axis_discrete(_cui_context.wayland_pointer_event.window,
+                                                      _cui_context.wayland_pointer_event.axis_discrete_x,
+                                                      _cui_context.wayland_pointer_event.axis_discrete_y);
+                }
+                else
+                {
+                    _cui_handle_pointer_axis(_cui_context.wayland_pointer_event.window,
+                                             _cui_context.wayland_pointer_event.axis_x,
+                                             _cui_context.wayland_pointer_event.axis_y);
+                }
+            } break;
+        }
+    }
+
+    CuiClearStruct(_cui_context.wayland_pointer_event);
+    _cui_context.wayland_pointer_event.axis_source = 0xFFFFFFFF;
 }
 
 static const struct wl_pointer_listener _cui_wayland_pointer_listener = {
@@ -2318,7 +2571,8 @@ _cui_wayland_handle_registry_add(void *data, struct wl_registry *registry, uint3
     {
         if (version >= 4)
         {
-            _cui_context.wayland_seat = (struct wl_seat *) wl_registry_bind(registry, name, &wl_seat_interface, 4);
+            _cui_context.wayland_seat_version = cui_min_uint32(version, 5);
+            _cui_context.wayland_seat = (struct wl_seat *) wl_registry_bind(registry, name, &wl_seat_interface, _cui_context.wayland_seat_version);
             wl_seat_add_listener(_cui_context.wayland_seat, &_cui_wayland_seat_listener, 0);
         }
     }
@@ -2384,6 +2638,8 @@ _cui_initialize_wayland(void)
     }
 
     _cui_context.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
+    _cui_context.wayland_pointer_event.axis_source = 0xFFFFFFFF;
 
     _cui_context.double_click_time = _CUI_DEFAULT_DOUBLE_CLICK_TIME;
 
@@ -4504,8 +4760,12 @@ cui_step(void)
                             case Button4:
                             case Button5:
                             {
+#if 0
+                                printf("WHEEL %d\n", (ev.xbutton.button == Button4) ? 1 : -1);
+#endif
                                 window->base.event.wheel.is_precise_scrolling = false;
-                                window->base.event.wheel.dy = (ev.xbutton.button == Button4) ? 100.0f : -100.0f; // TODO: ui_scale
+                                // TODO: where should this 3 be applied?
+                                window->base.event.wheel.dy = (ev.xbutton.button == Button4) ? 3.0f : -3.0f;
                                 cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
                             } break;
                         }
