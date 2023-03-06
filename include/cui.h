@@ -968,8 +968,7 @@ typedef struct CuiEvent
 
     struct {
         int32_t index;
-        int32_t x;
-        int32_t y;
+        CuiPoint position;
     } pointer;
 } CuiEvent;
 
@@ -1339,13 +1338,12 @@ float cui_window_get_string_width_until_character(CuiWindow *window, CuiFontId f
 
 // TODO: change prefix to 'cui_window_event_'
 // TODO: group by event type
-CuiPoint cui_window_get_mouse_point(CuiWindow *window);
+CuiPoint cui_window_get_mouse_position(CuiWindow *window);
 bool cui_window_is_precise_scrolling(CuiWindow *window);
 float cui_window_get_wheel_dx(CuiWindow *window);
 float cui_window_get_wheel_dy(CuiWindow *window);
 int32_t cui_window_get_pointer_index(CuiWindow *window);
-int32_t cui_window_get_pointer_x(CuiWindow *window);
-int32_t cui_window_get_pointer_y(CuiWindow *window);
+CuiPoint cui_window_get_pointer_position(CuiWindow *window);
 void cui_window_set_pointer_capture(CuiWindow *window, CuiWidget *widget, int32_t pointer_index);
 
 bool cui_event_is_inside_widget(CuiWindow *window, CuiWidget *widget);

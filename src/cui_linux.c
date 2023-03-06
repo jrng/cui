@@ -1657,8 +1657,7 @@ _cui_wayland_handle_touch_down(void *data, struct wl_touch *touch, uint32_t seri
     window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
 
     window->base.event.pointer.index = id;
-    window->base.event.pointer.x = touch_position.x;
-    window->base.event.pointer.y = touch_position.y;
+    window->base.event.pointer.position = touch_position;
     cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_DOWN);
 }
 

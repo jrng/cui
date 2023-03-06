@@ -48,7 +48,7 @@ cui_window_is_tiled(CuiWindow *window)
 }
 
 CuiPoint
-cui_window_get_mouse_point(CuiWindow *window)
+cui_window_get_mouse_position(CuiWindow *window)
 {
     return window->base.event.mouse;
 }
@@ -77,16 +77,10 @@ cui_window_get_pointer_index(CuiWindow *window)
     return window->base.event.pointer.index;
 }
 
-int32_t
-cui_window_get_pointer_x(CuiWindow *window)
+CuiPoint
+cui_window_get_pointer_position(CuiWindow *window)
 {
-    return window->base.event.pointer.x;
-}
-
-int32_t
-cui_window_get_pointer_y(CuiWindow *window)
-{
-    return window->base.event.pointer.y;
+    return window->base.event.pointer.position;
 }
 
 void
@@ -107,7 +101,7 @@ cui_event_is_inside_widget(CuiWindow *window, CuiWidget *widget)
 bool
 cui_event_pointer_is_inside_widget(CuiWindow *window, CuiWidget *widget)
 {
-    return cui_rect_has_point_inside(widget->rect, cui_make_point(window->base.event.pointer.x, window->base.event.pointer.y));
+    return cui_rect_has_point_inside(widget->rect, window->base.event.pointer.position);
 }
 
 bool

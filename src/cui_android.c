@@ -1070,24 +1070,24 @@ cui_step(void)
                                 case AMOTION_EVENT_ACTION_DOWN:
                                 {
                                     window->base.event.pointer.index = pointer_index;
-                                    window->base.event.pointer.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
-                                    window->base.event.pointer.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
+                                    window->base.event.pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
+                                    window->base.event.pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
                                     cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_DOWN);
                                 } break;
 
                                 case AMOTION_EVENT_ACTION_UP:
                                 {
                                     window->base.event.pointer.index = pointer_index;
-                                    window->base.event.pointer.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
-                                    window->base.event.pointer.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
+                                    window->base.event.pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
+                                    window->base.event.pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
                                     cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_UP);
                                 } break;
 
                                 case AMOTION_EVENT_ACTION_MOVE:
                                 {
                                     window->base.event.pointer.index = pointer_index;
-                                    window->base.event.pointer.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
-                                    window->base.event.pointer.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
+                                    window->base.event.pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
+                                    window->base.event.pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
                                     cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_MOVE);
                                 } break;
                             }
