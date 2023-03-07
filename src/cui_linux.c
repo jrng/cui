@@ -1477,7 +1477,7 @@ _cui_wayland_update_cursor(CuiWindow *window)
 
     CuiCursorType target_cursor = CUI_CURSOR_ARROW;
 
-    if (_cui_context.wayland_platform_cursor)
+    if (!window->pointer_button_mask && _cui_context.wayland_platform_cursor)
     {
         target_cursor = _cui_context.wayland_platform_cursor;
     }
@@ -1790,6 +1790,8 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                     {
                         if (resize_edge == XDG_TOPLEVEL_RESIZE_EDGE_NONE)
                         {
+                            window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_LEFT;
+
                             if (window->title && (window->base.hovered_widget == window->title))
                             {
                                 if (cui_window_is_maximized(window))
@@ -1809,9 +1811,16 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                                 cui_window_handle_event(window, CUI_EVENT_TYPE_DOUBLE_CLICK);
                             }
                         }
-                        else if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+                        else
                         {
-                            xdg_toplevel_resize(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial, resize_edge);
+                            if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE)
+                            {
+                                window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_LEFT;
+                            }
+                            else
+                            {
+                                xdg_toplevel_resize(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial, resize_edge);
+                            }
                         }
 
                         window->last_left_click_time = INT16_MIN;
@@ -1826,23 +1835,39 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                             }
                             else
                             {
+                                window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_LEFT;
+
                                 window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
                                 window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
 
                                 cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_DOWN);
                             }
                         }
-                        else if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+                        else
                         {
-                            xdg_toplevel_resize(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial, resize_edge);
+                            if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE)
+                            {
+                                window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_LEFT;
+                            }
+                            else
+                            {
+                                xdg_toplevel_resize(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial, resize_edge);
+                            }
                         }
 
                         window->last_left_click_time = (int64_t) time;
                     }
                 } break;
 
+                case BTN_MIDDLE:
+                {
+                    window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_MIDDLE;
+                } break;
+
                 case BTN_RIGHT:
                 {
+                    window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_RIGHT;
+
                     enum xdg_toplevel_resize_edge resize_edge = _cui_wayland_get_toplevel_resize_edge(window, _cui_context.wayland_platform_mouse_position);
 
                     if (resize_edge == XDG_TOPLEVEL_RESIZE_EDGE_NONE)
@@ -1877,6 +1902,15 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                     window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
 
                     cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_UP);
+
+                    window->pointer_button_mask &= ~CUI_WAYLAND_POINTER_BUTTON_LEFT;
+                    _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
+                } break;
+
+                case BTN_MIDDLE:
+                {
+                    window->pointer_button_mask &= ~CUI_WAYLAND_POINTER_BUTTON_MIDDLE;
+                    _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
                 } break;
 
                 case BTN_RIGHT:
@@ -1887,6 +1921,8 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
 
                     cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
 #endif
+                    window->pointer_button_mask &= ~CUI_WAYLAND_POINTER_BUTTON_RIGHT;
+                    _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
                 } break;
             }
         } break;
@@ -1958,12 +1994,12 @@ _cui_wayland_handle_pointer_leave(void *data, struct wl_pointer *pointer, uint32
     {
         CuiAssert(_cui_context.wayland_seat_version == 5);
 
-        if (_cui_context.wayland_pointer_event.flags)
+        if (_cui_context.wayland_pointer_event.flags & ~CUI_WAYLAND_POINTER_EVENT_BUTTON)
         {
             printf("error (pointer_leave): event flags should not be set.\n");
         }
 
-        _cui_context.wayland_pointer_event.flags  = CUI_WAYLAND_POINTER_EVENT_LEAVE;
+        _cui_context.wayland_pointer_event.flags |= CUI_WAYLAND_POINTER_EVENT_LEAVE;
         _cui_context.wayland_pointer_event.window = window;
     }
 }
@@ -2154,23 +2190,27 @@ _cui_wayland_handle_pointer_frame(void *data, struct wl_pointer *pointer)
                                   _cui_context.wayland_pointer_event.x,
                                   _cui_context.wayland_pointer_event.y);
     }
-    else if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_LEAVE)
-    {
-        _cui_handle_pointer_leave(_cui_context.wayland_pointer_event.window);
-    }
     else if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_MOTION)
     {
         _cui_handle_pointer_motion(_cui_context.wayland_pointer_event.window,
                                    _cui_context.wayland_pointer_event.x,
                                    _cui_context.wayland_pointer_event.y);
     }
-    else if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_BUTTON)
+    else if (_cui_context.wayland_pointer_event.flags & (CUI_WAYLAND_POINTER_EVENT_BUTTON | CUI_WAYLAND_POINTER_EVENT_LEAVE))
     {
-        _cui_handle_pointer_button(_cui_context.wayland_pointer_event.window,
-                                   _cui_context.wayland_pointer_event.serial,
-                                   _cui_context.wayland_pointer_event.time,
-                                   _cui_context.wayland_pointer_event.button,
-                                   _cui_context.wayland_pointer_event.state);
+        if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_BUTTON)
+        {
+            _cui_handle_pointer_button(_cui_context.wayland_pointer_event.window,
+                                       _cui_context.wayland_pointer_event.serial,
+                                       _cui_context.wayland_pointer_event.time,
+                                       _cui_context.wayland_pointer_event.button,
+                                       _cui_context.wayland_pointer_event.state);
+        }
+
+        if (_cui_context.wayland_pointer_event.flags & CUI_WAYLAND_POINTER_EVENT_LEAVE)
+        {
+            _cui_handle_pointer_leave(_cui_context.wayland_pointer_event.window);
+        }
     }
     else if (_cui_context.wayland_pointer_event.flags & (CUI_WAYLAND_POINTER_EVENT_AXIS | CUI_WAYLAND_POINTER_EVENT_AXIS_DISCRETE))
     {

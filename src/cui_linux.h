@@ -93,6 +93,13 @@ typedef struct CuiWaylandPointerEvent
     CuiWindow *window;
 } CuiWaylandPointerEvent;
 
+typedef enum CuiWaylandPointerButton
+{
+    CUI_WAYLAND_POINTER_BUTTON_LEFT   = (1 << 0),
+    CUI_WAYLAND_POINTER_BUTTON_MIDDLE = (1 << 1),
+    CUI_WAYLAND_POINTER_BUTTON_RIGHT  = (1 << 2),
+} CuiWaylandPointerButton;
+
 #endif
 
 typedef enum CuiLinuxBackend
@@ -193,6 +200,8 @@ struct CuiWindow
     CuiTemporaryMemory title_temp_memory;
 
     bool do_client_side_decoration;
+
+    uint32_t pointer_button_mask;
 
     CuiRect wayland_window_rect;
     CuiRect wayland_input_rect;
