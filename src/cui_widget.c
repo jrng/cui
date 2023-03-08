@@ -1506,12 +1506,20 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                     {
                         if (cui_event_is_inside_widget(window, child))
                         {
-                            cui_window_set_hovered(window, child);
-
-                            if (cui_widget_handle_event(child, CUI_EVENT_TYPE_MOUSE_ENTER))
+                            if (cui_widget_contains(child, window->base.hovered_widget))
                             {
+                                cui_widget_handle_event(child, CUI_EVENT_TYPE_MOUSE_MOVE);
                                 result = true;
-                                break;
+                            }
+                            else
+                            {
+                                cui_window_set_hovered(window, child);
+
+                                if (cui_widget_handle_event(child, CUI_EVENT_TYPE_MOUSE_ENTER))
+                                {
+                                    result = true;
+                                    break;
+                                }
                             }
                         }
                     }
