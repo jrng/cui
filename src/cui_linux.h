@@ -313,6 +313,14 @@ typedef struct CuiContext
     Atom x11_atom_xsettings_screen;
     Atom x11_atom_xsettings_settings;
 
+    Cursor x11_cursor_none;
+    Cursor x11_cursor_arrow;
+    Cursor x11_cursor_hand;
+    Cursor x11_cursor_text;
+    Cursor x11_cursor_move_all;
+    Cursor x11_cursor_move_left_right;
+    Cursor x11_cursor_move_up_down;
+
     bool has_xsync_extension;
 #  if CUI_RENDERER_SOFTWARE_ENABLED
     bool has_shared_memory_extension;

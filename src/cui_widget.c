@@ -2124,6 +2124,8 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
             {
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 {
+                    // TODO: generalize this
+                    cui_window_set_cursor(window, CUI_CURSOR_TEXT);
                     widget->state |= CUI_WIDGET_STATE_HOVERED;
                     cui_window_request_redraw(window);
                     result = true;
@@ -2131,6 +2133,7 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                 case CUI_EVENT_TYPE_MOUSE_LEAVE:
                 {
+                    cui_window_set_cursor(window, (CuiCursorType) 0);
                     widget->state &= ~CUI_WIDGET_STATE_HOVERED;
                     cui_window_request_redraw(window);
                     result = true;

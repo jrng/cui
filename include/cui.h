@@ -1323,6 +1323,7 @@ void cui_window_request_redraw(CuiWindow *window);
 void cui_window_set_color_theme(CuiWindow *window, const CuiColorTheme *color_theme);
 int32_t cui_window_allocate_texture_id(CuiWindow *window);
 void cui_window_deallocate_texture_id(CuiWindow *window, int32_t texture_id);
+void cui_window_set_cursor(CuiWindow *window, CuiCursorType cursor_type);
 
 #define cui_window_find_font(window, ...) cui_window_find_font_n(window, CuiNArgs(__VA_ARGS__), __VA_ARGS__)
 
@@ -1493,6 +1494,7 @@ _cui_array_grow(void *array, int32_t new_allocated, int32_t item_size, CuiArena 
 
 #define UNICODE
 #define _UNICODE
+#define NOMINMAX
 
 #include <windows.h>
 

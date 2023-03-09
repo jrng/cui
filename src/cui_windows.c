@@ -1838,6 +1838,19 @@ cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
 }
 
 void
+cui_window_set_cursor(CuiWindow *window, CuiCursorType cursor_type)
+{
+    if (window->base.cursor == cursor_type)
+    {
+        return;
+    }
+
+    window->base.cursor = cursor_type;
+
+    // TODO:
+}
+
+void
 cui_step(void)
 {
     DWORD ret = MsgWaitForMultipleObjects(1, &_cui_context.signal_event, FALSE, INFINITE, QS_ALLEVENTS);

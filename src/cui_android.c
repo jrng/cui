@@ -830,6 +830,19 @@ cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
 }
 
 void
+cui_window_set_cursor(CuiWindow *window, CuiCursorType cursor_type)
+{
+    if (window->base.cursor == cursor_type)
+    {
+        return;
+    }
+
+    window->base.cursor = cursor_type;
+
+    // TODO:
+}
+
+void
 cui_step(void)
 {
     CuiAssert(_cui_context.window);
@@ -1059,6 +1072,57 @@ cui_step(void)
                 {
                     switch (AInputEvent_getType(ev))
                     {
+                        case AINPUT_EVENT_TYPE_KEY:
+                        {
+                            int32_t action = AKeyEvent_getAction(ev);
+                            int32_t keycode = AKeyEvent_getKeyCode(ev);
+
+                            switch (action)
+                            {
+                                case AKEY_EVENT_ACTION_DOWN:
+                                {
+
+#define _CUI_KEY_DOWN_EVENT(key_id)                             \
+    window->base.event.key.codepoint       = (key_id);          \
+    window->base.event.key.alt_is_down     = false;             \
+    window->base.event.key.ctrl_is_down    = false;             \
+    window->base.event.key.shift_is_down   = false;             \
+    window->base.event.key.command_is_down = false;             \
+    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_DOWN);
+
+                                    switch (keycode)
+                                    {
+                                        case AKEYCODE_F1:   case AKEYCODE_F2:   case AKEYCODE_F3:   case AKEYCODE_F4:
+                                        case AKEYCODE_F5:   case AKEYCODE_F6:   case AKEYCODE_F7:   case AKEYCODE_F8:
+                                        case AKEYCODE_F9:   case AKEYCODE_F10:  case AKEYCODE_F11:  case AKEYCODE_F12:
+                                        {
+                                            _CUI_KEY_DOWN_EVENT(CUI_KEY_F1 + (keycode - AKEYCODE_F1));
+                                        } break;
+                                    }
+
+#undef _CUI_KEY_DOWN_EVENT
+                                } break;
+
+#if 0
+                                case AKEY_EVENT_ACTION_MULTIPLE:
+                                {
+                                    android_print("multiple 0 = %d (0x%08x)\n", keycode, keycode);
+
+                                    int32_t repeat_count = AKeyEvent_getRepeatCount(ev);
+
+                                    for (int32_t i = 0; i < repeat_count; i += 1)
+                                    {
+                                        android_print("multiple %d = %d (0x%08x)\n", i + 1, keycode, keycode);
+                                    }
+                                } break;
+#endif
+
+                                case AKEY_EVENT_ACTION_UP:
+                                {
+                                } break;
+                            }
+                        } break;
+
                         case AINPUT_EVENT_TYPE_MOTION:
                         {
                             int32_t action = AMotionEvent_getAction(ev) & AMOTION_EVENT_ACTION_MASK;

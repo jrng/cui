@@ -371,6 +371,8 @@ typedef struct CuiWindowBase
     // texture id and a bit being 1 means this texture id is in use.
     uint32_t allocated_texture_ids;
 
+    CuiCursorType cursor;
+
     CuiArena arena;
     CuiArena temporary_memory;
 

@@ -61,6 +61,7 @@ _cui_parse_egl_client_extensions(void)
 
 #include <sys/shm.h>
 #include <X11/Xutil.h>
+#include <X11/cursorfont.h>
 #include <X11/extensions/Xrandr.h>
 
 static inline int64_t
@@ -468,6 +469,18 @@ _cui_initialize_x11(void)
 
     cui_arena_allocate(&_cui_context.clipboard_arena, CuiMiB(1));
     _cui_context.clipboard_data = cui_make_string(0, 0);
+
+    XColor black = { 0 };
+    char cursor_data = 0;
+    Pixmap cursor_pixmap = XCreateBitmapFromData(_cui_context.x11_display, _cui_context.x11_root_window, &cursor_data, 1, 1);
+    _cui_context.x11_cursor_none = XCreatePixmapCursor(_cui_context.x11_display, cursor_pixmap, cursor_pixmap, &black, &black, 0, 0);
+
+    _cui_context.x11_cursor_arrow           = XCreateFontCursor(_cui_context.x11_display, XC_left_ptr);
+    _cui_context.x11_cursor_hand            = XCreateFontCursor(_cui_context.x11_display, XC_hand1);
+    _cui_context.x11_cursor_text            = XCreateFontCursor(_cui_context.x11_display, XC_xterm);
+    _cui_context.x11_cursor_move_all        = XCreateFontCursor(_cui_context.x11_display, XC_fleur);
+    _cui_context.x11_cursor_move_left_right = XCreateFontCursor(_cui_context.x11_display, XC_sb_h_double_arrow);
+    _cui_context.x11_cursor_move_up_down    = XCreateFontCursor(_cui_context.x11_display, XC_sb_v_double_arrow);
 
 #  if CUI_RENDERER_OPENGLES2_ENABLED
 
@@ -1476,6 +1489,11 @@ _cui_wayland_update_cursor(CuiWindow *window)
     }
 
     CuiCursorType target_cursor = CUI_CURSOR_ARROW;
+
+    if (window->base.cursor)
+    {
+        target_cursor = window->base.cursor;
+    }
 
     if (!window->pointer_button_mask && _cui_context.wayland_platform_cursor)
     {
@@ -4387,6 +4405,73 @@ cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
             cui_widget_set_window(window->base.user_root_widget, window);
             cui_widget_set_ui_scale(window->base.user_root_widget, window->base.ui_scale);
             cui_widget_layout(window->base.platform_root_widget, window->layout_rect);
+        } break;
+
+#endif
+
+    }
+}
+
+void
+cui_window_set_cursor(CuiWindow *window, CuiCursorType cursor_type)
+{
+    if (window->base.cursor == cursor_type)
+    {
+        return;
+    }
+
+    window->base.cursor = cursor_type;
+
+    switch (_cui_context.backend)
+    {
+        case CUI_LINUX_BACKEND_NONE:
+        {
+            CuiAssert(!"unsupported");
+        } break;
+
+#if CUI_BACKEND_WAYLAND_ENABLED
+
+        case CUI_LINUX_BACKEND_WAYLAND:
+        {
+            if (_cui_context.wayland_window_under_cursor == window)
+            {
+                _cui_wayland_update_cursor(window);
+            }
+        } break;
+
+#endif
+
+#if CUI_BACKEND_X11_ENABLED
+
+        case CUI_LINUX_BACKEND_X11:
+        {
+            if (window->base.cursor)
+            {
+                switch (window->base.cursor)
+                {
+                    case CUI_CURSOR_NONE:            XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_none);            break;
+                    case CUI_CURSOR_ARROW:           XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_arrow);           break;
+                    case CUI_CURSOR_HAND:            XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_hand);            break;
+                    case CUI_CURSOR_TEXT:            XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_text);            break;
+                    case CUI_CURSOR_MOVE_ALL:        XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_move_all);        break;
+                    case CUI_CURSOR_MOVE_LEFT_RIGHT: XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_move_left_right); break;
+                    case CUI_CURSOR_MOVE_UP_DOWN:    XDefineCursor(_cui_context.x11_display, window->x11_window, _cui_context.x11_cursor_move_up_down);    break;
+                    case CUI_CURSOR_RESIZE_TOP:          /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_BOTTOM:       /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_LEFT:         /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_RIGHT:        /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_TOP_LEFT:     /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_TOP_RIGHT:    /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_BOTTOM_LEFT:  /* FALLTHRU */
+                    case CUI_CURSOR_RESIZE_BOTTOM_RIGHT: /* FALLTHRU */
+                        CuiAssert(!"Not supported");
+                        break;
+                }
+            }
+            else
+            {
+                XUndefineCursor(_cui_context.x11_display, window->x11_window);
+            }
         } break;
 
 #endif

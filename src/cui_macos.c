@@ -1554,6 +1554,19 @@ cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
 }
 
 void
+cui_window_set_cursor(CuiWindow *window, CuiCursorType cursor_type)
+{
+    if (window->base.cursor == cursor_type)
+    {
+        return;
+    }
+
+    window->base.cursor = cursor_type;
+
+    // TODO:
+}
+
+void
 cui_step(void)
 {
     @autoreleasepool
