@@ -2644,6 +2644,13 @@ _cui_wayland_handle_registry_add(void *data, struct wl_registry *registry, uint3
 
         wl_output_add_listener(monitor->output, &_cui_wayland_output_listener, 0);
     }
+    else if (cui_string_equals(interface_name, CuiCString(wl_data_device_manager_interface.name)))
+    {
+        if (version >= 3)
+        {
+            _cui_context.wayland_data_device_manager = (struct wl_data_device_manager *) wl_registry_bind(registry, name, &wl_data_device_manager_interface, cui_min_uint32(version, 3));
+        }
+    }
 }
 
 static void
@@ -2684,6 +2691,187 @@ static const struct xdg_wm_base_listener _cui_wayland_xdg_wm_base_listener = {
     .ping = _cui_wayland_handle_xdg_wm_base_ping,
 };
 
+static void
+_cui_wayland_handle_data_source_target(void *data, struct wl_data_source *data_source, const char *mime_type)
+{
+    (void) data;
+    (void) data_source;
+    (void) mime_type;
+
+#if 0
+    printf("data_source_target\n");
+#endif
+}
+
+static void
+_cui_wayland_handle_data_source_send(void *data, struct wl_data_source *data_source, const char *mime_type, int32_t fd)
+{
+    (void) data;
+    (void) data_source;
+    (void) mime_type;
+    (void) fd;
+
+#if 0
+    printf("data_source_send\n");
+#endif
+}
+
+static void
+_cui_wayland_handle_data_source_cancelled(void *data, struct wl_data_source *data_source)
+{
+    (void) data;
+    (void) data_source;
+
+#if 0
+    printf("data_source_cancelled\n");
+#endif
+}
+
+static void
+_cui_wayland_handle_data_source_dnd_drop_performed(void *data, struct wl_data_source *data_source)
+{
+    (void) data;
+    (void) data_source;
+
+#if 0
+    printf("data_source_dnd_drop_performed\n");
+#endif
+}
+
+static void
+_cui_wayland_handle_data_source_dnd_finished(void *data, struct wl_data_source *data_source)
+{
+    (void) data;
+    (void) data_source;
+
+#if 0
+    printf("data_source_dnd_finished\n");
+#endif
+}
+
+static void
+_cui_wayland_handle_data_source_action(void *data, struct wl_data_source *data_source, uint32_t dnd_action)
+{
+    (void) data;
+    (void) data_source;
+    (void) dnd_action;
+
+#if 0
+    printf("data_source_action\n");
+#endif
+}
+
+static const struct wl_data_source_listener _cui_wayland_data_source_listener = {
+    .target             = _cui_wayland_handle_data_source_target,
+    .send               = _cui_wayland_handle_data_source_send,
+    .cancelled          = _cui_wayland_handle_data_source_cancelled,
+    .dnd_drop_performed = _cui_wayland_handle_data_source_dnd_drop_performed,
+    .dnd_finished       = _cui_wayland_handle_data_source_dnd_finished,
+    .action             = _cui_wayland_handle_data_source_action,
+};
+
+static void
+_cui_wayland_handle_data_offer_offer(void *data, struct wl_data_offer *data_offer, const char *mime_type)
+{
+    (void) data;
+    (void) data_offer;
+
+#if 0
+    printf("data_offer_offer(%s)\n", mime_type);
+#else
+    (void) mime_type;
+#endif
+}
+
+static void
+_cui_wayland_handle_data_offer_source_actions(void *data, struct wl_data_offer *data_offer, uint32_t source_actions)
+{
+    (void) data;
+    (void) data_offer;
+    (void) source_actions;
+}
+
+static void
+_cui_wayland_handle_data_offer_action(void *data, struct wl_data_offer *data_offer, uint32_t dnd_action)
+{
+    (void) data;
+    (void) data_offer;
+    (void) dnd_action;
+}
+
+static const struct wl_data_offer_listener _cui_wayland_data_offer_listener = {
+    .offer          = _cui_wayland_handle_data_offer_offer,
+    .source_actions = _cui_wayland_handle_data_offer_source_actions,
+    .action         = _cui_wayland_handle_data_offer_action,
+};
+
+static void
+_cui_wayland_handle_data_device_data_offer(void *data, struct wl_data_device *data_device, struct wl_data_offer *data_offer)
+{
+    (void) data;
+    (void) data_device;
+    (void) data_offer;
+
+    // TODO: what to do when there is already an offer
+    _cui_context.wayland_data_offer = data_offer;
+
+    wl_data_offer_add_listener(_cui_context.wayland_data_offer, &_cui_wayland_data_offer_listener, 0);
+}
+
+static void
+_cui_wayland_handle_data_device_enter(void *data, struct wl_data_device *data_device, uint32_t serial,
+                                      struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *data_offer)
+{
+    (void) data;
+    (void) data_device;
+    (void) serial;
+    (void) surface;
+    (void) x;
+    (void) y;
+    (void) data_offer;
+}
+
+static void
+_cui_wayland_handle_data_device_leave(void *data, struct wl_data_device *data_device)
+{
+    (void) data;
+    (void) data_device;
+}
+
+static void
+_cui_wayland_handle_data_device_motion(void *data, struct wl_data_device *data_device, uint32_t time, wl_fixed_t x, wl_fixed_t y)
+{
+    (void) data;
+    (void) data_device;
+    (void) time;
+    (void) x;
+    (void) y;
+}
+
+static void
+_cui_wayland_handle_data_device_drop(void *data, struct wl_data_device *data_device)
+{
+    (void) data;
+    (void) data_device;
+}
+
+static void
+_cui_wayland_handle_data_device_selection(void *data, struct wl_data_device *data_device, struct wl_data_offer *data_offer)
+{
+    (void) data;
+    (void) data_device;
+    (void) data_offer;
+}
+
+static const struct wl_data_device_listener _cui_wayland_data_device_listener = {
+    .data_offer = _cui_wayland_handle_data_device_data_offer,
+    .enter      = _cui_wayland_handle_data_device_enter,
+    .leave      = _cui_wayland_handle_data_device_leave,
+    .motion     = _cui_wayland_handle_data_device_motion,
+    .drop       = _cui_wayland_handle_data_device_drop,
+    .selection  = _cui_wayland_handle_data_device_selection,
+};
+
 static bool
 _cui_initialize_wayland(void)
 {
@@ -2714,6 +2902,14 @@ _cui_initialize_wayland(void)
     {
         wl_display_disconnect(_cui_context.wayland_display);
         return false;
+    }
+
+    if (_cui_context.wayland_seat && _cui_context.wayland_data_device_manager)
+    {
+        _cui_context.wayland_data_device =
+            wl_data_device_manager_get_data_device(_cui_context.wayland_data_device_manager,
+                                                   _cui_context.wayland_seat);
+        wl_data_device_add_listener(_cui_context.wayland_data_device, &_cui_wayland_data_device_listener, 0);
     }
 
     xdg_wm_base_add_listener(_cui_context.wayland_xdg_wm_base, &_cui_wayland_xdg_wm_base_listener, 0);
@@ -3213,7 +3409,19 @@ cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
 
         case CUI_LINUX_BACKEND_WAYLAND:
         {
-            // TODO
+            if (_cui_context.wayland_data_device)
+            {
+                printf("create data source\n");
+                _cui_context.wayland_data_source =
+                // struct wl_data_source *clipboard_source =
+                    wl_data_device_manager_create_data_source(_cui_context.wayland_data_device_manager);
+
+                wl_data_source_offer(_cui_context.wayland_data_source, "text/plain");
+                wl_data_source_add_listener(_cui_context.wayland_data_source, &_cui_wayland_data_source_listener, 0);
+
+                uint32_t serial = 0;
+                wl_data_device_set_selection(_cui_context.wayland_data_device, _cui_context.wayland_data_source, serial);
+            }
         } break;
 
 #endif

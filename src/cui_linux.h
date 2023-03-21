@@ -348,11 +348,16 @@ typedef struct CuiContext
     struct wl_display *wayland_display;
     struct wl_compositor *wayland_compositor;
     struct wl_shm *wayland_shared_memory;
+    struct wl_data_device_manager *wayland_data_device_manager;
     struct wl_seat *wayland_seat;
     struct wl_touch *wayland_touch;
     struct wl_pointer *wayland_pointer;
     struct wl_keyboard *wayland_keyboard;
     struct xdg_wm_base *wayland_xdg_wm_base;
+
+    struct wl_data_device *wayland_data_device;
+    struct wl_data_source *wayland_data_source;
+    struct wl_data_offer *wayland_data_offer;
 
     struct wl_surface *wayland_cursor_surface;
 
