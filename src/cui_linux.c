@@ -623,6 +623,7 @@ _cui_initialize_opengles2_x11(CuiWindow *window, XSetWindowAttributes window_att
 #if CUI_BACKEND_WAYLAND_ENABLED
 
 #include "xdg-shell.c"
+#include "xdg-decoration-unstable-v1.c"
 
 #include <linux/input.h>
 #include <wayland-cursor.h>
@@ -1259,8 +1260,49 @@ _cui_wayland_handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_su
     int32_t window_height = cui_rect_get_height(window->window_rect);
 
     if ((window->pending_window_state != window->base.state) ||
+        (window->pending_do_client_side_decoration != window->do_client_side_decoration) ||
         (window->pending_window_width != window_width) || (window->pending_window_height != window_height))
     {
+        if (window->pending_do_client_side_decoration != window->do_client_side_decoration)
+        {
+            window->do_client_side_decoration = window->pending_do_client_side_decoration;
+
+            if (window->do_client_side_decoration)
+            {
+                CuiAssert(window->base.platform_root_widget == window->base.user_root_widget);
+
+                if (window->base.user_root_widget)
+                {
+                    cui_widget_replace_child(window->client_side_decoration_root_widget,
+                                             window->client_side_decoration_dummy_user_root_widget,
+                                             window->base.user_root_widget);
+                }
+                else
+                {
+                    window->base.user_root_widget = window->client_side_decoration_dummy_user_root_widget;
+                }
+
+                window->base.platform_root_widget = window->client_side_decoration_root_widget;
+                cui_widget_set_ui_scale(window->base.platform_root_widget, window->base.ui_scale);
+            }
+            else
+            {
+                CuiAssert(window->base.platform_root_widget == window->client_side_decoration_root_widget);
+
+                if (window->base.user_root_widget == window->client_side_decoration_dummy_user_root_widget)
+                {
+                    window->base.user_root_widget = 0;
+                }
+                else
+                {
+                    cui_widget_replace_child(window->client_side_decoration_root_widget, window->base.user_root_widget,
+                                             window->client_side_decoration_dummy_user_root_widget);
+                }
+
+                window->base.platform_root_widget = window->base.user_root_widget;
+            }
+        }
+
         window->base.state = window->pending_window_state;
 
         if (window->do_client_side_decoration)
@@ -1322,10 +1364,7 @@ static void
 _cui_wayland_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width,
                                     int32_t height, struct wl_array *states)
 {
-    (void) states;
-
     CuiWindow *window = (CuiWindow *) data;
-
     CuiAssert(window->wayland_xdg_toplevel == xdg_toplevel);
 
     if ((width > 0) && (height > 0))
@@ -1395,7 +1434,6 @@ static void
 _cui_wayland_xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
 {
     CuiWindow *window = (CuiWindow *) data;
-
     CuiAssert(window->wayland_xdg_toplevel == toplevel);
 
     cui_window_close(window);
@@ -1404,6 +1442,27 @@ _cui_wayland_xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
 static const struct xdg_toplevel_listener _cui_wayland_xdg_toplevel_listener = {
     .configure = _cui_wayland_xdg_toplevel_configure,
     .close     = _cui_wayland_xdg_toplevel_close,
+};
+
+static void
+_cui_wayland_xdg_decoration_configure(void *data, struct zxdg_toplevel_decoration_v1 *decoration, uint32_t mode)
+{
+    CuiWindow *window = (CuiWindow *) data;
+    CuiAssert(window->wayland_xdg_decoration == decoration);
+
+    if (mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
+    {
+        window->pending_do_client_side_decoration = true;
+    }
+    else
+    {
+        CuiAssert(mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+        window->pending_do_client_side_decoration = false;
+    }
+}
+
+static const struct zxdg_toplevel_decoration_v1_listener _cui_wayland_xdg_decoration_listener = {
+    .configure = _cui_wayland_xdg_decoration_configure,
 };
 
 static inline CuiWaylandCursorTheme *
@@ -2651,6 +2710,13 @@ _cui_wayland_handle_registry_add(void *data, struct wl_registry *registry, uint3
             _cui_context.wayland_data_device_manager = (struct wl_data_device_manager *) wl_registry_bind(registry, name, &wl_data_device_manager_interface, cui_min_uint32(version, 3));
         }
     }
+    else if (cui_string_equals(interface_name, CuiCString(zxdg_decoration_manager_v1_interface.name)))
+    {
+        if (version >= 1)
+        {
+            _cui_context.wayland_xdg_decoration_manager = (struct zxdg_decoration_manager_v1 *) wl_registry_bind(registry, name, &zxdg_decoration_manager_v1_interface, 1);
+        }
+    }
 }
 
 static void
@@ -3748,9 +3814,17 @@ cui_window_create(uint32_t creation_flags)
         {
             CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
 
-            window->do_client_side_decoration =
-                (cui_platform_get_environment_variable_int32(&window->base.temporary_memory,
-                                                             CuiStringLiteral("CUI_WAYLAND_USE_SERVER_SIDE_DECORATION")) == 0) ? true : false;
+            if (cui_platform_get_environment_variable_int32(&window->base.temporary_memory, CuiStringLiteral("CUI_WAYLAND_USE_SERVER_SIDE_DECORATION")) != 0)
+            {
+                window->base.creation_flags |= CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION;
+                window->do_client_side_decoration = false;
+            }
+            else
+            {
+                window->do_client_side_decoration = true;
+            }
+
+            window->pending_do_client_side_decoration = window->do_client_side_decoration;
 
             cui_end_temporary_memory(temp_memory);
 
@@ -3758,120 +3832,123 @@ cui_window_create(uint32_t creation_flags)
 
             cui_arena_allocate(&window->arena, CuiKiB(8));
 
+            CuiWidget *root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(root_widget, CUI_WIDGET_TYPE_BOX);
+            cui_widget_set_main_axis(root_widget, CUI_AXIS_Y);
+            cui_widget_set_y_axis_gravity(root_widget, CUI_GRAVITY_START);
+            cui_widget_add_flags(root_widget, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_CLIP_CONTENT);
+            cui_widget_set_border_radius(root_widget, 4.0f, 4.0f, 0.0f, 0.0f);
+            cui_widget_set_border_width(root_widget, 1.0f, 1.0f, 1.0f, 1.0f);
+            cui_widget_set_box_shadow(root_widget, 0.0f, 4.0f, 16.0f);
+
+            root_widget->color_normal_box_shadow = CUI_COLOR_WINDOW_DROP_SHADOW;
+            root_widget->color_normal_border = CUI_COLOR_WINDOW_OUTLINE;
+
+            CuiWidget *titlebar_stack = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(titlebar_stack, CUI_WIDGET_TYPE_STACK);
+
+            cui_widget_append_child(root_widget, titlebar_stack);
+
+            window->titlebar = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(window->titlebar, CUI_WIDGET_TYPE_BOX);
+            cui_widget_set_main_axis(window->titlebar, CUI_AXIS_X);
+            cui_widget_set_x_axis_gravity(window->titlebar, CUI_GRAVITY_END);
+            cui_widget_add_flags(window->titlebar, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_FIXED_HEIGHT);
+            cui_widget_set_preferred_size(window->titlebar, 0.0f, (float) _CUI_WINDOW_TITLEBAR_HEIGHT);
+            cui_widget_set_border_width(window->titlebar, 0.0f, 0.0f, 0.0f, 0.0f);
+            cui_widget_set_border_radius(window->titlebar, 3.0f, 3.0f, 0.0f, 0.0f);
+            cui_widget_set_inline_padding(window->titlebar, 1.0f);
+
+            window->titlebar->color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+            window->titlebar->color_normal_border = CUI_COLOR_WINDOW_TITLEBAR_BORDER;
+
+            cui_widget_append_child(titlebar_stack, window->titlebar);
+
+            // window title
+            window->title = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(window->title, CUI_WIDGET_TYPE_LABEL);
+            cui_widget_set_label(window->title, CuiStringLiteral(""));
+            cui_widget_set_x_axis_gravity(window->title, CUI_GRAVITY_CENTER);
+            cui_widget_set_y_axis_gravity(window->title, CUI_GRAVITY_CENTER);
+            cui_widget_set_padding(window->title, 0.0f, 0.0f, 0.0f, 8.0f);
+            cui_widget_append_child(window->titlebar, window->title);
+
+            window->button_layer = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(window->button_layer, CUI_WIDGET_TYPE_BOX);
+            cui_widget_set_main_axis(window->button_layer, CUI_AXIS_X);
+            cui_widget_set_x_axis_gravity(window->button_layer, CUI_GRAVITY_END);
+            cui_widget_add_flags(window->button_layer, CUI_WIDGET_FLAG_FIXED_HEIGHT);
+            cui_widget_set_preferred_size(window->button_layer, 0.0f, (float) _CUI_WINDOW_TITLEBAR_HEIGHT);
+            cui_widget_append_child(titlebar_stack, window->button_layer);
+
+            // close button
+            window->close_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(window->close_button, CUI_WIDGET_TYPE_BUTTON);
+            cui_widget_set_icon(window->close_button, CUI_ICON_WINDOWS_CLOSE);
+            cui_widget_set_border_width(window->close_button, 0.0f, 0.0f, 0.0f, 0.0f);
+            cui_widget_set_border_radius(window->close_button, 0.0f, 3.0f, 0.0f, 0.0f);
+            cui_widget_set_padding(window->close_button, 8.0f, 14.0f, 8.0f, 14.0f);
+            cui_widget_set_box_shadow(window->close_button, 0.0f, 0.0f, 0.0f);
+            cui_widget_append_child(window->button_layer, window->close_button);
+
+            window->close_button->on_action = _cui_window_on_close_button;
+
+            if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+            {
+                // maximize button
+                window->maximize_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+                cui_widget_init(window->maximize_button, CUI_WIDGET_TYPE_BUTTON);
+                cui_widget_set_icon(window->maximize_button, CUI_ICON_WINDOWS_MAXIMIZE);
+                cui_widget_set_border_width(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+                cui_widget_set_border_radius(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+                cui_widget_set_padding(window->maximize_button, 8.0f, 14.0f, 8.0f, 14.0f);
+                cui_widget_set_box_shadow(window->maximize_button, 0.0f, 0.0f, 0.0f);
+                cui_widget_append_child(window->button_layer, window->maximize_button);
+
+                window->maximize_button->on_action = _cui_window_on_maximize_button;
+            }
+
+            // minimize button
+            window->minimize_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(window->minimize_button, CUI_WIDGET_TYPE_BUTTON);
+            cui_widget_set_icon(window->minimize_button, CUI_ICON_WINDOWS_MINIMIZE);
+            cui_widget_set_border_width(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+            cui_widget_set_border_radius(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
+            cui_widget_set_padding(window->minimize_button, 8.0f, 14.0f, 8.0f, 14.0f);
+            cui_widget_set_box_shadow(window->minimize_button, 0.0f, 0.0f, 0.0f);
+            cui_widget_append_child(window->button_layer, window->minimize_button);
+
+            window->minimize_button->on_action = _cui_window_on_minimize_button;
+
+            CuiWidget *button_padding = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+
+            cui_widget_init(button_padding, CUI_WIDGET_TYPE_BOX);
+            cui_widget_append_child(window->button_layer, button_padding);
+
+            CuiWidget *dummy_user_root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
+            cui_widget_init(dummy_user_root_widget, CUI_WIDGET_TYPE_BOX);
+
+            cui_widget_append_child(root_widget, dummy_user_root_widget);
+
+            cui_widget_set_window(root_widget, window);
+            cui_widget_set_ui_scale(root_widget, window->base.ui_scale);
+
+            window->client_side_decoration_root_widget = root_widget;
+            window->client_side_decoration_dummy_user_root_widget = dummy_user_root_widget;
+
             if (window->do_client_side_decoration)
             {
-                CuiWidget *root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(root_widget, CUI_WIDGET_TYPE_BOX);
-                cui_widget_set_main_axis(root_widget, CUI_AXIS_Y);
-                cui_widget_set_y_axis_gravity(root_widget, CUI_GRAVITY_START);
-                cui_widget_add_flags(root_widget, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_CLIP_CONTENT);
-                cui_widget_set_border_radius(root_widget, 4.0f, 4.0f, 0.0f, 0.0f);
-                cui_widget_set_border_width(root_widget, 1.0f, 1.0f, 1.0f, 1.0f);
-                cui_widget_set_box_shadow(root_widget, 0.0f, 4.0f, 16.0f);
-
-                root_widget->color_normal_box_shadow = CUI_COLOR_WINDOW_DROP_SHADOW;
-                root_widget->color_normal_border = CUI_COLOR_WINDOW_OUTLINE;
-
-                CuiWidget *titlebar_stack = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(titlebar_stack, CUI_WIDGET_TYPE_STACK);
-
-                cui_widget_append_child(root_widget, titlebar_stack);
-
-                window->titlebar = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(window->titlebar, CUI_WIDGET_TYPE_BOX);
-                cui_widget_set_main_axis(window->titlebar, CUI_AXIS_X);
-                cui_widget_set_x_axis_gravity(window->titlebar, CUI_GRAVITY_END);
-                cui_widget_add_flags(window->titlebar, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_FIXED_HEIGHT);
-                cui_widget_set_preferred_size(window->titlebar, 0.0f, (float) _CUI_WINDOW_TITLEBAR_HEIGHT);
-                cui_widget_set_border_width(window->titlebar, 0.0f, 0.0f, 0.0f, 0.0f);
-                cui_widget_set_border_radius(window->titlebar, 3.0f, 3.0f, 0.0f, 0.0f);
-                cui_widget_set_inline_padding(window->titlebar, 1.0f);
-
-                window->titlebar->color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
-                window->titlebar->color_normal_border = CUI_COLOR_WINDOW_TITLEBAR_BORDER;
-
-                cui_widget_append_child(titlebar_stack, window->titlebar);
-
-                // window title
-                window->title = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(window->title, CUI_WIDGET_TYPE_LABEL);
-                cui_widget_set_label(window->title, CuiStringLiteral(""));
-                cui_widget_set_x_axis_gravity(window->title, CUI_GRAVITY_CENTER);
-                cui_widget_set_y_axis_gravity(window->title, CUI_GRAVITY_CENTER);
-                cui_widget_set_padding(window->title, 0.0f, 0.0f, 0.0f, 8.0f);
-                cui_widget_append_child(window->titlebar, window->title);
-
-                window->button_layer = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(window->button_layer, CUI_WIDGET_TYPE_BOX);
-                cui_widget_set_main_axis(window->button_layer, CUI_AXIS_X);
-                cui_widget_set_x_axis_gravity(window->button_layer, CUI_GRAVITY_END);
-                cui_widget_add_flags(window->button_layer, CUI_WIDGET_FLAG_FIXED_HEIGHT);
-                cui_widget_set_preferred_size(window->button_layer, 0.0f, (float) _CUI_WINDOW_TITLEBAR_HEIGHT);
-                cui_widget_append_child(titlebar_stack, window->button_layer);
-
-                // close button
-                window->close_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(window->close_button, CUI_WIDGET_TYPE_BUTTON);
-                cui_widget_set_icon(window->close_button, CUI_ICON_WINDOWS_CLOSE);
-                cui_widget_set_border_width(window->close_button, 0.0f, 0.0f, 0.0f, 0.0f);
-                cui_widget_set_border_radius(window->close_button, 0.0f, 3.0f, 0.0f, 0.0f);
-                cui_widget_set_padding(window->close_button, 8.0f, 14.0f, 8.0f, 14.0f);
-                cui_widget_set_box_shadow(window->close_button, 0.0f, 0.0f, 0.0f);
-                cui_widget_append_child(window->button_layer, window->close_button);
-
-                window->close_button->on_action = _cui_window_on_close_button;
-
-                if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
-                {
-                    // maximize button
-                    window->maximize_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                    cui_widget_init(window->maximize_button, CUI_WIDGET_TYPE_BUTTON);
-                    cui_widget_set_icon(window->maximize_button, CUI_ICON_WINDOWS_MAXIMIZE);
-                    cui_widget_set_border_width(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
-                    cui_widget_set_border_radius(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
-                    cui_widget_set_padding(window->maximize_button, 8.0f, 14.0f, 8.0f, 14.0f);
-                    cui_widget_set_box_shadow(window->maximize_button, 0.0f, 0.0f, 0.0f);
-                    cui_widget_append_child(window->button_layer, window->maximize_button);
-
-                    window->maximize_button->on_action = _cui_window_on_maximize_button;
-                }
-
-                // minimize button
-                window->minimize_button = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(window->minimize_button, CUI_WIDGET_TYPE_BUTTON);
-                cui_widget_set_icon(window->minimize_button, CUI_ICON_WINDOWS_MINIMIZE);
-                cui_widget_set_border_width(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
-                cui_widget_set_border_radius(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
-                cui_widget_set_padding(window->minimize_button, 8.0f, 14.0f, 8.0f, 14.0f);
-                cui_widget_set_box_shadow(window->minimize_button, 0.0f, 0.0f, 0.0f);
-                cui_widget_append_child(window->button_layer, window->minimize_button);
-
-                window->minimize_button->on_action = _cui_window_on_minimize_button;
-
-                CuiWidget *button_padding = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-
-                cui_widget_init(button_padding, CUI_WIDGET_TYPE_BOX);
-                cui_widget_append_child(window->button_layer, button_padding);
-
-                CuiWidget *dummy_user_root_widget = cui_alloc_type(&window->arena, CuiWidget, CuiDefaultAllocationParams());
-                cui_widget_init(dummy_user_root_widget, CUI_WIDGET_TYPE_BOX);
-
-                cui_widget_append_child(root_widget, dummy_user_root_widget);
-
-                window->base.user_root_widget = dummy_user_root_widget;
-
-                cui_widget_set_window(root_widget, window);
-                cui_widget_set_ui_scale(root_widget, window->base.ui_scale);
                 cui_widget_layout(root_widget, window->layout_rect);
 
+                window->base.user_root_widget = dummy_user_root_widget;
                 window->base.platform_root_widget = root_widget;
             }
 
@@ -3880,6 +3957,14 @@ cui_window_create(uint32_t creation_flags)
             window->wayland_surface      = wl_compositor_create_surface(_cui_context.wayland_compositor);
             window->wayland_xdg_surface  = xdg_wm_base_get_xdg_surface(_cui_context.wayland_xdg_wm_base, window->wayland_surface);
             window->wayland_xdg_toplevel = xdg_surface_get_toplevel(window->wayland_xdg_surface);
+
+            if (_cui_context.wayland_xdg_decoration_manager)
+            {
+                window->wayland_xdg_decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(_cui_context.wayland_xdg_decoration_manager, window->wayland_xdg_toplevel);
+                zxdg_toplevel_decoration_v1_set_mode(window->wayland_xdg_decoration, (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) ?
+                                                                                     ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE : ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
+                zxdg_toplevel_decoration_v1_add_listener(window->wayland_xdg_decoration, &_cui_wayland_xdg_decoration_listener, window);
+            }
 
             wl_surface_add_listener(window->wayland_surface, &_cui_wayland_surface_listener, window);
             xdg_surface_add_listener(window->wayland_xdg_surface, &_cui_wayland_xdg_surface_listener, window);
@@ -4472,6 +4557,11 @@ cui_window_destroy(CuiWindow *window)
                 {
                     CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
                 } break;
+            }
+
+            if (window->wayland_xdg_decoration)
+            {
+                zxdg_toplevel_decoration_v1_destroy(window->wayland_xdg_decoration);
             }
 
             xdg_toplevel_destroy(window->wayland_xdg_toplevel);
