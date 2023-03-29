@@ -14,6 +14,8 @@ static const int32_t _CUI_DROP_SHADOW_PADDING_LEFT   = 16;
 static const int32_t _CUI_WINDOW_TITLEBAR_HEIGHT     = 28;
 static const int32_t _CUI_WAYLAND_INPUT_MARGIN       = 8;
 static const int32_t _CUI_WAYLAND_CORNER_MARGIN      = 16;
+static const int32_t _CUI_WAYLAND_MINIMUM_WIDTH      = 200;
+static const int32_t _CUI_WAYLAND_MINIMUM_HEIGHT     = 100;
 
 #if CUI_RENDERER_OPENGLES2_ENABLED
 
@@ -1369,15 +1371,8 @@ _cui_wayland_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_topleve
 
     if ((width > 0) && (height > 0))
     {
-        if (width < 200)
-        {
-            width = 200;
-        }
-
-        if (height < 100)
-        {
-            height = 100;
-        }
+        width = cui_max_int32(width, _CUI_WAYLAND_MINIMUM_WIDTH);
+        height = cui_max_int32(height, _CUI_WAYLAND_MINIMUM_HEIGHT);
 
         window->pending_window_width = window->backbuffer_scale * width;
         window->pending_window_height = window->backbuffer_scale * height;
