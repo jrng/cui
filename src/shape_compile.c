@@ -98,7 +98,7 @@ parse_float(const char **str)
     return value;
 }
 
-int main()
+int main(void)
 {
     FILE *file = fopen("src/cui_shapes.c", "w");
 
