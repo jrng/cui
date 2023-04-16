@@ -23,6 +23,12 @@ create_widget(CuiArena *arena, uint32_t type)
 }
 
 static void
+on_input_action(CuiWidget *widget)
+{
+    (void) widget;
+}
+
+static void
 create_user_interface(CuiWindow *window, CuiArena *arena)
 {
     app.root_widget = create_widget(arena, CUI_WIDGET_TYPE_BOX);
@@ -38,6 +44,8 @@ create_user_interface(CuiWindow *window, CuiArena *arena)
     cui_widget_set_icon(app.search_input, CUI_ICON_SEARCH_12);
     cui_widget_set_label(app.search_input, CuiStringLiteral("Search files and folders"));
     cui_widget_set_textinput_buffer(app.search_input, cui_alloc(arena, CuiKiB(1), CuiDefaultAllocationParams()), CuiKiB(1));
+
+    app.search_input->on_action = on_input_action;
 
     cui_widget_append_child(app.root_widget, app.search_input);
 

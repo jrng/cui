@@ -1105,6 +1105,7 @@ struct CuiWidget
 
     // event callbacks
     void     (*on_action)          (CuiWidget *widget);
+    void     (*on_changed)         (CuiWidget *widget);
 
     // custom widget functions
     void     (*set_ui_scale)       (CuiWidget *widget, float ui_scale);
@@ -1178,7 +1179,7 @@ void cui_text_input_delete_selected_range(CuiTextInput *input);
 CuiString cui_text_input_get_selected_text(CuiTextInput *input);
 void cui_text_input_insert_string(CuiTextInput *input, CuiString str);
 void cui_text_input_insert_codepoint(CuiTextInput *input, uint32_t codepoint);
-void cui_text_input_backspace(CuiTextInput *input);
+bool cui_text_input_backspace(CuiTextInput *input);
 void cui_text_input_move_left(CuiTextInput *input, bool shift_is_down);
 void cui_text_input_move_right(CuiTextInput *input, bool shift_is_down);
 

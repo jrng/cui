@@ -139,21 +139,27 @@ cui_text_input_insert_codepoint(CuiTextInput *input, uint32_t codepoint)
     }
 }
 
-void
+bool
 cui_text_input_backspace(CuiTextInput *input)
 {
+    bool result = false;
+
     if (input->cursor_start == input->cursor_end)
     {
         if (input->cursor_end > 0)
         {
             input->cursor_end -= 1;
             cui_text_input_delete_selected_range(input);
+            result = true;
         }
     }
     else
     {
         cui_text_input_delete_selected_range(input);
+        result = true;
     }
+
+    return result;
 }
 
 void

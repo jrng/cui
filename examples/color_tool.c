@@ -489,7 +489,7 @@ create_rgb_row(CuiWidget *parent_widget, CuiArena *arena)
         cui_widget_set_textinput_buffer(app.input_r, cui_alloc(arena, TEXTINPUT_NUMBER_BUFFER_SIZE, CuiDefaultAllocationParams()), TEXTINPUT_NUMBER_BUFFER_SIZE);
         cui_widget_set_textinput_value(app.input_r, cui_sprint(&app.temporary_memory, CuiStringLiteral("%u"), r));
 
-        app.input_r->on_action = on_rgb_changed;
+        app.input_r->on_changed = on_rgb_changed;
 
         cui_widget_append_child(rgb_row, app.input_r);
     }
@@ -503,7 +503,7 @@ create_rgb_row(CuiWidget *parent_widget, CuiArena *arena)
         cui_widget_set_textinput_buffer(app.input_g, cui_alloc(arena, TEXTINPUT_NUMBER_BUFFER_SIZE, CuiDefaultAllocationParams()), TEXTINPUT_NUMBER_BUFFER_SIZE);
         cui_widget_set_textinput_value(app.input_g, cui_sprint(&app.temporary_memory, CuiStringLiteral("%u"), g));
 
-        app.input_g->on_action = on_rgb_changed;
+        app.input_g->on_changed = on_rgb_changed;
 
         cui_widget_append_child(rgb_row, app.input_g);
     }
@@ -517,7 +517,7 @@ create_rgb_row(CuiWidget *parent_widget, CuiArena *arena)
         cui_widget_set_textinput_buffer(app.input_b, cui_alloc(arena, TEXTINPUT_NUMBER_BUFFER_SIZE, CuiDefaultAllocationParams()), TEXTINPUT_NUMBER_BUFFER_SIZE);
         cui_widget_set_textinput_value(app.input_b, cui_sprint(&app.temporary_memory, CuiStringLiteral("%u"), b));
 
-        app.input_b->on_action = on_rgb_changed;
+        app.input_b->on_changed = on_rgb_changed;
 
         cui_widget_append_child(rgb_row, app.input_b);
     }

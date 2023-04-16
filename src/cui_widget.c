@@ -2199,10 +2199,19 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                                 CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
 
                                 CuiString str = cui_platform_get_clipboard_text(&window->base.temporary_memory);
-                                cui_text_input_insert_string(&widget->text_input, str);
-                                _cui_widget_update_text_offset(widget);
+
+                                if (str.count)
+                                {
+                                    cui_text_input_insert_string(&widget->text_input, str);
+                                    _cui_widget_update_text_offset(widget);
+                                }
 
                                 cui_end_temporary_memory(temp_memory);
+
+                                if (str.count && widget->on_action)
+                                {
+                                    widget->on_action(widget);
+                                }
 
                                 cui_window_request_redraw(window);
                                 result = true;
@@ -2214,6 +2223,12 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                         cui_text_input_insert_codepoint(&widget->text_input, window->base.event.key.codepoint);
                         _cui_widget_update_text_offset(widget);
                         cui_window_request_redraw(window);
+
+                        if (widget->on_action)
+                        {
+                            widget->on_action(widget);
+                        }
+
                         result = true;
                     }
                     else
@@ -2222,9 +2237,17 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
                         {
                             case CUI_KEY_BACKSPACE:
                             {
-                                cui_text_input_backspace(&widget->text_input);
-                                _cui_widget_update_text_offset(widget);
-                                cui_window_request_redraw(window);
+                                if (cui_text_input_backspace(&widget->text_input))
+                                {
+                                    _cui_widget_update_text_offset(widget);
+                                    cui_window_request_redraw(window);
+
+                                    if (widget->on_action)
+                                    {
+                                        widget->on_action(widget);
+                                    }
+                                }
+
                                 result = true;
                             } break;
 
@@ -2248,9 +2271,9 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
 
                             case CUI_KEY_ENTER:
                             {
-                                if (widget->on_action)
+                                if (widget->on_changed)
                                 {
-                                    widget->on_action(widget);
+                                    widget->on_changed(widget);
                                 }
                                 result = true;
                             } break;
