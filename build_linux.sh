@@ -146,6 +146,9 @@ compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o interface_browser ../exam
 # image viewer
 compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o image_viewer ../examples/image_viewer.c libcui.a ${LINKER_FLAGS}"
 
+# file search
+compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o file_search ../examples/file_search.c libcui.a ${LINKER_FLAGS}"
+
 # color tool
 compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o color_tool ../examples/color_tool.c libcui.a ${LINKER_FLAGS}"
 

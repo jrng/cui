@@ -133,6 +133,10 @@ if [ "$(uname -m)" = "arm64" ]; then
     compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o image_viewer-arm64 -target arm64-apple-macos11 ../examples/image_viewer.c libcui.a ${LINKER_FLAGS}"
     compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o image_viewer-x86_64 -target x86_64-apple-macos10.14 ../examples/image_viewer.c libcui.a ${LINKER_FLAGS}"
 
+    # file search
+    compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o file_search-arm64 -target arm64-apple-macos11 ../examples/file_search.c libcui.a ${LINKER_FLAGS}"
+    compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o file_search-x86_64 -target x86_64-apple-macos10.14 ../examples/file_search.c libcui.a ${LINKER_FLAGS}"
+
     # color tool
     compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o color_tool-arm64 -target arm64-apple-macos11 ../examples/color_tool.c libcui.a ${LINKER_FLAGS}"
     compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o color_tool-x86_64 -target x86_64-apple-macos10.14 ../examples/color_tool.c libcui.a ${LINKER_FLAGS}"
@@ -164,6 +168,9 @@ elif [ "$(uname -m)" = "x86_64" ]; then
     # image viewer
     compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o image_viewer -target x86_64-apple-macos10.14 ../examples/image_viewer.c libcui.a ${LINKER_FLAGS}"
 
+    # file search
+    compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o file_search -target x86_64-apple-macos10.14 ../examples/file_search.c libcui.a ${LINKER_FLAGS}"
+
     # color tool
     compile "${COMPILER} ${COMPILER_FLAGS} -I../include -o color_tool -target x86_64-apple-macos10.14 ../examples/color_tool.c libcui.a ${LINKER_FLAGS}"
 
@@ -175,11 +182,13 @@ wait
 # # so if you run into issues with debugging enable these commands:
 # compile "codesign -s - -v -f --entitlements ../src/macos_signing.plist interface_browser"
 # compile "codesign -s - -v -f --entitlements ../src/macos_signing.plist image_viewer"
+# compile "codesign -s - -v -f --entitlements ../src/macos_signing.plist file_search"
 # compile "codesign -s - -v -f --entitlements ../src/macos_signing.plist color_tool"
 # wait
 
 package "Interface Browser" "interface_browser"
 package "Image Viewer" "image_viewer"
+package "File Search" "file_search"
 package "Color Tool" "color_tool"
 
 echo

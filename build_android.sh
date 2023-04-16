@@ -155,6 +155,9 @@ build_android_app "interface_browser" "Interface Browser"
 # image viewer
 build_android_app "image_viewer" "Image Viewer"
 
+# file search
+build_android_app "file_search" "File Search"
+
 # color tool
 build_android_app "color_tool" "Color Tool"
 

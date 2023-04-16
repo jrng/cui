@@ -79,6 +79,10 @@ REM image viewer
 echo [COMPILE] %COMPILER% %COMPILER_FLAGS% -I"../include" -Fe"image_viewer.exe" "../examples/image_viewer.c" /link %LINKER_FLAGS% cui.lib
 %COMPILER% %COMPILER_FLAGS% -I"../include" -Fe"image_viewer.exe" "../examples/image_viewer.c" /link %LINKER_FLAGS% cui.lib
 
+REM file search
+echo [COMPILE] %COMPILER% %COMPILER_FLAGS% -I"../include" -Fe"file_search.exe" "../examples/file_search.c" /link %LINKER_FLAGS% cui.lib
+%COMPILER% %COMPILER_FLAGS% -I"../include" -Fe"file_search.exe" "../examples/file_search.c" /link %LINKER_FLAGS% cui.lib
+
 REM color tool
 echo [COMPILE] %COMPILER% %COMPILER_FLAGS% -I"../include" -Fe"color_tool.exe" "../examples/color_tool.c" /link %LINKER_FLAGS% cui.lib
 %COMPILER% %COMPILER_FLAGS% -I"../include" -Fe"color_tool.exe" "../examples/color_tool.c" /link %LINKER_FLAGS% cui.lib

@@ -90,7 +90,6 @@ typedef struct ColorTool
     CuiWidget *copy_shader_vec4;
     CuiWidget *copy_shader_float3;
     CuiWidget *copy_shader_float4;
-
 } ColorTool;
 
 static ColorTool app;
