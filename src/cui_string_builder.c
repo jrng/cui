@@ -259,7 +259,33 @@ cui_string_builder_to_string(CuiStringBuilder *builder, CuiArena *arena)
 }
 
 void
-cui_string_builder_print(CuiStringBuilder *builder, CuiString format, va_list args)
+cui_string_builder_write_to_file(CuiStringBuilder *builder, CuiFile *file, uint64_t offset)
+{
+    if (builder->write_buffer)
+    {
+        CuiTextBuffer *buffer = &builder->base_buffer;
+        while (buffer)
+        {
+            cui_platform_file_write(file, buffer->data, offset, buffer->occupied);
+            offset += buffer->occupied;
+            buffer = buffer->next;
+        }
+    }
+}
+
+void
+cui_string_builder_print(CuiStringBuilder *builder, CuiString format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    cui_string_builder_print_valist(builder, format, args);
+
+    va_end(args);
+}
+
+void
+cui_string_builder_print_valist(CuiStringBuilder *builder, CuiString format, va_list args)
 {
     for (int64_t index = 0; index < format.count; index++)
     {
@@ -408,7 +434,7 @@ cui_sprint(CuiArena *arena, CuiString format, ...)
     va_list args;
     va_start(args, format);
 
-    cui_string_builder_print(&builder, format, args);
+    cui_string_builder_print_valist(&builder, format, args);
 
     va_end(args);
 

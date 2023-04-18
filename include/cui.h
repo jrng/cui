@@ -1226,6 +1226,7 @@ CuiString cui_platform_get_canonical_filename(CuiArena *temporary_memory, CuiAre
 void cui_platform_get_files(CuiArena *temporary_memory, CuiArena *arena, CuiString directory, CuiFileInfo **file_list);
 void cui_platform_get_font_directories(CuiArena *temporary_memory, CuiArena *arena, CuiString **font_dirs);
 CuiString cui_platform_get_data_directory(CuiArena *temporary_memory, CuiArena *arena);
+CuiString cui_platform_get_current_working_directory(CuiArena *temporary_memory, CuiArena *arena);
 
 //
 // memory arena
@@ -1250,7 +1251,9 @@ void cui_string_builder_init(CuiStringBuilder *builder, CuiArena *arena);
 int64_t cui_string_builder_get_size(CuiStringBuilder *builder);
 CuiString cui_string_builder_to_string(CuiStringBuilder *builder, CuiArena *arena);
 CuiString cui_sprint(CuiArena *arena, CuiString format, ...);
-void cui_string_builder_print(CuiStringBuilder *builder, CuiString format, va_list args);
+void cui_string_builder_write_to_file(CuiStringBuilder *builder, CuiFile *file, uint64_t offset);
+void cui_string_builder_print(CuiStringBuilder *builder, CuiString format, ...);
+void cui_string_builder_print_valist(CuiStringBuilder *builder, CuiString format, va_list args);
 void cui_string_builder_append_character(CuiStringBuilder *builder, uint8_t c);
 void cui_string_builder_append_string(CuiStringBuilder *builder, CuiString str);
 void cui_string_builder_append_number(CuiStringBuilder *builder, int64_t value, int64_t leading_zeros);

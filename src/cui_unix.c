@@ -70,7 +70,6 @@ _cui_set_fd_non_blocking(int fd)
 CuiString
 cui_platform_get_environment_variable(CuiArena *temporary_memory, CuiArena *arena, CuiString name)
 {
-    (void) temporary_memory;
     (void) arena;
 
     CuiString result = { 0 };
@@ -365,4 +364,20 @@ cui_platform_get_files(CuiArena *temporary_memory, CuiArena *arena, CuiString di
 
         closedir(dir);
     }
+}
+
+CuiString
+cui_platform_get_current_working_directory(CuiArena *temporary_memory, CuiArena *arena)
+{
+    CuiString result = { 0 };
+
+    size_t buffer_size = CuiKiB(1);
+    char *current_working_directory = cui_alloc_array(temporary_memory, char, buffer_size, CuiDefaultAllocationParams());
+
+    if (getcwd(current_working_directory, buffer_size))
+    {
+        result = cui_copy_string(arena, CuiCString(current_working_directory));
+    }
+
+    return result;
 }

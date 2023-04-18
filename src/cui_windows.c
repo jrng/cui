@@ -1314,6 +1314,38 @@ cui_platform_get_font_directories(CuiArena *temporary_memory, CuiArena *arena, C
     *cui_array_append(*font_dirs) = CuiStringLiteral("C:\\Windows\\Fonts");
 }
 
+CuiString
+cui_platform_get_data_directory(CuiArena *temporary_memory, CuiArena *arena)
+{
+    (void) temporary_memory;
+    (void) arena;
+
+    CuiString result = { 0 };
+
+    CuiAssert(!"unimplemented");
+
+    return result;
+}
+
+CuiString
+cui_platform_get_current_working_directory(CuiArena *temporary_memory, CuiArena *arena)
+{
+    CuiString result = { 0 };
+
+    size_t buffer_size = CuiKiB(1);
+    char *current_working_directory = cui_alloc_array(temporary_memory, char, buffer_size, CuiDefaultAllocationParams());
+
+    DWORD count = GetCurrentDirectory(buffer_size, (LPWSTR) current_working_directory);
+
+    if (count)
+    {
+        CuiString utf16_string = cui_make_string(current_working_directory, 2 * count);
+        result = cui_utf16le_to_utf8(arena, utf16_string);
+    }
+
+    return result;
+}
+
 CuiString *
 cui_get_files_to_open(void)
 {
