@@ -5,6 +5,7 @@ typedef struct FileEntry
     int32_t parent_index;
     bool is_directory;
     CuiString name;
+    CuiString path;
 } FileEntry;
 
 typedef struct FileSearch
@@ -62,6 +63,11 @@ scan_directory(CuiString directory)
                 parent_index = file_entry.parent_index;
             }
 
+            if (current_parent_index > 0)
+            {
+                app.files[current_parent_index].path = cui_copy_string(&app.file_names_arena, path);
+            }
+
             path = cui_path_concat(&app.temporary_memory, directory, path);
 
 #if 0
@@ -85,6 +91,7 @@ scan_directory(CuiString directory)
                     file_entry->parent_index = current_parent_index;
                     file_entry->is_directory = (info.attr.flags & CUI_FILE_ATTRIBUTE_IS_DIRECTORY) ? true : false;
                     file_entry->name = cui_copy_string(&app.file_names_arena, info.name);
+                    file_entry->path = cui_make_string(0, 0);
                 }
             }
 
@@ -115,10 +122,30 @@ read_index_file(CuiString index_filename)
 
         while (index < content.count)
         {
-            FileEntry *file_entry = cui_array_append(app.files);
-
             char first_char = content.data[index];
-            index += 9;
+            index += 1;
+
+            uint32_t parent_index = 0;
+
+            for (int32_t i = 0; i < 8; i += 1)
+            {
+                uint32_t digit = content.data[index];
+
+                if ((digit >= 'A') && (digit <= 'F'))
+                {
+                    parent_index = (parent_index << 4) + (digit - 'A' + 0xA);
+                }
+                else
+                {
+                    parent_index = (parent_index << 4) + (digit - '0');
+                }
+
+                index += 1;
+            }
+
+            int32_t max_index = cui_array_count(app.files);
+
+            CuiAssert((int32_t) parent_index < max_index);
 
             CuiString name;
             name.data = content.data + index;
@@ -130,9 +157,27 @@ read_index_file(CuiString index_filename)
 
             name.count = (content.data + index) - name.data;
 
-            // file_entry->parent_index = current_parent_index;
+            CuiString path = { 0 };
+
+            if (first_char == '1')
+            {
+                path = cui_path_concat(&app.temporary_memory, name, path);
+                int32_t p_index = parent_index;
+
+                while (p_index > 0)
+                {
+                    FileEntry file_entry = app.files[p_index];
+                    path = cui_path_concat(&app.temporary_memory, file_entry.name, path);
+                    p_index = file_entry.parent_index;
+                }
+            }
+
+            FileEntry *file_entry = cui_array_append(app.files);
+
+            file_entry->parent_index = (int32_t) parent_index;
             file_entry->is_directory = (first_char == '1') ? true : false;
             file_entry->name = cui_copy_string(&app.file_names_arena, name);
+            file_entry->path = path;
 
             index += 1;
         }
@@ -213,14 +258,28 @@ clear_search_results(void)
 }
 
 static void
-insert_search_result(CuiString name)
+insert_search_result(CuiString name, CuiString path)
 {
-    CuiWidget *widget = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_LABEL);
+    CuiWidget *wrapper = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_BOX);
 
-    cui_widget_set_label(widget, name);
-    cui_widget_add_flags(widget, CUI_WIDGET_FLAG_DRAW_BACKGROUND);
+    cui_widget_set_main_axis(wrapper, CUI_AXIS_X);
+    cui_widget_set_y_axis_gravity(wrapper, CUI_GRAVITY_START);
+    cui_widget_set_padding(wrapper, 4.0f, 4.0f, 4.0f, 4.0f);
 
-    cui_widget_insert_before(app.search_results, app.last_search_result, widget);
+    cui_widget_insert_before(app.search_results, app.last_search_result, wrapper);
+
+    CuiWidget *path_label = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_LABEL);
+
+    cui_widget_set_label(path_label, path);
+    path_label->color_normal_text = CUI_COLOR_DEFAULT_BORDER;
+
+    cui_widget_append_child(wrapper, path_label);
+
+    CuiWidget *name_label = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_LABEL);
+
+    cui_widget_set_label(name_label, name);
+
+    cui_widget_append_child(wrapper, name_label);
 }
 
 static bool
@@ -251,12 +310,12 @@ filename_matches(CuiString filename, CuiString search)
 static void
 on_input_action(CuiWidget *widget)
 {
+    clear_search_results();
+
     CuiString value = cui_widget_get_textinput_value(widget);
 
     if (cui_utf8_get_character_count(value) >= 3)
     {
-        clear_search_results();
-
         int32_t count = cui_array_count(app.files);
 
         for (int32_t i = 0; i < count; i += 1)
@@ -265,7 +324,14 @@ on_input_action(CuiWidget *widget)
 
             if (filename_matches(file_entry.name, value))
             {
-                insert_search_result(file_entry.name);
+                CuiString path = { 0 };
+
+                if (file_entry.parent_index > 0)
+                {
+                    path = app.files[file_entry.parent_index].path;
+                }
+
+                insert_search_result(file_entry.name, path);
             }
         }
 
@@ -305,6 +371,7 @@ create_user_interface(CuiWindow *window, CuiArena *arena)
     CuiWidget *directory_label = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_LABEL);
 
     cui_widget_set_label(directory_label, app.directory);
+    cui_widget_set_padding(directory_label, 0.0f, 0.0f, 0.0f, 2.0f);
 
     cui_widget_append_child(bottom, directory_label);
 
@@ -354,8 +421,8 @@ CUI_PLATFORM_MAIN
     int32_t file_count = cui_array_count(app.files);
 
     printf("file_count = %d\n", file_count);
-    printf("files_arena = %lu / %lu\n", app.files_arena.occupied, app.files_arena.capacity);
-    printf("file_names_arena = %lu / %lu\n", app.file_names_arena.occupied, app.file_names_arena.capacity);
+    printf("files_arena = %llu / %llu\n", app.files_arena.occupied, app.files_arena.capacity);
+    printf("file_names_arena = %llu / %llu\n", app.file_names_arena.occupied, app.file_names_arena.capacity);
 
 #if 0
     for (int32_t i = 0; i < file_count; i += 1)

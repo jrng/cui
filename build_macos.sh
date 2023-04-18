@@ -145,6 +145,7 @@ if [ "$(uname -m)" = "arm64" ]; then
 
     compile "lipo -create -output interface_browser interface_browser-arm64 interface_browser-x86_64"
     compile "lipo -create -output image_viewer image_viewer-arm64 image_viewer-x86_64"
+    compile "lipo -create -output file_search file_search-arm64 file_search-x86_64"
     compile "lipo -create -output color_tool color_tool-arm64 color_tool-x86_64"
 
 elif [ "$(uname -m)" = "x86_64" ]; then
