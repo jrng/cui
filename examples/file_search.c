@@ -65,14 +65,14 @@ scan_directory(CuiString directory)
             CuiString path = { 0 };
             int32_t parent_index = current_parent_index;
 
-            while (parent_index > 0)
+            while (parent_index >= 0)
             {
                 FileEntry file_entry = app.files[parent_index];
                 path = cui_path_concat(&app.temporary_memory, file_entry.name, path);
                 parent_index = file_entry.parent_index;
             }
 
-            if (current_parent_index > 0)
+            if (current_parent_index >= 0)
             {
                 app.files[current_parent_index].path = cui_copy_string(&app.file_names_arena, path);
             }
@@ -181,36 +181,39 @@ read_index_file(CuiString index_filename)
 
             name.count = (content.data + index) - name.data;
 
-            CuiString path = { 0 };
-
-            if (first_char == '1')
-            {
-                path = cui_path_concat(&app.temporary_memory, name, path);
-                int32_t p_index = parent_index;
-
-                while (p_index > 0)
-                {
-                    FileEntry file_entry = app.files[p_index];
-                    path = cui_path_concat(&app.temporary_memory, file_entry.name, path);
-                    p_index = file_entry.parent_index;
-                }
-            }
-
             FileEntry *file_entry = cui_array_append(app.files);
 
             file_entry->parent_index = (int32_t) parent_index;
             file_entry->is_directory = (first_char == '1') ? true : false;
             file_entry->name = cui_copy_string(&app.file_names_arena, name);
-            file_entry->path = path;
+            file_entry->path = cui_make_string(0, 0);
+
+            CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&app.temporary_memory);
 
             if (file_entry->is_directory)
             {
+                CuiString path = { 0 };
+
+                path = cui_path_concat(&app.temporary_memory, name, path);
+                int32_t p_index = parent_index;
+
+                while (p_index >= 0)
+                {
+                    FileEntry entry = app.files[p_index];
+                    path = cui_path_concat(&app.temporary_memory, entry.name, path);
+                    p_index = entry.parent_index;
+                }
+
+                file_entry->path = cui_copy_string(&app.file_names_arena, path);
+
                 app.folder_count += 1;
             }
             else
             {
                 app.file_count += 1;
             }
+
+            cui_end_temporary_memory(temp_memory);
 
             index += 1;
         }
