@@ -234,11 +234,12 @@ cui_widget_init(CuiWidget *widget, uint32_t type)
         {
             widget->flags = CUI_WIDGET_FLAG_FIXED_WIDTH;
 
-            widget->color_normal_background = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BACKGROUND;
-            widget->color_normal_box_shadow = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BOX_SHADOW;
-            widget->color_normal_border     = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BORDER;
-            widget->color_normal_text       = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_TEXT;
-            widget->color_normal_icon       = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_ICON;
+            widget->color_normal_background  = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BACKGROUND;
+            widget->color_normal_box_shadow  = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BOX_SHADOW;
+            widget->color_normal_border      = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BORDER;
+            widget->color_normal_text        = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_TEXT;
+            widget->color_normal_placeholder = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_PLACEHOLDER;
+            widget->color_normal_icon        = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_ICON;
 
             widget->preferred_size.x = 64.0f;
 
@@ -418,6 +419,11 @@ cui_widget_remove_child(CuiWidget *widget, CuiWidget *old_child)
 
     CuiAssert(found_widget);
 #endif
+
+    if (old_child->window && (old_child->window->base.hovered_widget == old_child))
+    {
+        old_child->window->base.hovered_widget = widget;
+    }
 
     CuiDListRemove(&old_child->list);
 }
@@ -1432,7 +1438,7 @@ cui_widget_draw(CuiWidget *widget, CuiGraphicsContext *ctx, const CuiColorTheme 
             if ((str.count == 0) && !(widget->state & CUI_WIDGET_STATE_FOCUSED))
             {
                 cui_draw_fill_string(ctx, font_id, (float) widget->rect.min.x + widget->label_offset.x,
-                                     (float) widget->rect.min.y + widget->label_offset.y, widget->label, cui_color_theme_get_color(color_theme, widget->color_normal_text));
+                                     (float) widget->rect.min.y + widget->label_offset.y, widget->label, cui_color_theme_get_color(color_theme, widget->color_normal_placeholder));
             }
             else
             {

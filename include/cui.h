@@ -437,25 +437,26 @@ typedef struct CuiFileInfo
 
 typedef enum CuiColorThemeId
 {
-    CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND          = 0,
-    CUI_COLOR_WINDOW_TITLEBAR_BORDER              = 1,
-    CUI_COLOR_WINDOW_TITLEBAR_TEXT                = 2,
-    CUI_COLOR_WINDOW_TITLEBAR_ICON                = 3,
-    CUI_COLOR_WINDOW_DROP_SHADOW                  = 4,
-    CUI_COLOR_WINDOW_OUTLINE                      = 5,
-    CUI_COLOR_DEFAULT_BG                          = 6,
-    CUI_COLOR_DEFAULT_FG                          = 7,
-    CUI_COLOR_DEFAULT_BORDER                      = 8,
-    CUI_COLOR_DEFAULT_BUTTON_NORMAL_BACKGROUND    = 9,
-    CUI_COLOR_DEFAULT_BUTTON_NORMAL_BOX_SHADOW    = 10,
-    CUI_COLOR_DEFAULT_BUTTON_NORMAL_BORDER        = 11,
-    CUI_COLOR_DEFAULT_BUTTON_NORMAL_TEXT          = 12,
-    CUI_COLOR_DEFAULT_BUTTON_NORMAL_ICON          = 13,
-    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BACKGROUND = 14,
-    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BOX_SHADOW = 15,
-    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BORDER     = 16,
-    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_TEXT       = 17,
-    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_ICON       = 18,
+    CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND           = 0,
+    CUI_COLOR_WINDOW_TITLEBAR_BORDER               = 1,
+    CUI_COLOR_WINDOW_TITLEBAR_TEXT                 = 2,
+    CUI_COLOR_WINDOW_TITLEBAR_ICON                 = 3,
+    CUI_COLOR_WINDOW_DROP_SHADOW                   = 4,
+    CUI_COLOR_WINDOW_OUTLINE                       = 5,
+    CUI_COLOR_DEFAULT_BG                           = 6,
+    CUI_COLOR_DEFAULT_FG                           = 7,
+    CUI_COLOR_DEFAULT_BORDER                       = 8,
+    CUI_COLOR_DEFAULT_BUTTON_NORMAL_BACKGROUND     = 9,
+    CUI_COLOR_DEFAULT_BUTTON_NORMAL_BOX_SHADOW     = 10,
+    CUI_COLOR_DEFAULT_BUTTON_NORMAL_BORDER         = 11,
+    CUI_COLOR_DEFAULT_BUTTON_NORMAL_TEXT           = 12,
+    CUI_COLOR_DEFAULT_BUTTON_NORMAL_ICON           = 13,
+    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BACKGROUND  = 14,
+    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BOX_SHADOW  = 15,
+    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BORDER      = 16,
+    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_TEXT        = 17,
+    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_PLACEHOLDER = 18,
+    CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_ICON        = 19,
 } CuiColorThemeId;
 
 typedef struct CuiColorTheme
@@ -478,29 +479,31 @@ typedef struct CuiColorTheme
     CuiColor default_textinput_normal_box_shadow;
     CuiColor default_textinput_normal_border;
     CuiColor default_textinput_normal_text;
+    CuiColor default_textinput_normal_placeholder;
     CuiColor default_textinput_normal_icon;
 } CuiColorTheme;
 
 static const CuiColorTheme cui_color_theme_default_dark = {
-    /* window_titlebar_background          */ CuiHexColorLiteral(0xFF2F333D),
-    /* window_titlebar_border              */ CuiHexColorLiteral(0x7F000000),
-    /* window_titlebar_text                */ CuiHexColorLiteral(0xFFD7DAE0),
-    /* window_titlebar_icon                */ CuiHexColorLiteral(0xFFD7DAE0),
-    /* window_drop_shadow                  */ CuiHexColorLiteral(0x6F000000),
-    /* window_outline                      */ CuiHexColorLiteral(0xAF050607),
-    /* default_bg                          */ CuiHexColorLiteral(0xFF282C34),
-    /* default_fg                          */ CuiHexColorLiteral(0xFFD7DAE0),
-    /* default_border                      */ CuiHexColorLiteral(0xFF585C64),
-    /* default_button_normal_background    */ CuiHexColorLiteral(0xFF2F333D),
-    /* default_button_normal_box_shadow    */ CuiHexColorLiteral(0x3F000000),
-    /* default_button_normal_border        */ CuiHexColorLiteral(0xFF1E1E1E),
-    /* default_button_normal_text          */ CuiHexColorLiteral(0xFFD7DAE0),
-    /* default_button_normal_icon          */ CuiHexColorLiteral(0xFFB7BAC0),
-    /* default_textinput_normal_background */ CuiHexColorLiteral(0xFF20232A),
-    /* default_textinput_normal_box_shadow */ CuiHexColorLiteral(0x3F000000),
-    /* default_textinput_normal_border     */ CuiHexColorLiteral(0xFF3A3D45),
-    /* default_textinput_normal_text       */ CuiHexColorLiteral(0xFFD7DAE0),
-    /* default_textinput_normal_icon       */ CuiHexColorLiteral(0xFFB7BAC0),
+    /* window_titlebar_background           */ CuiHexColorLiteral(0xFF2F333D),
+    /* window_titlebar_border               */ CuiHexColorLiteral(0x7F000000),
+    /* window_titlebar_text                 */ CuiHexColorLiteral(0xFFD7DAE0),
+    /* window_titlebar_icon                 */ CuiHexColorLiteral(0xFFD7DAE0),
+    /* window_drop_shadow                   */ CuiHexColorLiteral(0x6F000000),
+    /* window_outline                       */ CuiHexColorLiteral(0xAF050607),
+    /* default_bg                           */ CuiHexColorLiteral(0xFF282C34),
+    /* default_fg                           */ CuiHexColorLiteral(0xFFD7DAE0),
+    /* default_border                       */ CuiHexColorLiteral(0xFF585C64),
+    /* default_button_normal_background     */ CuiHexColorLiteral(0xFF2F333D),
+    /* default_button_normal_box_shadow     */ CuiHexColorLiteral(0x3F000000),
+    /* default_button_normal_border         */ CuiHexColorLiteral(0xFF1E1E1E),
+    /* default_button_normal_text           */ CuiHexColorLiteral(0xFFD7DAE0),
+    /* default_button_normal_icon           */ CuiHexColorLiteral(0xFFB7BAC0),
+    /* default_textinput_normal_background  */ CuiHexColorLiteral(0xFF20232A),
+    /* default_textinput_normal_box_shadow  */ CuiHexColorLiteral(0x3F000000),
+    /* default_textinput_normal_border      */ CuiHexColorLiteral(0xFF3A3D45),
+    /* default_textinput_normal_text        */ CuiHexColorLiteral(0xFFD7DAE0),
+    /* default_textinput_normal_placeholder */ CuiHexColorLiteral(0xFF585C64),
+    /* default_textinput_normal_icon        */ CuiHexColorLiteral(0xFFB7BAC0),
 };
 
 static inline CuiColor
@@ -1073,6 +1076,7 @@ struct CuiWidget
     CuiColorThemeId color_normal_box_shadow;
     CuiColorThemeId color_normal_border;
     CuiColorThemeId color_normal_text;
+    CuiColorThemeId color_normal_placeholder;
     CuiColorThemeId color_normal_icon;
 
     CuiAxis main_axis;

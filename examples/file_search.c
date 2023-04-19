@@ -19,6 +19,9 @@ typedef struct FileSearch
 
     FileEntry *files;
 
+    int32_t file_count;
+    int32_t folder_count;
+
     CuiWindow *window;
 
     CuiWidget *root_widget;
@@ -39,8 +42,14 @@ scan_directory(CuiString directory)
     printf("directory = '%.*s'\n", (int) directory.count, directory.data);
 #endif
 
+    cui_arena_clear(&app.files_arena);
+    cui_arena_clear(&app.file_names_arena);
+
     app.files = 0;
     cui_array_init(app.files, 100, &app.files_arena);
+
+    app.file_count = 0;
+    app.folder_count = 0;
 
     int32_t current_parent_index = -1;
 
@@ -92,6 +101,15 @@ scan_directory(CuiString directory)
                     file_entry->is_directory = (info.attr.flags & CUI_FILE_ATTRIBUTE_IS_DIRECTORY) ? true : false;
                     file_entry->name = cui_copy_string(&app.file_names_arena, info.name);
                     file_entry->path = cui_make_string(0, 0);
+
+                    if (file_entry->is_directory)
+                    {
+                        app.folder_count += 1;
+                    }
+                    else
+                    {
+                        app.file_count += 1;
+                    }
                 }
             }
 
@@ -105,8 +123,14 @@ scan_directory(CuiString directory)
 static void
 read_index_file(CuiString index_filename)
 {
+    cui_arena_clear(&app.files_arena);
+    cui_arena_clear(&app.file_names_arena);
+
     app.files = 0;
     cui_array_init(app.files, 100, &app.files_arena);
+
+    app.file_count = 0;
+    app.folder_count = 0;
 
     CuiFile *file = cui_platform_file_open(&app.temporary_memory, index_filename, CUI_FILE_MODE_READ);
 
@@ -179,6 +203,15 @@ read_index_file(CuiString index_filename)
             file_entry->name = cui_copy_string(&app.file_names_arena, name);
             file_entry->path = path;
 
+            if (file_entry->is_directory)
+            {
+                app.folder_count += 1;
+            }
+            else
+            {
+                app.file_count += 1;
+            }
+
             index += 1;
         }
 
@@ -245,16 +278,25 @@ destroy_widget(CuiWidget *widget)
 }
 
 static void
+destroy_all_children(CuiWidget *widget, CuiWidget *last_child)
+{
+    CuiWidget *child = cui_widget_get_first_child(widget);
+
+    while (child != last_child)
+    {
+        destroy_all_children(child, 0);
+
+        cui_widget_remove_child(widget, child);
+        destroy_widget(child);
+        child = cui_widget_get_first_child(widget);
+    }
+}
+
+static void
 clear_search_results(void)
 {
-    CuiWidget *child = cui_widget_get_first_child(app.search_results);
-
-    while (child != app.last_search_result)
-    {
-        cui_widget_remove_child(app.search_results, child);
-        destroy_widget(child);
-        child = cui_widget_get_first_child(app.search_results);
-    }
+    destroy_all_children(app.search_results, app.last_search_result);
+    cui_widget_relayout_parent(app.last_search_result);
 }
 
 static void
@@ -335,8 +377,91 @@ on_input_action(CuiWidget *widget)
             }
         }
 
-        cui_widget_relayout_parent(app.search_results);
+        cui_widget_relayout_parent(app.last_search_result);
     }
+}
+
+static void
+create_search_row(CuiWidget *parent, CuiArena *arena)
+{
+    CuiWidget *search_container = create_widget(arena, CUI_WIDGET_TYPE_BOX);
+
+    cui_widget_set_main_axis(search_container, CUI_AXIS_Y);
+    cui_widget_set_y_axis_gravity(search_container, CUI_GRAVITY_START);
+    cui_widget_set_padding(search_container, 8.0f, 8.0f, 8.0f, 8.0f);
+
+    cui_widget_append_child(parent, search_container);
+
+    app.search_input = create_widget(arena, CUI_WIDGET_TYPE_TEXTINPUT);
+
+    cui_widget_set_icon(app.search_input, CUI_ICON_SEARCH_12);
+    cui_widget_set_label(app.search_input, CuiStringLiteral("Search files and folders"));
+    cui_widget_set_textinput_buffer(app.search_input, cui_alloc(arena, CuiKiB(1), CuiDefaultAllocationParams()), CuiKiB(1));
+
+    app.search_input->on_action = on_input_action;
+
+    cui_widget_append_child(search_container, app.search_input);
+}
+
+static void
+create_status_row(CuiWidget *parent, CuiArena *arena)
+{
+    CuiWidget *status_container = create_widget(arena, CUI_WIDGET_TYPE_BOX);
+
+    cui_widget_set_main_axis(status_container, CUI_AXIS_X);
+    cui_widget_set_y_axis_gravity(status_container, CUI_GRAVITY_START);
+#if CUI_PLATFORM_MACOS
+    cui_widget_set_padding(status_container, 4.0f, 8.0f, 6.0f, 8.0f);
+#else
+    cui_widget_set_padding(status_container, 4.0f, 8.0f, 4.0f, 8.0f);
+#endif
+    cui_widget_set_inline_padding(status_container, 16.0f);
+
+    cui_widget_append_child(parent, status_container);
+
+    // directory
+
+    CuiWidget *directory_label = create_widget(arena, CUI_WIDGET_TYPE_LABEL);
+
+    cui_widget_set_label(directory_label, app.directory);
+
+    cui_widget_append_child(status_container, directory_label);
+
+    // file count
+
+    CuiWidget *file_count_label = create_widget(arena, CUI_WIDGET_TYPE_LABEL);
+
+    cui_widget_set_label(file_count_label, cui_sprint(arena, CuiStringLiteral("%d files"), app.file_count));
+
+    cui_widget_append_child(status_container, file_count_label);
+
+    // folder count
+
+    CuiWidget *folder_count_label = create_widget(arena, CUI_WIDGET_TYPE_LABEL);
+
+    cui_widget_set_label(folder_count_label, cui_sprint(arena, CuiStringLiteral("%d folders"), app.folder_count));
+
+    cui_widget_append_child(status_container, folder_count_label);
+}
+
+static void
+create_results_row(CuiWidget *parent, CuiArena *arena)
+{
+    app.search_results = create_widget(arena, CUI_WIDGET_TYPE_BOX);
+
+    cui_widget_set_main_axis(app.search_results, CUI_AXIS_Y);
+    cui_widget_set_y_axis_gravity(app.search_results, CUI_GRAVITY_START);
+    cui_widget_add_flags(app.search_results, CUI_WIDGET_FLAG_DRAW_BACKGROUND | CUI_WIDGET_FLAG_CLIP_CONTENT);
+    cui_widget_set_border_width(app.search_results, 1.0f, 0.0f, 1.0f, 0.0f);
+
+    app.search_results->color_normal_border = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+    app.search_results->color_normal_background = CUI_COLOR_DEFAULT_TEXTINPUT_NORMAL_BACKGROUND;
+
+    cui_widget_append_child(parent, app.search_results);
+
+    app.last_search_result = create_widget(arena, CUI_WIDGET_TYPE_BOX);
+
+    cui_widget_append_child(app.search_results, app.last_search_result);
 }
 
 static void
@@ -347,47 +472,18 @@ create_user_interface(CuiWindow *window, CuiArena *arena)
     cui_widget_set_main_axis(app.root_widget, CUI_AXIS_Y);
     cui_widget_set_y_axis_gravity(app.root_widget, CUI_GRAVITY_START);
     cui_widget_add_flags(app.root_widget, CUI_WIDGET_FLAG_DRAW_BACKGROUND);
-    cui_widget_set_inline_padding(app.root_widget, 8.0f);
-    cui_widget_set_padding(app.root_widget, 8.0f, 8.0f, 4.0f, 8.0f);
 
-    app.search_input = create_widget(arena, CUI_WIDGET_TYPE_TEXTINPUT);
+    create_search_row(app.root_widget, arena);
 
-    cui_widget_set_icon(app.search_input, CUI_ICON_SEARCH_12);
-    cui_widget_set_label(app.search_input, CuiStringLiteral("Search files and folders"));
-    cui_widget_set_textinput_buffer(app.search_input, cui_alloc(arena, CuiKiB(1), CuiDefaultAllocationParams()), CuiKiB(1));
+    CuiWidget *bottom_container = create_widget(arena, CUI_WIDGET_TYPE_BOX);
 
-    app.search_input->on_action = on_input_action;
+    cui_widget_set_main_axis(bottom_container, CUI_AXIS_Y);
+    cui_widget_set_y_axis_gravity(bottom_container, CUI_GRAVITY_END);
 
-    cui_widget_append_child(app.root_widget, app.search_input);
+    cui_widget_append_child(app.root_widget, bottom_container);
 
-    CuiWidget *bottom = create_widget(arena, CUI_WIDGET_TYPE_BOX);
-
-    cui_widget_set_main_axis(bottom, CUI_AXIS_Y);
-    cui_widget_set_y_axis_gravity(bottom, CUI_GRAVITY_END);
-    cui_widget_set_inline_padding(bottom, 4.0f);
-
-    cui_widget_append_child(app.root_widget, bottom);
-
-    CuiWidget *directory_label = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_LABEL);
-
-    cui_widget_set_label(directory_label, app.directory);
-    cui_widget_set_padding(directory_label, 0.0f, 0.0f, 0.0f, 2.0f);
-
-    cui_widget_append_child(bottom, directory_label);
-
-    app.search_results = create_widget(arena, CUI_WIDGET_TYPE_BOX);
-
-    cui_widget_set_main_axis(app.search_results, CUI_AXIS_Y);
-    cui_widget_set_y_axis_gravity(app.search_results, CUI_GRAVITY_START);
-    cui_widget_add_flags(app.search_results, CUI_WIDGET_FLAG_DRAW_BACKGROUND);
-    cui_widget_set_border_width(app.search_results, 1.0f, 1.0f, 1.0f, 1.0f);
-    cui_widget_set_border_radius(app.search_results, 4.0f, 4.0f, 4.0f, 4.0f);
-
-    cui_widget_append_child(bottom, app.search_results);
-
-    app.last_search_result = create_widget(&app.widget_arena, CUI_WIDGET_TYPE_BOX);
-
-    cui_widget_append_child(app.search_results, app.last_search_result);
+    create_status_row(bottom_container, arena);
+    create_results_row(bottom_container, arena);
 
     cui_window_set_root_widget(window, app.root_widget);
 }
