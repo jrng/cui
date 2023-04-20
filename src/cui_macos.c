@@ -1,3 +1,4 @@
+#include <libproc.h>
 #include <sys/sysctl.h>
 #include <Carbon/Carbon.h>
 
@@ -1184,6 +1185,34 @@ cui_init(int argument_count, char **arguments)
     pthread_attr_destroy(&worker_thread_attr);
     pthread_attr_destroy(&interactive_background_thread_attr);
     pthread_attr_destroy(&non_interactive_background_thread_attr);
+
+    {
+        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&_cui_context.common.temporary_memory);
+
+        size_t buffer_size = CuiKiB(1);
+        char *buffer = cui_alloc_array(&_cui_context.common.temporary_memory, char, buffer_size, CuiDefaultAllocationParams());
+
+        int len = proc_pidpath(getpid(), buffer, buffer_size);
+        CuiString executable_path = cui_make_string(buffer, len);
+        cui_path_remove_last_directory(&executable_path);
+        _cui_context.common.executable_directory = cui_copy_string(&_cui_context.common.arena, executable_path);
+
+        CFBundleRef bundle = CFBundleGetMainBundle();
+        CFURLRef bundle_url = CFBundleCopyBundleURL(bundle);
+
+        CFStringRef uti;
+
+        if (CFURLCopyResourcePropertyForKey(bundle_url, kCFURLTypeIdentifierKey, &uti, 0) &&
+            uti && UTTypeConformsTo(uti, kUTTypeApplicationBundle))
+        {
+            if (CFURLGetFileSystemRepresentation(bundle_url, TRUE, (UInt8 *) buffer, buffer_size))
+            {
+                _cui_context.common.bundle_directory = cui_copy_string(&_cui_context.common.arena, CuiCString(buffer));
+            }
+        }
+
+        cui_end_temporary_memory(temp_memory);
+    }
 
     _cui_context.signal_event = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
                                                    location: NSMakePoint(0.0, 0.0)

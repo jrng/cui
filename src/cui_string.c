@@ -128,6 +128,37 @@ cui_path_concat(CuiArena *arena, CuiString a, CuiString b)
 #endif
 }
 
+void
+cui_path_remove_last_directory(CuiString *dir)
+{
+#if CUI_PLATFORM_WINDOWS
+    if ((dir->count > 1) && (dir->data[dir->count - 1] == '\\'))
+#else
+    if ((dir->count > 1) && (dir->data[dir->count - 1] == '/'))
+#endif
+    {
+        dir->count -= 1;
+    }
+
+#if CUI_PLATFORM_WINDOWS
+    while (dir->count && (dir->data[dir->count - 1] != '\\'))
+#else
+    while (dir->count && (dir->data[dir->count - 1] != '/'))
+#endif
+    {
+        dir->count -= 1;
+    }
+
+#if CUI_PLATFORM_WINDOWS
+    if ((dir->count > 1) && (dir->data[dir->count - 1] == '\\'))
+#else
+    if ((dir->count > 1) && (dir->data[dir->count - 1] == '/'))
+#endif
+    {
+        dir->count -= 1;
+    }
+}
+
 char *
 cui_to_c_string(CuiArena *arena, CuiString str)
 {

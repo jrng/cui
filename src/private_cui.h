@@ -417,6 +417,9 @@ typedef struct CuiContextCommon
     CuiArena arena;
     CuiArena temporary_memory;
 
+    CuiString bundle_directory;
+    CuiString executable_directory;
+
     CuiArena command_line_arguments_arena;
     CuiString *command_line_arguments;
 

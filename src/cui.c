@@ -954,6 +954,18 @@ cui_get_command_line_arguments(void)
     return _cui_context.common.command_line_arguments;
 }
 
+CuiString
+cui_get_executable_directory(void)
+{
+    return _cui_context.common.executable_directory;
+}
+
+CuiString
+cui_get_bundle_directory(void)
+{
+    return _cui_context.common.bundle_directory;
+}
+
 void
 cui_set_signal_callback(void (*signal_callback)(void))
 {

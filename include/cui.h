@@ -1150,6 +1150,7 @@ CuiString cui_string_trim(CuiString str);
 CuiString cui_copy_string(CuiArena *arena, CuiString str);
 CuiString cui_string_concat_n(CuiArena *arena, int32_t n, ...);
 CuiString cui_path_concat(CuiArena *arena, CuiString a, CuiString b);
+void cui_path_remove_last_directory(CuiString *dir);
 
 char * cui_to_c_string(CuiArena *arena, CuiString str);
 
@@ -1439,6 +1440,8 @@ void cui_draw_fill_icon(CuiGraphicsContext *ctx, float x, float y, float scale, 
 
 CuiString *cui_get_files_to_open(void);
 CuiString *cui_get_command_line_arguments(void);
+CuiString cui_get_executable_directory(void);
+CuiString cui_get_bundle_directory(void);
 
 bool cui_init(int argument_count, char **arguments);
 int cui_main_loop(void);

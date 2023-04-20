@@ -3664,6 +3664,20 @@ cui_init(int argument_count, char **arguments)
     pthread_t non_interactive_background_thread;
     pthread_create(&non_interactive_background_thread, 0, _cui_background_thread_proc, &_cui_context.common.non_interactive_background_thread_queue);
 
+    {
+        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&_cui_context.common.temporary_memory);
+
+        size_t buffer_size = CuiKiB(1);
+        char *executable_directory = cui_alloc_array(&_cui_context.common.temporary_memory, char, buffer_size, CuiDefaultAllocationParams());
+
+        ssize_t len = readlink("/proc/self/exe", executable_directory, buffer_size);
+        CuiString executable_path = cui_make_string(executable_directory, len);
+        cui_path_remove_last_directory(&executable_path);
+        _cui_context.common.executable_directory = cui_copy_string(&_cui_context.common.arena, executable_path);
+
+        cui_end_temporary_memory(temp_memory);
+    }
+
     bool backend_initialized = false;
 
 #if CUI_BACKEND_WAYLAND_ENABLED

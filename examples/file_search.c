@@ -523,7 +523,13 @@ CUI_PLATFORM_MAIN
     }
     else
     {
-        app.directory = cui_platform_get_current_working_directory(&app.temporary_memory, &app.widget_arena);
+        app.directory = cui_get_bundle_directory();
+        cui_path_remove_last_directory(&app.directory);
+
+        if (!app.directory.count)
+        {
+            app.directory = cui_platform_get_current_working_directory(&app.temporary_memory, &app.widget_arena);
+        }
     }
 
     CuiString index_filename = cui_path_concat(&app.temporary_memory, app.directory, CuiStringLiteral("file_index.txt"));
