@@ -503,9 +503,30 @@ CUI_PLATFORM_MAIN
     cui_arena_allocate(&app.files_arena, CuiMiB(64));
     cui_arena_allocate(&app.file_names_arena, CuiMiB(32));
 
-    app.directory = cui_platform_get_current_working_directory(&app.temporary_memory, &app.widget_arena);
+    CuiString directory = { 0 };
 
-    CuiString index_filename = CuiStringLiteral("file_index.txt");
+    CuiString *files_to_open = cui_get_files_to_open();
+    CuiString *arguments = cui_get_command_line_arguments();
+
+    if (cui_array_count(files_to_open) > 0)
+    {
+        directory = files_to_open[0];
+    }
+    else if (cui_array_count(arguments) > 0)
+    {
+        directory = arguments[0];
+    }
+
+    if (directory.count)
+    {
+        app.directory = directory;
+    }
+    else
+    {
+        app.directory = cui_platform_get_current_working_directory(&app.temporary_memory, &app.widget_arena);
+    }
+
+    CuiString index_filename = cui_path_concat(&app.temporary_memory, app.directory, CuiStringLiteral("file_index.txt"));
 
     if (cui_platform_file_exists(&app.temporary_memory, index_filename))
     {
