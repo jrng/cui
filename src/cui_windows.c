@@ -1087,6 +1087,46 @@ cui_platform_get_performance_frequency(void)
     return frequency.QuadPart;
 }
 
+uint32_t
+cui_platform_get_core_count(void)
+{
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+
+    return system_info.dwNumberOfProcessors;
+}
+
+uint32_t
+cui_platform_get_performance_core_count(void)
+{
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+
+    return system_info.dwNumberOfProcessors;
+}
+
+uint32_t
+cui_platform_get_efficiency_core_count(void)
+{
+    return 0;
+}
+
+bool
+cui_platform_file_exists(CuiArena *temporary_memory, CuiString filename)
+{
+    bool result;
+
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, filename);
+    DWORD file_attr = GetFileAttributes((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string));
+    result = (file_attr != INVALID_FILE_ATTRIBUTES);
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
 CuiFile *
 cui_platform_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode)
 {
@@ -1279,30 +1319,6 @@ cui_platform_get_files(CuiArena *temporary_memory, CuiArena *arena, CuiString di
             }
         }
     }
-}
-
-uint32_t
-cui_platform_get_core_count(void)
-{
-    SYSTEM_INFO system_info;
-    GetSystemInfo(&system_info);
-
-    return system_info.dwNumberOfProcessors;
-}
-
-uint32_t
-cui_platform_get_performance_core_count(void)
-{
-    SYSTEM_INFO system_info;
-    GetSystemInfo(&system_info);
-
-    return system_info.dwNumberOfProcessors;
-}
-
-uint32_t
-cui_platform_get_efficiency_core_count(void)
-{
-    return 0;
 }
 
 void
