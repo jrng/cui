@@ -973,7 +973,7 @@ cui_set_signal_callback(void (*signal_callback)(void))
 }
 
 int
-cui_main_loop()
+cui_main_loop(void)
 {
     _cui_context.common.main_loop_is_running = true;
 

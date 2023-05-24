@@ -2,7 +2,7 @@
 #define CUI_SOFTWARE_RENDERER_TILE_COUNT_Y 4
 
 static CuiRendererSoftware *
-_cui_create_software_renderer()
+_cui_create_software_renderer(void)
 {
     uint64_t renderer_size          = CuiAlign(sizeof(CuiRendererSoftware), 16);
     uint64_t texture_operation_size = CuiAlign(_CUI_MAX_TEXTURE_OPERATION_COUNT * sizeof(CuiTextureOperation), 16);

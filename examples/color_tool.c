@@ -321,7 +321,7 @@ darken(CuiColor color, float amount)
 }
 
 static void
-update_output()
+update_output(void)
 {
     cui_arena_clear(&app.output_arena);
 
@@ -366,7 +366,7 @@ update_output()
 }
 
 static void
-update_hsv()
+update_hsv(void)
 {
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&app.temporary_memory);
 
@@ -382,7 +382,7 @@ update_hsv()
 }
 
 static void
-update_hsl()
+update_hsl(void)
 {
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&app.temporary_memory);
 

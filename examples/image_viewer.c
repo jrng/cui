@@ -210,7 +210,7 @@ image_view_handle_event(CuiWidget *widget, CuiEventType event_type)
 }
 
 static CuiString
-get_prev_image_filename()
+get_prev_image_filename(void)
 {
     int32_t index = 0;
     int32_t count = cui_array_count(app.files_list);
@@ -236,7 +236,7 @@ get_prev_image_filename()
 }
 
 static CuiString
-get_next_image_filename()
+get_next_image_filename(void)
 {
     int32_t index = 0;
     int32_t count = cui_array_count(app.files_list);
