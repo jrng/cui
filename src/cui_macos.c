@@ -1186,6 +1186,9 @@ cui_init(int argument_count, char **arguments)
     pthread_attr_destroy(&interactive_background_thread_attr);
     pthread_attr_destroy(&non_interactive_background_thread_attr);
 
+    // This enables key repeats for insertText
+    [[NSUserDefaults standardUserDefaults] setBool: NO forKey: @"ApplePressAndHoldEnabled"];
+
     {
         CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&_cui_context.common.temporary_memory);
 
