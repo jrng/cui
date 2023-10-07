@@ -39,7 +39,7 @@ dynamic (`libcui.so`) or the static (`libcui.a`) library.
 
 Per default the build will use background jobs to parallelize the compilation.
 This will lead to error messages getting printed out of order. To get them in
-order use `./build_linux.sh -no_jobs [debug|redebug|release]`.
+order use `./build_linux.sh -no_jobs [debug|reldebug|release]`.
 
 ### macOS
 
@@ -53,7 +53,7 @@ dynamic (`libcui.so`) or the static (`libcui.a`) library.
 
 Per default the build will use background jobs to parallelize the compilation.
 This will lead to error messages getting printed out of order. To get them in
-order use `./build_macos.sh -no_jobs [debug|redebug|release]`.
+order use `./build_macos.sh -no_jobs [debug|reldebug|release]`.
 
 ### Windows
 
@@ -77,7 +77,7 @@ dynamic (`libcui.so`) or the static (`libcui.a`) library.
 
 Per default the build will use background jobs to parallelize the compilation.
 This will lead to error messages getting printed out of order. To get them in
-order use `./build_android.sh -no_jobs [debug|redebug|release]`.
+order use `./build_android.sh -no_jobs [debug|reldebug|release]`.
 
 ## Configuration
 
@@ -96,7 +96,7 @@ CUI_RENDERER_SOFTWARE="off"
 CUI_RENDERER_OPENGLES2="on"
 ```
 
-These configuration files are currently not supported on Windows.
+These configuration files are currently **not** supported on Windows.
 
 ## Examples
 
@@ -105,5 +105,6 @@ how to use it in your own code. You can find all of these in `examples`. All exa
 are build with CUI automatically. Just run one of the `build_*` files mentioned above.
 
   - `color_tool` - Color conversion tool
-  - `image_viewer` - Simple image viewer which supports QOI and JPEG
+  - `file_search` - A file search utility
+  - `image_viewer` - Simple image viewer which supports QOI, BMP and JPEG
   - `interface_browser` - An overview app for all the available widget types
