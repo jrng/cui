@@ -63,6 +63,7 @@ _cui_parse_egl_client_extensions(void)
 
 #include <sys/shm.h>
 #include <X11/Xutil.h>
+#include <X11/Xresource.h>
 #include <X11/cursorfont.h>
 #include <X11/extensions/Xrandr.h>
 
@@ -456,6 +457,41 @@ _cui_initialize_x11(void)
             }
 
             XFree(settings_buffer);
+        }
+    }
+    else
+    {
+        XrmInitialize();
+
+        char *resource_manager = XResourceManagerString(_cui_context.x11_display);
+
+        if (resource_manager)
+        {
+            XrmDatabase database = XrmGetStringDatabase(resource_manager);
+
+            if (database)
+            {
+                char *type;
+                XrmValue value;
+
+                if (XrmGetResource(database, "Xft.dpi", "String", &type, &value))
+                {
+                    CuiString type_str = CuiCString(type);
+
+                    if (value.addr && cui_string_equals(type_str, CuiStringLiteral("String")))
+                    {
+                        CuiString value_str = CuiCString(value.addr);
+                        int32_t desktop_scale = (cui_parse_int32(value_str) + 48) / 96;
+
+                        if (desktop_scale > 0)
+                        {
+                            _cui_context.x11_desktop_scale = desktop_scale;
+                        }
+                    }
+                }
+
+                XrmDestroyDatabase(database);
+            }
         }
     }
 
