@@ -166,8 +166,8 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 #if CUI_DEBUG_BUILD
 

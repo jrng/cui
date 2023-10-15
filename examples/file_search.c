@@ -547,8 +547,8 @@ CUI_PLATFORM_MAIN
     int32_t file_count = cui_array_count(app.files);
 
     printf("file_count = %d\n", file_count);
-    printf("files_arena = %llu / %llu\n", app.files_arena.occupied, app.files_arena.capacity);
-    printf("file_names_arena = %llu / %llu\n", app.file_names_arena.occupied, app.file_names_arena.capacity);
+    printf("files_arena = %" PRIu64 " / %" PRIu64 "\n", app.files_arena.occupied, app.files_arena.capacity);
+    printf("file_names_arena = %" PRIu64 " / %" PRIu64 "\n", app.file_names_arena.occupied, app.file_names_arena.capacity);
 
 #if 0
     for (int32_t i = 0; i < file_count; i += 1)

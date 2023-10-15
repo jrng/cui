@@ -78,7 +78,7 @@ _cui_opengles2_renderer_create_program(char *header_source, char *vertex_source,
 }
 
 static CuiRendererOpengles2 *
-_cui_create_opengles2_renderer()
+_cui_create_opengles2_renderer(void)
 {
     GLint major_version = 2;
     glGetIntegerv(GL_MAJOR_VERSION, &major_version);
