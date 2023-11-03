@@ -10,7 +10,7 @@ JAVA_HOME="/usr/lib64/openjdk-11/bin"
 REL_PATH=$(dirname "$0")
 
 if [ -f "${REL_PATH}/build_config_android.sh" ]; then
-    source "${REL_PATH}/build_config_android.sh"
+    . "${REL_PATH}/build_config_android.sh"
 fi
 
 compile () {

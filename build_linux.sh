@@ -20,7 +20,7 @@ CUI_FRAMEBUFFER_SCREENSHOT="off"
 REL_PATH=$(dirname "$0")
 
 if [ -f "${REL_PATH}/build_config_linux.sh" ]; then
-    source "${REL_PATH}/build_config_linux.sh"
+    . "${REL_PATH}/build_config_linux.sh"
 fi
 
 compile () {

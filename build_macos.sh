@@ -14,7 +14,7 @@ CUI_FRAMEBUFFER_SCREENSHOT="off"
 REL_PATH=$(dirname "$0")
 
 if [ -f "${REL_PATH}/build_config_macos.sh" ]; then
-    source "${REL_PATH}/build_config_macos.sh"
+    . "${REL_PATH}/build_config_macos.sh"
 fi
 
 compile () {
