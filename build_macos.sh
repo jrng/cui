@@ -47,7 +47,7 @@ LINKER_FLAGS="-framework AppKit"
 DEFINES=""
 
 if [ "$(uname)" != "Darwin" ]; then
-    echo "It doesn't look like your running on macos. You might want to check that."
+    echo "It doesn't look like you are running on macos. You might want to check that."
 fi
 
 if [ "${CUI_RENDERER_SOFTWARE}" != "on" ] && [ "${CUI_RENDERER_METAL}" != "on" ]; then

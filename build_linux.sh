@@ -42,7 +42,7 @@ LINKER_FLAGS="-lm -pthread"
 DEFINES=""
 
 if [ "$(uname)" != "Linux" ]; then
-    echo "It doesn't look like your running on linux. You might want to check that."
+    echo "It doesn't look like you are running on linux. You might want to check that."
 fi
 
 if [ "${CUI_BACKEND_X11}" != "on" ] && [ "${CUI_BACKEND_WAYLAND}" != "on" ]; then
