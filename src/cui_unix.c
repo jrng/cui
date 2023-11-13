@@ -171,7 +171,7 @@ CuiFile *
 cui_platform_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode)
 {
     CuiFile *result = 0;
-    mode_t access_mode = 0;
+    int access_mode = 0;
 
     if ((mode & CUI_FILE_MODE_READ) && (mode & CUI_FILE_MODE_WRITE))
     {
