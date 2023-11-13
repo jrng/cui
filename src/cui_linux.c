@@ -392,7 +392,7 @@ _cui_initialize_x11(void)
         return false;
     }
 
-    _cui_context.x11_desktop_scale = 1.0f;
+    _cui_context.x11_desktop_scale = 1;
     _cui_context.double_click_time = _CUI_DEFAULT_DOUBLE_CLICK_TIME;
 
     _cui_context.x11_default_screen = DefaultScreen(_cui_context.x11_display);
