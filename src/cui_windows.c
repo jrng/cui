@@ -1,4 +1,4 @@
-#include <VersionHelpers.h>
+#include <versionhelpers.h>
 #include <windowsx.h>
 #include <uxtheme.h>
 #include <vssym32.h>
@@ -6,6 +6,8 @@
 static DWORD
 _cui_worker_thread_proc(void *data)
 {
+    (void) data;
+
     CuiWorkerThreadQueue *queue = &_cui_context.common.worker_thread_queue;
 
     for (;;)
@@ -483,18 +485,16 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
                 if (!cui_window_is_fullscreen(window))
                 {
-                    int frame_x, frame_y, border_padding;
+                    int frame_y, border_padding;
 
                     // TODO: cache those on dpi change
                     if (_cui_context.GetSystemMetricsForDpi)
                     {
-                        frame_x = _cui_context.GetSystemMetricsForDpi(SM_CXSIZEFRAME, window->dpi);
                         frame_y = _cui_context.GetSystemMetricsForDpi(SM_CYSIZEFRAME, window->dpi);
                         border_padding = _cui_context.GetSystemMetricsForDpi(SM_CXPADDEDBORDER, window->dpi);
                     }
                     else
                     {
-                        frame_x = GetSystemMetrics(SM_CXSIZEFRAME);
                         frame_y = GetSystemMetrics(SM_CYSIZEFRAME);
                         border_padding = GetSystemMetrics(SM_CXPADDEDBORDER);
                     }
@@ -1276,6 +1276,9 @@ cui_platform_file_close(CuiFile *file)
 CuiString
 cui_platform_get_canonical_filename(CuiArena *temporary_memory, CuiArena *arena, CuiString filename)
 {
+    (void) temporary_memory;
+    (void) arena;
+
     CuiString result = { 0 };
 
     result = filename;
@@ -1502,6 +1505,8 @@ cui_window_create(uint32_t creation_flags)
 
     window->font_id = _cui_font_manager_find_font(&window->base.temporary_memory, &window->base.font_manager, window->base.ui_scale,
                                                   cui_make_sized_font_spec(CuiStringLiteral("arial"),  14.0f, 1.0f),
+                                                  // fallback font for wine
+                                                  cui_make_sized_font_spec(CuiStringLiteral("consola"), 14.0f, 1.0f),
                                                   cui_make_sized_font_spec(CuiStringLiteral("seguiemj"), 14.0f, 1.0f));
 
     cui_arena_allocate(&window->arena, CuiKiB(4));

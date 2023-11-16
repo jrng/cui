@@ -169,6 +169,10 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+#if CUI_PLATFORM_WINDOWS
+#  include <intrin.h>
+#endif
+
 #if CUI_DEBUG_BUILD
 
 #  if CUI_PLATFORM_ANDROID
@@ -179,6 +183,9 @@ static inline void
 _cui_assert(const char *expression, const char *file, int line_number)
 {
 #if CUI_PLATFORM_WINDOWS
+    (void) expression;
+    (void) file;
+    (void) line_number;
     __debugbreak();
 #else
 #  if CUI_PLATFORM_ANDROID
@@ -1503,7 +1510,9 @@ _cui_array_grow(void *array, int32_t new_allocated, int32_t item_size, CuiArena 
 
 #if CUI_PLATFORM_WINDOWS
 
-#define UNICODE
+#ifndef UNICODE
+#  define UNICODE
+#endif
 #define _UNICODE
 #define NOMINMAX
 
