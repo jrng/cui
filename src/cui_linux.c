@@ -3940,6 +3940,10 @@ cui_window_create(uint32_t creation_flags)
             cui_widget_set_border_radius(window->close_button, 0.0f, 3.0f, 0.0f, 0.0f);
             cui_widget_set_padding(window->close_button, 8.0f, 14.0f, 8.0f, 14.0f);
             cui_widget_set_box_shadow(window->close_button, 0.0f, 0.0f, 0.0f);
+
+            window->close_button->color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+            window->close_button->color_normal_icon = CUI_COLOR_WINDOW_TITLEBAR_ICON;
+
             cui_widget_append_child(window->button_layer, window->close_button);
 
             window->close_button->on_action = _cui_window_on_close_button;
@@ -3955,6 +3959,10 @@ cui_window_create(uint32_t creation_flags)
                 cui_widget_set_border_radius(window->maximize_button, 0.0f, 0.0f, 0.0f, 0.0f);
                 cui_widget_set_padding(window->maximize_button, 8.0f, 14.0f, 8.0f, 14.0f);
                 cui_widget_set_box_shadow(window->maximize_button, 0.0f, 0.0f, 0.0f);
+
+                window->maximize_button->color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+                window->maximize_button->color_normal_icon = CUI_COLOR_WINDOW_TITLEBAR_ICON;
+
                 cui_widget_append_child(window->button_layer, window->maximize_button);
 
                 window->maximize_button->on_action = _cui_window_on_maximize_button;
@@ -3969,6 +3977,10 @@ cui_window_create(uint32_t creation_flags)
             cui_widget_set_border_radius(window->minimize_button, 0.0f, 0.0f, 0.0f, 0.0f);
             cui_widget_set_padding(window->minimize_button, 8.0f, 14.0f, 8.0f, 14.0f);
             cui_widget_set_box_shadow(window->minimize_button, 0.0f, 0.0f, 0.0f);
+
+            window->minimize_button->color_normal_background = CUI_COLOR_WINDOW_TITLEBAR_BACKGROUND;
+            window->minimize_button->color_normal_icon = CUI_COLOR_WINDOW_TITLEBAR_ICON;
+
             cui_widget_append_child(window->button_layer, window->minimize_button);
 
             window->minimize_button->on_action = _cui_window_on_minimize_button;
@@ -4479,9 +4491,38 @@ cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
 float
 cui_window_get_titlebar_height(CuiWindow *window)
 {
-    (void) window;
+    float titlebar_height = 0.0f;
 
-    return 0.0f;
+    switch (_cui_context.backend)
+    {
+        case CUI_LINUX_BACKEND_NONE:
+        {
+            CuiAssert(!"unsupported");
+        } break;
+
+#if CUI_BACKEND_WAYLAND_ENABLED
+
+        case CUI_LINUX_BACKEND_WAYLAND:
+        {
+            if (window->do_client_side_decoration)
+            {
+                titlebar_height = _CUI_WINDOW_TITLEBAR_HEIGHT;
+            }
+        } break;
+
+#endif
+
+#if CUI_BACKEND_X11_ENABLED
+
+        case CUI_LINUX_BACKEND_X11:
+        {
+        } break;
+
+#endif
+
+    }
+
+    return titlebar_height;
 }
 
 void
