@@ -8,6 +8,8 @@ struct CuiWindow
     int32_t width;
     int32_t height;
 
+    float titlebar_height;
+
     UINT dpi;
 
     HWND window_handle;
