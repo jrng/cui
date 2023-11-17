@@ -795,6 +795,24 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
             cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
         } break;
 
+        case WM_MOUSEHWHEEL:
+        {
+            window->base.event.wheel.is_precise_scrolling = false;
+            // TODO: where should this 3 be applied?
+            window->base.event.wheel.dx = (float) ((3 * GET_WHEEL_DELTA_WPARAM(w_param)) / WHEEL_DELTA);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+        } break;
+
+        case WM_MOUSEWHEEL:
+        {
+            window->base.event.wheel.is_precise_scrolling = false;
+            // TODO: where should this 3 be applied?
+            window->base.event.wheel.dy = (float) ((3 * GET_WHEEL_DELTA_WPARAM(w_param)) / WHEEL_DELTA);
+
+            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+        } break;
+
 #define _CUI_KEY_DOWN_EVENT(key_id)                                 \
     window->base.event.key.codepoint       = (key_id);              \
     window->base.event.key.alt_is_down     = window->alt_is_down;   \
