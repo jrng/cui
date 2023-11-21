@@ -1788,6 +1788,7 @@ cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
             if (window->use_custom_decoration)
             {
                 SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
+                cui_widget_set_preferred_size(window->titlebar, 0.0f, window->titlebar_height);
             }
             else
             {
@@ -1816,6 +1817,7 @@ cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
                 if (window->use_custom_decoration)
                 {
                     SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~(WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX));
+                    cui_widget_set_preferred_size(window->titlebar, 0.0f, 0.0f);
                 }
                 else
                 {
