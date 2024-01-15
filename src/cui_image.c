@@ -1411,6 +1411,162 @@ cui_image_decode_qoi(CuiBitmap *bitmap, CuiString data, CuiArena *arena)
     return true;
 }
 
+void
+_cui_pnm_skip_whitespace(CuiString *str)
+{
+    while (str->count > 0)
+    {
+        if (str->data[0] == '#')
+        {
+            while (str->count > 0)
+            {
+                if (str->data[0] == '\n')
+                {
+                    cui_string_advance(str, 1);
+                    break;
+                }
+
+                cui_string_advance(str, 1);
+            }
+        }
+        else if (cui_unicode_is_whitespace(str->data[0]))
+        {
+            cui_string_advance(str, 1);
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+int32_t
+_cui_pnm_parse_integer(CuiString *str)
+{
+    int32_t value = 0;
+    int64_t index = 0;
+
+    while ((index < str->count) && cui_unicode_is_digit(str->data[index]))
+    {
+        value = (10 * value) + (str->data[index] - '0');
+        index += 1;
+    }
+
+    str->data += index;
+    str->count -= index;
+
+    return value;
+}
+
+bool
+cui_image_decode_pbm(CuiBitmap *bitmap, CuiString data, CuiArena *arena)
+{
+    if (!cui_string_starts_with(data, CuiStringLiteral("P1")) &&
+        !cui_string_starts_with(data, CuiStringLiteral("P4")))
+    {
+        return false;
+    }
+
+    bool is_ascii = true;
+
+    if (cui_string_starts_with(data, CuiStringLiteral("P4")))
+    {
+        is_ascii = false;
+    }
+
+    cui_string_advance(&data, 2);
+
+    _cui_pnm_skip_whitespace(&data);
+
+    int32_t width = _cui_pnm_parse_integer(&data);
+
+    _cui_pnm_skip_whitespace(&data);
+
+    int32_t height = _cui_pnm_parse_integer(&data);
+
+    if (is_ascii)
+    {
+        _cui_pnm_skip_whitespace(&data);
+    }
+    else
+    {
+        cui_string_advance(&data, 1);
+    }
+
+    bitmap->width  = width;
+    bitmap->height = height;
+    bitmap->stride = bitmap->width * 4;
+    bitmap->pixels = cui_alloc(arena, bitmap->stride * bitmap->height, CuiDefaultAllocationParams());
+
+    if (is_ascii)
+    {
+        uint8_t *row = (uint8_t *) bitmap->pixels;
+
+        for (int32_t y = 0; y < bitmap->height; y += 1)
+        {
+            uint32_t *pixel = (uint32_t *) row;
+
+            for (int32_t x = 0; x < bitmap->width; x += 1)
+            {
+                uint8_t p = data.data[0];
+                cui_string_advance(&data, 1);
+                _cui_pnm_skip_whitespace(&data);
+
+                if (p == '0')
+                {
+                    *pixel = 0xFFFFFFFF;
+                }
+                else
+                {
+                    *pixel = 0xFF000000;
+                }
+
+                pixel += 1;
+            }
+
+            row += bitmap->stride;
+        }
+    }
+    else
+    {
+        int32_t stride = (bitmap->width + 7) / 8;
+        int32_t size = stride * bitmap->height;
+
+        if (data.count >= size)
+        {
+            uint8_t *row = (uint8_t *) bitmap->pixels;
+
+            for (int32_t y = 0; y < bitmap->height; y += 1)
+            {
+                uint32_t *pixel = (uint32_t *) row;
+
+                for (int32_t x = 0; x < bitmap->width; x += 1)
+                {
+                    int32_t byte = (stride * y) + (x / 8);
+                    int32_t bit = x % 8;
+
+                    int32_t p = data.data[byte] & (0x80 >> bit);
+
+                    if (p)
+                    {
+                        *pixel = 0xFF000000;
+                    }
+                    else
+                    {
+                        *pixel = 0xFFFFFFFF;
+                    }
+
+                    pixel += 1;
+                }
+
+                row += bitmap->stride;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool
 cui_image_decode(CuiArena *temporary_memory, CuiBitmap *bitmap, CuiString data, CuiArena *arena,
                  CuiImageMetaData **meta_data, CuiArena *meta_data_arena)
@@ -1426,6 +1582,11 @@ cui_image_decode(CuiArena *temporary_memory, CuiBitmap *bitmap, CuiString data, 
     else if (cui_string_starts_with(data, CuiStringLiteral("qoif")))
     {
         return cui_image_decode_qoi(bitmap, data, arena);
+    }
+    else if (cui_string_starts_with(data, CuiStringLiteral("P1")) ||
+             cui_string_starts_with(data, CuiStringLiteral("P4")))
+    {
+        return cui_image_decode_pbm(bitmap, data, arena);
     }
 
     return false;

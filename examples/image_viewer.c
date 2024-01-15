@@ -641,7 +641,8 @@ CUI_PLATFORM_MAIN
 
             // TODO: case insensitive
             if (!cui_string_starts_with(info.name, CuiStringLiteral(".")) &&
-                (cui_string_ends_with(info.name, CuiStringLiteral(".qoi")) ||
+                (cui_string_ends_with(info.name, CuiStringLiteral(".pbm")) ||
+                 cui_string_ends_with(info.name, CuiStringLiteral(".qoi")) ||
                  cui_string_ends_with(info.name, CuiStringLiteral(".bmp")) ||
                  cui_string_ends_with(info.name, CuiStringLiteral(".jpg")) ||
                  cui_string_ends_with(info.name, CuiStringLiteral(".jpeg")) ||

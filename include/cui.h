@@ -1298,6 +1298,7 @@ void cui_bitmap_clear(CuiBitmap *bitmap, CuiColor clear_color);
 
 CuiString cui_image_encode_bmp(CuiBitmap bitmap, bool top_to_bottom, bool bgra, CuiArena *arena);
 
+bool cui_image_decode_pbm(CuiBitmap *bitmap, CuiString data, CuiArena *arena);
 bool cui_image_decode_qoi(CuiBitmap *bitmap, CuiString data, CuiArena *arena);
 bool cui_image_decode_bmp(CuiBitmap *bitmap, CuiString data, CuiArena *arena);
 bool cui_image_decode_jpeg(CuiArena *temporary_memory, CuiBitmap *bitmap, CuiString data, CuiArena *arena, CuiImageMetaData **meta_data, CuiArena *meta_data_arena);
@@ -1494,7 +1495,11 @@ _cui_array_grow(void *array, int32_t new_allocated, int32_t item_size, CuiArena 
     else
     {
         CuiAssert(arena);
-        CuiAssert(new_allocated > 0);
+
+        if (new_allocated <= 0)
+        {
+            new_allocated = 16;
+        }
 
         int32_t size = sizeof(CuiArrayHeader) + (new_allocated * item_size);
 
