@@ -1298,6 +1298,7 @@ void cui_bitmap_clear(CuiBitmap *bitmap, CuiColor clear_color);
 
 CuiString cui_image_encode_bmp(CuiBitmap bitmap, bool top_to_bottom, bool bgra, CuiArena *arena);
 
+bool cui_image_decode_pgm(CuiBitmap *bitmap, CuiString data, CuiArena *arena);
 bool cui_image_decode_pbm(CuiBitmap *bitmap, CuiString data, CuiArena *arena);
 bool cui_image_decode_qoi(CuiBitmap *bitmap, CuiString data, CuiArena *arena);
 bool cui_image_decode_bmp(CuiBitmap *bitmap, CuiString data, CuiArena *arena);

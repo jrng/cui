@@ -1568,6 +1568,135 @@ cui_image_decode_pbm(CuiBitmap *bitmap, CuiString data, CuiArena *arena)
 }
 
 bool
+cui_image_decode_pgm(CuiBitmap *bitmap, CuiString data, CuiArena *arena)
+{
+    if (!cui_string_starts_with(data, CuiStringLiteral("P2")) &&
+        !cui_string_starts_with(data, CuiStringLiteral("P5")))
+    {
+        return false;
+    }
+
+    bool is_ascii = true;
+    int32_t bytes_per_pixel = 1;
+
+    if (cui_string_starts_with(data, CuiStringLiteral("P5")))
+    {
+        is_ascii = false;
+    }
+
+    cui_string_advance(&data, 2);
+
+    _cui_pnm_skip_whitespace(&data);
+
+    int32_t width = _cui_pnm_parse_integer(&data);
+
+    _cui_pnm_skip_whitespace(&data);
+
+    int32_t height = _cui_pnm_parse_integer(&data);
+
+    _cui_pnm_skip_whitespace(&data);
+
+    int32_t max_value = _cui_pnm_parse_integer(&data);
+
+    if (max_value > 65535)
+    {
+        return false;
+    }
+
+    if (max_value > 255)
+    {
+        bytes_per_pixel = 2;
+    }
+
+    if (is_ascii)
+    {
+        _cui_pnm_skip_whitespace(&data);
+    }
+    else
+    {
+        cui_string_advance(&data, 1);
+    }
+
+    bitmap->width  = width;
+    bitmap->height = height;
+    bitmap->stride = bitmap->width * 4;
+    bitmap->pixels = cui_alloc(arena, bitmap->stride * bitmap->height, CuiDefaultAllocationParams());
+
+    if (is_ascii)
+    {
+        uint8_t *row = (uint8_t *) bitmap->pixels;
+
+        for (int32_t y = 0; y < bitmap->height; y += 1)
+        {
+            uint32_t *pixel = (uint32_t *) row;
+
+            for (int32_t x = 0; x < bitmap->width; x += 1)
+            {
+                _cui_pnm_skip_whitespace(&data);
+
+                int32_t pixel_value = _cui_pnm_parse_integer(&data);
+                float value = (float) pixel_value / (float) max_value;
+
+                CuiColor color;
+
+                color.r = value;
+                color.g = value;
+                color.b = value;
+                color.a = 1.0f;
+
+                *pixel = cui_color_pack_bgra(color);
+                pixel += 1;
+            }
+
+            row += bitmap->stride;
+        }
+    }
+    else
+    {
+        int32_t size = bitmap->width * bitmap->height * bytes_per_pixel;
+
+        if (data.count >= size)
+        {
+            uint8_t *row = (uint8_t *) bitmap->pixels;
+            uint8_t *src = (uint8_t *) data.data;
+
+            for (int32_t y = 0; y < bitmap->height; y += 1)
+            {
+                uint32_t *pixel = (uint32_t *) row;
+
+                for (int32_t x = 0; x < bitmap->width; x += 1)
+                {
+                    int32_t pixel_value = *src;
+
+                    if (bytes_per_pixel == 2)
+                    {
+                        pixel_value = (pixel_value << 8) | src[1];
+                    }
+
+                    float value = (float) pixel_value / (float) max_value;
+
+                    CuiColor color;
+
+                    color.r = value;
+                    color.g = value;
+                    color.b = value;
+                    color.a = 1.0f;
+
+                    *pixel = cui_color_pack_bgra(color);
+                    pixel += 1;
+
+                    src += bytes_per_pixel;
+                }
+
+                row += bitmap->stride;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool
 cui_image_decode(CuiArena *temporary_memory, CuiBitmap *bitmap, CuiString data, CuiArena *arena,
                  CuiImageMetaData **meta_data, CuiArena *meta_data_arena)
 {
@@ -1587,6 +1716,11 @@ cui_image_decode(CuiArena *temporary_memory, CuiBitmap *bitmap, CuiString data, 
              cui_string_starts_with(data, CuiStringLiteral("P4")))
     {
         return cui_image_decode_pbm(bitmap, data, arena);
+    }
+    else if (cui_string_starts_with(data, CuiStringLiteral("P2")) ||
+             cui_string_starts_with(data, CuiStringLiteral("P5")))
+    {
+        return cui_image_decode_pgm(bitmap, data, arena);
     }
 
     return false;
