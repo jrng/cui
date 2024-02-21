@@ -94,8 +94,8 @@ _cui_window_create_renderer(CuiWindow *window)
                 android_print("OpenGL ES Extensions: %s\n", glGetString(GL_EXTENSIONS));
 #endif
 
-                window->renderer.opengles2.egl_surface = egl_surface;
-                window->renderer.opengles2.egl_context = egl_context;
+                window->opengles2.egl_surface = egl_surface;
+                window->opengles2.egl_context = egl_context;
                 window->base.renderer = _cui_renderer_opengles2_create();
 
                 if (window->base.renderer)
@@ -140,16 +140,16 @@ _cui_window_destroy_renderer(CuiWindow *window)
     {
         eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-        if (window->renderer.opengles2.egl_context != EGL_NO_CONTEXT)
+        if (window->opengles2.egl_context != EGL_NO_CONTEXT)
         {
-            eglDestroyContext(_cui_context.egl_display, window->renderer.opengles2.egl_context);
-            window->renderer.opengles2.egl_context = EGL_NO_CONTEXT;
+            eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
+            window->opengles2.egl_context = EGL_NO_CONTEXT;
         }
 
-        if (window->renderer.opengles2.egl_surface != EGL_NO_SURFACE)
+        if (window->opengles2.egl_surface != EGL_NO_SURFACE)
         {
-            eglDestroySurface(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
-            window->renderer.opengles2.egl_surface = EGL_NO_SURFACE;
+            eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
+            window->opengles2.egl_surface = EGL_NO_SURFACE;
         }
     }
 }
@@ -356,66 +356,23 @@ _cui_on_window_focus_changed(ANativeActivity *activity, int has_focus)
     android_print("onWindowFocusChanged: %p, focus = %d\n", (void *) activity, has_focus);
 }
 
-static void
-_cui_window_draw(CuiWindow *window)
+static CuiFramebuffer *
+_cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
+    (void) width;
+    (void) height;
 
-    EGLint surface_width, surface_height;
+    CuiAssert(window->base.renderer);
+    CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_OPENGLES2);
 
-    eglQuerySurface(_cui_context.egl_display, window->renderer.opengles2.egl_surface, EGL_WIDTH, &surface_width);
-    eglQuerySurface(_cui_context.egl_display, window->renderer.opengles2.egl_surface, EGL_HEIGHT, &surface_height);
-
-    android_print("redraw w = %d, h = %d, sw = %d, sh = %d\n", window->width, window->height, surface_width, surface_height);
-
-    const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
-
-    if (window->base.platform_root_widget)
-    {
-        if (!window->base.glyph_cache.allocated)
-        {
-            _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
-                                        cui_window_allocate_texture_id(window));
-        }
-        else
-        {
-            _cui_glyph_cache_maybe_reset(&window->base.glyph_cache, command_buffer);
-        }
-
-        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-
-        CuiRect window_rect = cui_make_rect(0, 0, window->width, window->height);
-
-        CuiGraphicsContext ctx;
-        ctx.clip_rect_offset = 0;
-        ctx.clip_rect = window_rect;
-        ctx.window_rect = window_rect;
-        ctx.command_buffer = command_buffer;
-        ctx.glyph_cache = &window->base.glyph_cache;
-        ctx.temporary_memory = &window->base.temporary_memory;
-        ctx.font_manager = &window->base.font_manager;
-
-        if (window->base.color_theme)
-        {
-            color_theme = window->base.color_theme;
-        }
-
-        cui_widget_draw(window->base.platform_root_widget, &ctx, color_theme);
+    eglQuerySurface(_cui_context.egl_display, window->opengles2.egl_surface, EGL_WIDTH, &window->framebuffer.width);
+    eglQuerySurface(_cui_context.egl_display, window->opengles2.egl_surface, EGL_HEIGHT, &window->framebuffer.height);
 
 #if 0
-        int32_t texture_width = ctx.glyph_cache->texture.width;
-        int32_t texture_height = ctx.glyph_cache->texture.height;
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(0.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, texture_width, texture_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f),
-                                ctx.glyph_cache->texture_id, 0);
+    android_print("redraw w = %d, h = %d, sw = %d, sh = %d\n", window->width, window->height, surface_width, surface_height);
 #endif
 
-        cui_end_temporary_memory(temp_memory);
-    }
-
-    _cui_renderer_render(window->base.renderer, 0, window->width, window->height, command_buffer, CuiHexColor(0xFF000000));
+    return &window->framebuffer;
 }
 
 void
@@ -852,7 +809,8 @@ cui_step(void)
                                 cui_widget_layout(window->base.platform_root_widget, rect);
                             }
 
-                            _cui_window_draw(window);
+                            // The framebuffer size is queried in _cui_acquire_framebuffer()
+                            _cui_window_draw(window, 0, 0);
 
                             switch (window->base.renderer->type)
                             {
@@ -864,7 +822,7 @@ cui_step(void)
                                 case CUI_RENDERER_TYPE_OPENGLES2:
                                 {
 #  if CUI_RENDERER_OPENGLES2_ENABLED
-                                    eglSwapBuffers(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+                                    eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
 #  else
                                     CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif
@@ -952,7 +910,8 @@ cui_step(void)
                     {
                         pthread_mutex_lock(&_cui_context.platform_mutex);
 
-                        _cui_window_draw(window);
+                        // The framebuffer size is queried in _cui_acquire_framebuffer()
+                        _cui_window_draw(window, 0, 0);
 
                         switch (window->base.renderer->type)
                         {
@@ -964,7 +923,7 @@ cui_step(void)
                             case CUI_RENDERER_TYPE_OPENGLES2:
                             {
 #  if CUI_RENDERER_OPENGLES2_ENABLED
-                                eglSwapBuffers(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+                                eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
 #  else
                                 CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif
@@ -1119,7 +1078,8 @@ cui_step(void)
 
         if (_cui_context.native_window && window->base.needs_redraw)
         {
-            _cui_window_draw(window);
+            // The framebuffer size is queried in _cui_acquire_framebuffer()
+            _cui_window_draw(window, 0, 0);
 
             switch (window->base.renderer->type)
             {
@@ -1131,7 +1091,7 @@ cui_step(void)
                 case CUI_RENDERER_TYPE_OPENGLES2:
                 {
 #  if CUI_RENDERER_OPENGLES2_ENABLED
-                    eglSwapBuffers(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+                    eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
 #  else
                     CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif

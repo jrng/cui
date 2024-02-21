@@ -35,10 +35,6 @@ struct CuiWindow
 
     CuiFontId font_id;
 
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-    bool take_screenshot;
-#endif
-
     AppKitView *appkit_view;
     AppKitWindow *appkit_window;
     NSToolbar *appkit_toolbar;
@@ -47,6 +43,8 @@ struct CuiWindow
 
     CuiWidget *titlebar;
 
+    CuiFramebuffer framebuffer;
+
     union
     {
 
@@ -54,7 +52,7 @@ struct CuiWindow
 
         struct
         {
-            CuiBitmap backbuffer;
+            CuiBitmap backbuffer; // TODO: use the framebuffer bitmap
             int64_t backbuffer_memory_size;
 
             CGContextRef backbuffer_context;

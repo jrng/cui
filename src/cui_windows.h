@@ -25,10 +25,6 @@ struct CuiWindow
 
     bool use_custom_decoration;
 
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-    bool take_screenshot;
-#endif
-
     CuiFontId font_id;
 
     CuiWidget *titlebar;
@@ -37,6 +33,8 @@ struct CuiWindow
     CuiWidget *close_button;
     CuiWidget *title;
 
+    CuiFramebuffer framebuffer;
+
     union
     {
 
@@ -44,7 +42,7 @@ struct CuiWindow
 
         struct
         {
-            CuiBitmap backbuffer;
+            CuiBitmap backbuffer; // TODO: use the framebuffer bitmap
             int64_t backbuffer_memory_size;
         } software;
 

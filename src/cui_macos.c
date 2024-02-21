@@ -203,86 +203,23 @@ _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 
 #endif
 
-static void
-_cui_window_draw(CuiWindow *window)
+static CuiFramebuffer *
+_cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
-
-    if (window->base.platform_root_widget)
-    {
-        if (!window->base.glyph_cache.allocated)
-        {
-            _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
-                                        cui_window_allocate_texture_id(window));
-        }
-        else
-        {
-            _cui_glyph_cache_maybe_reset(&window->base.glyph_cache, command_buffer);
-        }
-
-        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-
-        CuiRect window_rect = cui_make_rect(0, 0, window->width, window->height);
-
-        CuiGraphicsContext ctx;
-        ctx.clip_rect_offset = 0;
-        ctx.clip_rect = window_rect;
-        ctx.window_rect = window_rect;
-        ctx.command_buffer = command_buffer;
-        ctx.glyph_cache = &window->base.glyph_cache;
-        ctx.temporary_memory = &window->base.temporary_memory;
-        ctx.font_manager = &window->base.font_manager;
-
-        const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
-
-        if (window->base.color_theme)
-        {
-            color_theme = window->base.color_theme;
-        }
-
-        cui_widget_draw(window->base.platform_root_widget, &ctx, color_theme);
-
-#if 0
-        int32_t texture_width = ctx.glyph_cache->texture.width;
-        int32_t texture_height = ctx.glyph_cache->texture.height;
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(0.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, texture_width, texture_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f),
-                                ctx.glyph_cache->texture_id, 0);
-#endif
-
-        cui_end_temporary_memory(temp_memory);
-    }
-
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-    CuiArena screenshot_arena;
-    CuiBitmap screenshot_bitmap;
-
-    if (window->take_screenshot)
-    {
-        cui_arena_allocate(&screenshot_arena, CuiMiB(32));
-    }
-#endif
+    CuiFramebuffer *framebuffer = 0;
 
     switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
 #if CUI_RENDERER_SOFTWARE_ENABLED
-            if ((window->renderer.software.backbuffer.width != window->width) ||
-                (window->renderer.software.backbuffer.height != window->height))
+            if ((window->renderer.software.backbuffer.width != width) || (window->renderer.software.backbuffer.height != height))
             {
-                _cui_window_resize_backbuffer(window, window->width, window->height);
+                _cui_window_resize_backbuffer(window, width, height);
             }
 
-            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-            _cui_renderer_software_render(renderer_software, &window->renderer.software.backbuffer,
-                                          command_buffer, CuiHexColor(0xFF000000));
-
-#  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-            screenshot_bitmap = window->renderer.software.backbuffer;
-#  endif
+            window->framebuffer.bitmap = window->renderer.software.backbuffer;
+            framebuffer = &window->framebuffer;
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #endif
@@ -296,7 +233,7 @@ _cui_window_draw(CuiWindow *window)
         case CUI_RENDERER_TYPE_METAL:
         {
 #if CUI_RENDERER_METAL_ENABLED
-            CGSize drawable_size = CGSizeMake((CGFloat) window->width, (CGFloat) window->height);
+            CGSize drawable_size = CGSizeMake((CGFloat) width, (CGFloat) height);
             CAMetalLayer *metal_layer = (CAMetalLayer *) window->appkit_view.layer;
 
             if ((metal_layer.drawableSize.width != drawable_size.width) ||
@@ -305,32 +242,11 @@ _cui_window_draw(CuiWindow *window)
                 metal_layer.drawableSize = drawable_size;
             }
 
-            id<CAMetalDrawable> drawable = [metal_layer nextDrawable];
+            framebuffer = &window->framebuffer;
 
-            if (drawable)
-            {
-                CuiRendererMetal *renderer_metal = CuiContainerOf(window->base.renderer, CuiRendererMetal, base);
-                _cui_renderer_metal_render(renderer_metal, drawable, window->width,
-                                           window->height, command_buffer, CuiHexColor(0xFF000000));
-
-#  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-                if (window->take_screenshot)
-                {
-                    screenshot_bitmap.width  = window->width;
-                    screenshot_bitmap.height = window->height;
-                    screenshot_bitmap.stride = screenshot_bitmap.width * 4;
-                    screenshot_bitmap.pixels = cui_alloc(&screenshot_arena, screenshot_bitmap.stride * screenshot_bitmap.height,
-                                                         CuiDefaultAllocationParams());
-
-                    [drawable.texture getBytes: screenshot_bitmap.pixels
-                                   bytesPerRow: screenshot_bitmap.stride
-                                    fromRegion: MTLRegionMake2D(0, 0, window->width, window->height)
-                                   mipmapLevel: 0];
-                }
-#  endif
-
-                [drawable present];
-            }
+            framebuffer->width = width;
+            framebuffer->height = height;
+            framebuffer->drawable = [metal_layer nextDrawable];
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
 #endif
@@ -342,28 +258,7 @@ _cui_window_draw(CuiWindow *window)
         } break;
     }
 
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-
-    if (window->take_screenshot)
-    {
-        CuiString bmp_data = cui_image_encode_bmp(screenshot_bitmap, true, true, &screenshot_arena);
-
-        CuiFile *screenshot_file = cui_platform_file_create(&screenshot_arena, CuiStringLiteral("screenshot_cui.bmp"));
-
-        if (screenshot_file)
-        {
-            cui_platform_file_truncate(screenshot_file, bmp_data.count);
-            cui_platform_file_write(screenshot_file, bmp_data.data, 0, bmp_data.count);
-            cui_platform_file_close(screenshot_file);
-        }
-
-        cui_arena_deallocate(&screenshot_arena);
-
-        window->take_screenshot = false;
-    }
-
-#endif
-
+    return framebuffer;
 }
 
 @implementation AppKitWindowDelegate
@@ -484,7 +379,7 @@ _cui_window_draw(CuiWindow *window)
             cui_widget_layout(cui_window->base.platform_root_widget, rect);
         }
 
-        _cui_window_draw(cui_window);
+        _cui_window_draw(cui_window, cui_window->width, cui_window->height);
 
         switch (cui_window->base.renderer->type)
         {
@@ -504,7 +399,9 @@ _cui_window_draw(CuiWindow *window)
 
             case CUI_RENDERER_TYPE_METAL:
             {
-#if !CUI_RENDERER_METAL_ENABLED
+#if CUI_RENDERER_METAL_ENABLED
+                [cui_window->framebuffer.drawable present];
+#else
                 CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
 #endif
             } break;
@@ -793,7 +690,7 @@ _cui_window_draw(CuiWindow *window)
         case kVK_F2:
         {
 #if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-            cui_window->take_screenshot = true;
+            cui_window->base.take_screenshot = true;
             cui_window->base.needs_redraw = true;
 #else
             _CUI_KEY_DOWN_EVENT(CUI_KEY_F2);
@@ -1610,7 +1507,7 @@ cui_step(void)
 
             if (window->base.needs_redraw)
             {
-                _cui_window_draw(window);
+                _cui_window_draw(window, window->width, window->height);
 
                 switch (window->base.renderer->type)
                 {
@@ -1630,7 +1527,9 @@ cui_step(void)
 
                     case CUI_RENDERER_TYPE_METAL:
                     {
-#if !CUI_RENDERER_METAL_ENABLED
+#if CUI_RENDERER_METAL_ENABLED
+                        [window->framebuffer.drawable present];
+#else
                         CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
 #endif
                     } break;

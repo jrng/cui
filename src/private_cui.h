@@ -372,6 +372,10 @@ typedef struct CuiWindowBase
 
     bool needs_redraw;
 
+#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+    bool take_screenshot;
+#endif
+
     // This is a bit mask where the index of the bit is the
     // texture id and a bit being 1 means this texture id is in use.
     uint32_t allocated_texture_ids;
@@ -627,6 +631,22 @@ typedef struct CuiRendererDirect3D11
 } CuiRendererDirect3D11;
 
 #endif
+
+typedef struct CuiFramebuffer
+{
+    int32_t width;
+    int32_t height;
+
+#if CUI_RENDERER_SOFTWARE_ENABLED
+    CuiBitmap bitmap;
+#endif
+
+#if CUI_RENDERER_METAL_ENABLED
+    id<CAMetalDrawable> drawable;
+#endif
+} CuiFramebuffer;
+
+static CuiFramebuffer *_cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height);
 
 #endif
 

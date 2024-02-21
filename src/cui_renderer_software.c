@@ -166,7 +166,7 @@ _cui_renderer_software_do_render_work(void *data)
 }
 
 static void
-_cui_renderer_software_render(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
+_cui_renderer_software_render(CuiRendererSoftware *renderer, CuiFramebuffer *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
@@ -196,17 +196,19 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiBitmap *framebuf
         }
     }
 
+    CuiBitmap *render_target = &framebuffer->bitmap;
+
     CuiRenderWork render_jobs[CUI_SOFTWARE_RENDERER_TILE_COUNT_X *
                               CUI_SOFTWARE_RENDERER_TILE_COUNT_Y];
 
-    uint32_t tile_width  = (framebuffer->width  + (CUI_SOFTWARE_RENDERER_TILE_COUNT_X - 1)) /
+    uint32_t tile_width  = (render_target->width  + (CUI_SOFTWARE_RENDERER_TILE_COUNT_X - 1)) /
                            CUI_SOFTWARE_RENDERER_TILE_COUNT_X;
-    uint32_t tile_height = (framebuffer->height + (CUI_SOFTWARE_RENDERER_TILE_COUNT_Y - 1)) /
+    uint32_t tile_height = (render_target->height + (CUI_SOFTWARE_RENDERER_TILE_COUNT_Y - 1)) /
                            CUI_SOFTWARE_RENDERER_TILE_COUNT_Y;
 
     tile_width = CuiAlign(tile_width, 16); // align to cache-line
 
-    CuiRect framebuffer_rect = cui_make_rect(0, 0, framebuffer->width, framebuffer->height);
+    CuiRect framebuffer_rect = cui_make_rect(0, 0, render_target->width, render_target->height);
 
     CuiWorkerThreadQueue *queue = &_cui_context.common.worker_thread_queue;
     CuiWorkerThreadTaskGroup render_group = _cui_begin_worker_thread_task_group(_cui_renderer_software_do_render_work);
@@ -226,7 +228,7 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiBitmap *framebuf
             tile_rect.max.y = tile_rect.min.y + tile_height;
 
             job->renderer = renderer;
-            job->framebuffer = framebuffer;
+            job->framebuffer = render_target;
             job->command_buffer = command_buffer;
             job->tile_rect = cui_rect_get_intersection(tile_rect, framebuffer_rect);
             job->clear_color = clear_color;
@@ -238,16 +240,16 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiBitmap *framebuf
     _cui_complete_worker_thread_task_group(queue, &render_group);
 
 #if 0
-    for (int32_t x = 0; x < framebuffer->width; x += 1)
+    for (int32_t x = 0; x < render_target->width; x += 1)
     {
-        *(uint32_t *) ((uint8_t *) framebuffer->pixels + (0 * framebuffer->stride) + (x * 4)) = 0xFFFF0000;
-        *(uint32_t *) ((uint8_t *) framebuffer->pixels + ((framebuffer->height - 1) * framebuffer->stride) + (x * 4)) = 0xFFFF0000;
+        *(uint32_t *) ((uint8_t *) render_target->pixels + (0 * render_target->stride) + (x * 4)) = 0xFFFF0000;
+        *(uint32_t *) ((uint8_t *) render_target->pixels + ((render_target->height - 1) * render_target->stride) + (x * 4)) = 0xFFFF0000;
     }
 
-    for (int32_t y = 0; y < framebuffer->height; y += 1)
+    for (int32_t y = 0; y < render_target->height; y += 1)
     {
-        *(uint32_t *) ((uint8_t *) framebuffer->pixels + (y * framebuffer->stride) + (0 * 4)) = 0xFFFF0000;
-        *(uint32_t *) ((uint8_t *) framebuffer->pixels + (y * framebuffer->stride) + ((framebuffer->width - 1) * 4)) = 0xFFFF0000;
+        *(uint32_t *) ((uint8_t *) render_target->pixels + (y * render_target->stride) + (0 * 4)) = 0xFFFF0000;
+        *(uint32_t *) ((uint8_t *) render_target->pixels + (y * render_target->stride) + ((render_target->width - 1) * 4)) = 0xFFFF0000;
     }
 #endif
 }

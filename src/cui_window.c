@@ -18,6 +18,179 @@ _cui_window_set_ui_scale(CuiWindow *window, float ui_scale)
     }
 }
 
+static void
+_cui_window_draw(CuiWindow *window, int32_t window_width, int32_t window_height)
+{
+    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
+
+    if (window->base.platform_root_widget)
+    {
+        if (!window->base.glyph_cache.allocated)
+        {
+            _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
+                                        cui_window_allocate_texture_id(window));
+        }
+        else
+        {
+            _cui_glyph_cache_maybe_reset(&window->base.glyph_cache, command_buffer);
+        }
+
+        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
+
+        CuiRect window_rect = cui_make_rect(0, 0, window_width, window_height);
+
+        CuiGraphicsContext ctx;
+        ctx.clip_rect_offset = 0;
+        ctx.clip_rect = window_rect;
+        ctx.window_rect = window_rect;
+        ctx.command_buffer = command_buffer;
+        ctx.glyph_cache = &window->base.glyph_cache;
+        ctx.temporary_memory = &window->base.temporary_memory;
+        ctx.font_manager = &window->base.font_manager;
+
+        const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
+
+        if (window->base.color_theme)
+        {
+            color_theme = window->base.color_theme;
+        }
+
+        cui_widget_draw(window->base.platform_root_widget, &ctx, color_theme);
+
+#if 0
+        int32_t texture_width = ctx.glyph_cache->texture.width;
+        int32_t texture_height = ctx.glyph_cache->texture.height;
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(0.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
+                                cui_make_rect(0, 0, texture_width, texture_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f),
+                                ctx.glyph_cache->texture_id, 0);
+#endif
+
+#if 0
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, 0, window_width, 2),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, window_height - 2, window_width, window_height),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, 2, 2, window_height - 2),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(window_width - 2, 2, window_width, window_height - 2),
+                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
+#endif
+
+        cui_end_temporary_memory(temp_memory);
+    }
+
+#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+
+    bool bgra = true;
+    bool top_to_bottom = true;
+    CuiArena screenshot_arena;
+    CuiBitmap screenshot_bitmap = { 0 };
+
+    if (window->base.take_screenshot)
+    {
+        cui_arena_allocate(&screenshot_arena, CuiMiB(32));
+    }
+
+#endif
+
+    CuiColor clear_color = CuiHexColor(0xFF000000);
+
+#if CUI_PLATFORM_LINUX && CUI_BACKEND_WAYLAND_ENABLED
+
+    if (_cui_context.backend == CUI_LINUX_BACKEND_WAYLAND)
+    {
+        clear_color = CuiHexColor(0x00000000);
+    }
+
+#endif
+
+    CuiFramebuffer *framebuffer = _cui_acquire_framebuffer(window, window_width, window_height);
+    _cui_renderer_render(window->base.renderer, framebuffer, command_buffer, clear_color);
+
+#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
+
+    if (window->base.take_screenshot)
+    {
+        switch (window->base.renderer->type)
+        {
+            case CUI_RENDERER_TYPE_SOFTWARE:
+            {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+                screenshot_bitmap = framebuffer->bitmap;
+#else
+                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+            } break;
+
+            case CUI_RENDERER_TYPE_OPENGLES2:
+            {
+#if CUI_RENDERER_OPENGLES2_ENABLED
+                bgra = false;
+                top_to_bottom = false;
+
+                screenshot_bitmap.width = framebuffer->width;
+                screenshot_bitmap.height = framebuffer->height;
+                screenshot_bitmap.stride = screenshot_bitmap.width * 4;
+                screenshot_bitmap.pixels = cui_alloc(&screenshot_arena, screenshot_bitmap.stride * screenshot_bitmap.height,
+                                                     CuiDefaultAllocationParams());
+
+                glReadPixels(0, 0, screenshot_bitmap.width, screenshot_bitmap.height, GL_RGBA, GL_UNSIGNED_BYTE,
+                             screenshot_bitmap.pixels);
+#else
+                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#endif
+            } break;
+
+            case CUI_RENDERER_TYPE_METAL:
+            {
+#if CUI_RENDERER_METAL_ENABLED
+                screenshot_bitmap.width  = framebuffer->width;
+                screenshot_bitmap.height = framebuffer->height;
+                screenshot_bitmap.stride = screenshot_bitmap.width * 4;
+                screenshot_bitmap.pixels = cui_alloc(&screenshot_arena, screenshot_bitmap.stride * screenshot_bitmap.height,
+                                                     CuiDefaultAllocationParams());
+
+                [drawable.texture getBytes: screenshot_bitmap.pixels
+                               bytesPerRow: screenshot_bitmap.stride
+                                fromRegion: MTLRegionMake2D(0, 0, screenshot_bitmap.width, screenshot_bitmap.height)
+                               mipmapLevel: 0];
+#else
+                CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
+#endif
+            } break;
+
+            case CUI_RENDERER_TYPE_DIRECT3D11:
+            {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+                CuiAssert(!"CUI_FRAMEBUFFER_SCREENSHOT is not supported with CUI_RENDERER_DIRECT3D11.");
+#else
+                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+            } break;
+        }
+
+        CuiString bmp_data = cui_image_encode_bmp(screenshot_bitmap, top_to_bottom, bgra, &screenshot_arena);
+
+        CuiFile *screenshot_file = cui_platform_file_create(&screenshot_arena, CuiStringLiteral("screenshot_cui.bmp"));
+
+        if (screenshot_file)
+        {
+            cui_platform_file_truncate(screenshot_file, bmp_data.count);
+            cui_platform_file_write(screenshot_file, bmp_data.data, 0, bmp_data.count);
+            cui_platform_file_close(screenshot_file);
+        }
+
+        cui_arena_deallocate(&screenshot_arena);
+
+        window->base.take_screenshot = false;
+    }
+
+#endif
+
+}
+
 void
 cui_window_pack(CuiWindow *window)
 {

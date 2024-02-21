@@ -114,15 +114,14 @@ typedef enum CuiLinuxBackend
 #endif
 } CuiLinuxBackend;
 
+typedef struct CuiLinuxFramebuffer
+{
+    CuiFramebuffer base;
+
 #if CUI_RENDERER_SOFTWARE_ENABLED
 
-typedef struct CuiFramebuffer
-{
     bool is_busy;
-
     int64_t shared_memory_size;
-
-    CuiBitmap bitmap;
 
     union
     {
@@ -149,9 +148,9 @@ typedef struct CuiFramebuffer
 
     } backend;
 
-} CuiFramebuffer;
-
 #endif
+
+} CuiLinuxFramebuffer;
 
 struct CuiWindow
 {
@@ -174,10 +173,6 @@ struct CuiWindow
     int32_t windowed_height;
 
     int64_t last_left_click_time;
-
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-    bool take_screenshot;
-#endif
 
 #if CUI_BACKEND_X11_ENABLED
 
@@ -242,30 +237,22 @@ struct CuiWindow
 
 #endif
 
-    union
-    {
-
 #if CUI_RENDERER_SOFTWARE_ENABLED
-
-        struct
-        {
-            CuiFramebuffer *current_framebuffer;
-            CuiFramebuffer framebuffers[3];
-        } software;
-
+    CuiLinuxFramebuffer *current_framebuffer;
+    CuiLinuxFramebuffer framebuffers[4];
+#else
+    CuiLinuxFramebuffer framebuffers[1];
 #endif
 
 #if CUI_RENDERER_OPENGLES2_ENABLED
 
-        struct
-        {
-            EGLSurface egl_surface;
-            EGLContext egl_context;
-        } opengles2;
+    struct
+    {
+        EGLSurface egl_surface;
+        EGLContext egl_context;
+    } opengles2;
 
 #endif
-
-    } renderer;
 };
 
 typedef struct CuiContext

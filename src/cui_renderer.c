@@ -50,8 +50,7 @@ _cui_renderer_begin_command_buffer(CuiRenderer *renderer)
 }
 
 static inline void
-_cui_renderer_render(CuiRenderer *renderer, CuiBitmap *framebuffer, int32_t framebuffer_width, int32_t framebuffer_height,
-                     CuiCommandBuffer *command_buffer, CuiColor clear_color)
+_cui_renderer_render(CuiRenderer *renderer, CuiFramebuffer *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {
     switch (renderer->type)
     {
@@ -70,7 +69,7 @@ _cui_renderer_render(CuiRenderer *renderer, CuiBitmap *framebuffer, int32_t fram
         {
 #if CUI_RENDERER_OPENGLES2_ENABLED
             CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(renderer, CuiRendererOpengles2, base);
-            _cui_renderer_opengles2_render(renderer_opengles2, command_buffer, framebuffer_width, framebuffer_height, clear_color);
+            _cui_renderer_opengles2_render(renderer_opengles2, framebuffer, command_buffer, clear_color);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #endif
@@ -79,12 +78,8 @@ _cui_renderer_render(CuiRenderer *renderer, CuiBitmap *framebuffer, int32_t fram
         case CUI_RENDERER_TYPE_METAL:
         {
 #if CUI_RENDERER_METAL_ENABLED
-            id<CAMetalDrawable> drawable = nil;
-            CuiAssert(!"not implemented");
-
             CuiRendererMetal *renderer_metal = CuiContainerOf(renderer, CuiRendererMetal, base);
-            _cui_renderer_metal_render(renderer_metal, drawable, framebuffer_width,
-                                       framebuffer_height, command_buffer, clear_color);
+            _cui_renderer_metal_render(renderer_metal, framebuffer, command_buffer, clear_color);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
 #endif
@@ -94,7 +89,7 @@ _cui_renderer_render(CuiRenderer *renderer, CuiBitmap *framebuffer, int32_t fram
         {
 #if CUI_RENDERER_DIRECT3D11_ENABLED
             CuiRendererDirect3D11 *renderer_direct3d11 = CuiContainerOf(renderer, CuiRendererDirect3D11, base);
-            _cui_renderer_direct3d11_render(renderer_direct3d11, command_buffer, framebuffer_width, framebuffer_height, clear_color);
+            _cui_renderer_direct3d11_render(renderer_direct3d11, framebuffer, command_buffer, clear_color);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
 #endif

@@ -219,10 +219,10 @@ _cui_is_shm_completion_event(Display *x11_display, XEvent *ev, XPointer arg)
             if (window->x11_window == event->drawable)
             {
                 for (uint32_t framebuffer_index = 0;
-                     framebuffer_index < CuiArrayCount(window->renderer.software.framebuffers);
+                     framebuffer_index < CuiArrayCount(window->framebuffers);
                      framebuffer_index += 1)
                 {
-                    CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + framebuffer_index;
+                    CuiLinuxFramebuffer *framebuffer = window->framebuffers + framebuffer_index;
 
                     if (framebuffer->backend.x11.shared_memory_info.shmseg == event->shmseg)
                     {
@@ -258,15 +258,15 @@ _cui_wait_for_frame_completion(CuiWindow *window)
 }
 
 static void
-_cui_x11_allocate_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_t height)
+_cui_x11_allocate_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width, int32_t height)
 {
     framebuffer->is_busy = false;
 
-    framebuffer->bitmap.width  = width;
-    framebuffer->bitmap.height = height;
-    framebuffer->bitmap.stride = CuiAlign(framebuffer->bitmap.width * 4, 64);
+    framebuffer->base.bitmap.width  = width;
+    framebuffer->base.bitmap.height = height;
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
 
-    framebuffer->shared_memory_size = CuiAlign((int64_t) framebuffer->bitmap.stride * (int64_t) framebuffer->bitmap.height, CuiMiB(4));
+    framebuffer->shared_memory_size = CuiAlign((int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height, CuiMiB(4));
 
     if (_cui_context.has_shared_memory_extension)
     {
@@ -274,26 +274,26 @@ _cui_x11_allocate_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_
         framebuffer->backend.x11.shared_memory_info.shmaddr = (char *) shmat(framebuffer->backend.x11.shared_memory_info.shmid, 0, 0);
         framebuffer->backend.x11.shared_memory_info.readOnly = True;
 
-        framebuffer->bitmap.pixels = framebuffer->backend.x11.shared_memory_info.shmaddr;
+        framebuffer->base.bitmap.pixels = framebuffer->backend.x11.shared_memory_info.shmaddr;
 
         XShmAttach(_cui_context.x11_display, &framebuffer->backend.x11.shared_memory_info);
     }
     else
     {
-        framebuffer->bitmap.pixels = cui_platform_allocate(framebuffer->shared_memory_size);
+        framebuffer->base.bitmap.pixels = cui_platform_allocate(framebuffer->shared_memory_size);
     }
 }
 
 static void
-_cui_x11_resize_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_t height)
+_cui_x11_resize_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width, int32_t height)
 {
     CuiAssert(!framebuffer->is_busy);
 
-    framebuffer->bitmap.width  = width;
-    framebuffer->bitmap.height = height;
-    framebuffer->bitmap.stride = CuiAlign(framebuffer->bitmap.width * 4, 64);
+    framebuffer->base.bitmap.width  = width;
+    framebuffer->base.bitmap.height = height;
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
 
-    int64_t needed_size = (int64_t) framebuffer->bitmap.stride * (int64_t) framebuffer->bitmap.height;
+    int64_t needed_size = (int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height;
 
     if (needed_size > framebuffer->shared_memory_size)
     {
@@ -310,14 +310,14 @@ _cui_x11_resize_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_t 
             framebuffer->backend.x11.shared_memory_info.shmaddr = (char *) shmat(framebuffer->backend.x11.shared_memory_info.shmid, 0, 0);
             framebuffer->backend.x11.shared_memory_info.readOnly = True;
 
-            framebuffer->bitmap.pixels = framebuffer->backend.x11.shared_memory_info.shmaddr;
+            framebuffer->base.bitmap.pixels = framebuffer->backend.x11.shared_memory_info.shmaddr;
 
             XShmAttach(_cui_context.x11_display, &framebuffer->backend.x11.shared_memory_info);
         }
         else
         {
-            cui_platform_deallocate(framebuffer->bitmap.pixels, old_shared_memory_size);
-            framebuffer->bitmap.pixels = cui_platform_allocate(framebuffer->shared_memory_size);
+            cui_platform_deallocate(framebuffer->base.bitmap.pixels, old_shared_memory_size);
+            framebuffer->base.bitmap.pixels = cui_platform_allocate(framebuffer->shared_memory_size);
         }
     }
 }
@@ -326,23 +326,23 @@ static void
 _cui_x11_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
     CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
-    CuiAssert(!window->renderer.software.current_framebuffer);
+    CuiAssert(!window->current_framebuffer);
 
     for (;;)
     {
-        for (uint32_t i = 0; i < CuiArrayCount(window->renderer.software.framebuffers); i += 1)
+        for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
         {
-            CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + i;
+            CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
 
             if (!framebuffer->is_busy)
             {
-                if ((framebuffer->bitmap.width != width) || (framebuffer->bitmap.height != height))
+                if ((framebuffer->base.bitmap.width != width) || (framebuffer->base.bitmap.height != height))
                 {
                     _cui_x11_resize_framebuffer(framebuffer, width, height);
                 }
 
                 framebuffer->is_busy = true;
-                window->renderer.software.current_framebuffer = framebuffer;
+                window->current_framebuffer = framebuffer;
                 return;
             }
         }
@@ -617,8 +617,8 @@ _cui_initialize_opengles2_x11(CuiWindow *window, XSetWindowAttributes window_att
                 printf("OpenGL ES Extensions: %s\n", glGetString(GL_EXTENSIONS));
 #endif
 
-                window->renderer.opengles2.egl_surface = egl_surface;
-                window->renderer.opengles2.egl_context = egl_context;
+                window->opengles2.egl_surface = egl_surface;
+                window->opengles2.egl_context = egl_context;
                 window->base.renderer = _cui_renderer_opengles2_create();
 
                 if (!window->base.renderer)
@@ -670,7 +670,7 @@ _cui_initialize_opengles2_x11(CuiWindow *window, XSetWindowAttributes window_att
 static void
 _cui_wayland_handle_buffer_release(void *data, struct wl_buffer *buffer)
 {
-    CuiFramebuffer *framebuffer = (CuiFramebuffer *) data;
+    CuiLinuxFramebuffer *framebuffer = (CuiLinuxFramebuffer *) data;
     CuiAssert(framebuffer->backend.wayland.buffer == buffer);
     framebuffer->is_busy = false;
 }
@@ -680,60 +680,60 @@ static const struct wl_buffer_listener _cui_wayland_buffer_listener = {
 };
 
 static void
-_cui_wayland_allocate_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_t height)
+_cui_wayland_allocate_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width, int32_t height)
 {
     framebuffer->is_busy = false;
 
-    framebuffer->bitmap.width  = width;
-    framebuffer->bitmap.height = height;
-    framebuffer->bitmap.stride = CuiAlign(framebuffer->bitmap.width * 4, 64);
+    framebuffer->base.bitmap.width  = width;
+    framebuffer->base.bitmap.height = height;
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
 
-    framebuffer->shared_memory_size = CuiAlign((int64_t) framebuffer->bitmap.stride * (int64_t) framebuffer->bitmap.height, CuiMiB(4));
+    framebuffer->shared_memory_size = CuiAlign((int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height, CuiMiB(4));
 
     framebuffer->backend.wayland.shared_memory_fd = syscall(SYS_memfd_create, "wayland_framebuffer", 0);
 
     ftruncate(framebuffer->backend.wayland.shared_memory_fd, framebuffer->shared_memory_size);
-    framebuffer->bitmap.pixels = mmap(0, framebuffer->shared_memory_size, PROT_READ | PROT_WRITE,
-                                      MAP_SHARED, framebuffer->backend.wayland.shared_memory_fd, 0);
+    framebuffer->base.bitmap.pixels = mmap(0, framebuffer->shared_memory_size, PROT_READ | PROT_WRITE,
+                                           MAP_SHARED, framebuffer->backend.wayland.shared_memory_fd, 0);
 
     framebuffer->backend.wayland.shared_memory_pool = wl_shm_create_pool(_cui_context.wayland_shared_memory,
                                                                          framebuffer->backend.wayland.shared_memory_fd,
                                                                          framebuffer->shared_memory_size);
 
-    framebuffer->backend.wayland.buffer = wl_shm_pool_create_buffer(framebuffer->backend.wayland.shared_memory_pool, 0, framebuffer->bitmap.width,
-                                                                    framebuffer->bitmap.height, framebuffer->bitmap.stride, WL_SHM_FORMAT_ARGB8888);
+    framebuffer->backend.wayland.buffer = wl_shm_pool_create_buffer(framebuffer->backend.wayland.shared_memory_pool, 0, framebuffer->base.bitmap.width,
+                                                                    framebuffer->base.bitmap.height, framebuffer->base.bitmap.stride, WL_SHM_FORMAT_ARGB8888);
 
     wl_buffer_add_listener(framebuffer->backend.wayland.buffer, &_cui_wayland_buffer_listener, framebuffer);
 }
 
 static void
-_cui_wayland_resize_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_t height)
+_cui_wayland_resize_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width, int32_t height)
 {
     CuiAssert(!framebuffer->is_busy);
 
     wl_buffer_destroy(framebuffer->backend.wayland.buffer);
 
-    framebuffer->bitmap.width  = width;
-    framebuffer->bitmap.height = height;
-    framebuffer->bitmap.stride = CuiAlign(framebuffer->bitmap.width * 4, 64);
+    framebuffer->base.bitmap.width  = width;
+    framebuffer->base.bitmap.height = height;
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
 
-    int64_t needed_size = (int64_t) framebuffer->bitmap.stride * (int64_t) framebuffer->bitmap.height;
+    int64_t needed_size = (int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height;
 
     if (needed_size > framebuffer->shared_memory_size)
     {
         int64_t old_shared_memory_size = framebuffer->shared_memory_size;
         framebuffer->shared_memory_size = CuiAlign(needed_size, CuiMiB(4));
 
-        munmap(framebuffer->bitmap.pixels, old_shared_memory_size);
+        munmap(framebuffer->base.bitmap.pixels, old_shared_memory_size);
         ftruncate(framebuffer->backend.wayland.shared_memory_fd, framebuffer->shared_memory_size);
-        framebuffer->bitmap.pixels = mmap(0, framebuffer->shared_memory_size, PROT_READ | PROT_WRITE,
+        framebuffer->base.bitmap.pixels = mmap(0, framebuffer->shared_memory_size, PROT_READ | PROT_WRITE,
                                           MAP_SHARED, framebuffer->backend.wayland.shared_memory_fd, 0);
 
         wl_shm_pool_resize(framebuffer->backend.wayland.shared_memory_pool, framebuffer->shared_memory_size);
     }
 
-    framebuffer->backend.wayland.buffer = wl_shm_pool_create_buffer(framebuffer->backend.wayland.shared_memory_pool, 0, framebuffer->bitmap.width,
-                                                                    framebuffer->bitmap.height, framebuffer->bitmap.stride, WL_SHM_FORMAT_ARGB8888);
+    framebuffer->backend.wayland.buffer = wl_shm_pool_create_buffer(framebuffer->backend.wayland.shared_memory_pool, 0, framebuffer->base.bitmap.width,
+                                                                    framebuffer->base.bitmap.height, framebuffer->base.bitmap.stride, WL_SHM_FORMAT_ARGB8888);
 
     wl_buffer_add_listener(framebuffer->backend.wayland.buffer, &_cui_wayland_buffer_listener, framebuffer);
 }
@@ -742,23 +742,23 @@ static void
 _cui_wayland_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
     CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
-    CuiAssert(!window->renderer.software.current_framebuffer);
+    CuiAssert(!window->current_framebuffer);
 
     for (;;)
     {
-        for (uint32_t i = 0; i < CuiArrayCount(window->renderer.software.framebuffers); i += 1)
+        for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
         {
-            CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + i;
+            CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
 
             if (!framebuffer->is_busy)
             {
-                if ((framebuffer->bitmap.width != width) || (framebuffer->bitmap.height != height))
+                if ((framebuffer->base.bitmap.width != width) || (framebuffer->base.bitmap.height != height))
                 {
                     _cui_wayland_resize_framebuffer(framebuffer, width, height);
                 }
 
                 framebuffer->is_busy = true;
-                window->renderer.software.current_framebuffer = framebuffer;
+                window->current_framebuffer = framebuffer;
                 return;
             }
         }
@@ -770,12 +770,10 @@ _cui_wayland_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t heigh
 
 #  endif
 
-static void _cui_window_draw(CuiWindow *window);
-
 static inline void
 _cui_wayland_commit_frame(CuiWindow *window)
 {
-    _cui_window_draw(window);
+    _cui_window_draw(window, cui_rect_get_width(window->backbuffer_rect), cui_rect_get_height(window->backbuffer_rect));
 
     if (window->wayland_configure_serial)
     {
@@ -809,13 +807,13 @@ _cui_wayland_commit_frame(CuiWindow *window)
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
 #  if CUI_RENDERER_SOFTWARE_ENABLED
-            CuiFramebuffer *framebuffer = window->renderer.software.current_framebuffer;
+            CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
 
             wl_surface_attach(window->wayland_surface, framebuffer->backend.wayland.buffer, 0, 0);
             wl_surface_damage(window->wayland_surface, 0, 0, INT32_MAX, INT32_MAX);
             wl_surface_commit(window->wayland_surface);
 
-            window->renderer.software.current_framebuffer = 0;
+            window->current_framebuffer = 0;
 #  else
             CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #  endif
@@ -824,7 +822,7 @@ _cui_wayland_commit_frame(CuiWindow *window)
         case CUI_RENDERER_TYPE_OPENGLES2:
         {
 #if CUI_RENDERER_OPENGLES2_ENABLED
-            eglSwapBuffers(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+            eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #endif
@@ -2432,7 +2430,7 @@ _cui_wayland_handle_key_down(CuiWindow *window, uint32_t keycode)
 #if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                 if (sym == XKB_KEY_F2)
                 {
-                    window->take_screenshot = true;
+                    window->base.take_screenshot = true;
                     window->base.needs_redraw = true;
                 }
                 else
@@ -3150,8 +3148,8 @@ _cui_initialize_opengles2_wayland(CuiWindow *window)
                 printf("OpenGL ES Extensions: %s\n", glGetString(GL_EXTENSIONS));
 #endif
 
-                window->renderer.opengles2.egl_surface = egl_surface;
-                window->renderer.opengles2.egl_context = egl_context;
+                window->opengles2.egl_surface = egl_surface;
+                window->opengles2.egl_context = egl_context;
                 window->base.renderer = _cui_renderer_opengles2_create();
 
                 if (!window->base.renderer)
@@ -3190,70 +3188,10 @@ _cui_initialize_opengles2_wayland(CuiWindow *window)
 
 #endif
 
-static void
-_cui_window_draw(CuiWindow *window)
+static CuiFramebuffer *
+_cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
-
-    if (window->base.platform_root_widget)
-    {
-        if (!window->base.glyph_cache.allocated)
-        {
-            _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
-                                        cui_window_allocate_texture_id(window));
-        }
-        else
-        {
-            _cui_glyph_cache_maybe_reset(&window->base.glyph_cache, command_buffer);
-        }
-
-        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-
-        CuiGraphicsContext ctx;
-        ctx.clip_rect_offset = 0;
-        ctx.clip_rect = window->backbuffer_rect;
-        ctx.window_rect = window->backbuffer_rect;
-        ctx.command_buffer = command_buffer;
-        ctx.glyph_cache = &window->base.glyph_cache;
-        ctx.temporary_memory = &window->base.temporary_memory;
-        ctx.font_manager = &window->base.font_manager;
-
-        const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
-
-        if (window->base.color_theme)
-        {
-            color_theme = window->base.color_theme;
-        }
-
-        cui_widget_draw(window->base.platform_root_widget, &ctx, color_theme);
-
-#if 0
-        int32_t texture_width = ctx.glyph_cache->texture.width;
-        int32_t texture_height = ctx.glyph_cache->texture.height;
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(0.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, texture_width, texture_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f),
-                                ctx.glyph_cache->texture_id, 0);
-#endif
-
-        cui_end_temporary_memory(temp_memory);
-    }
-
-    int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
-    int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
-
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-    bool bgra = true;
-    bool top_to_bottom = true;
-    CuiArena screenshot_arena;
-    CuiBitmap screenshot_bitmap;
-
-    if (window->take_screenshot)
-    {
-        cui_arena_allocate(&screenshot_arena, CuiMiB(32));
-    }
-#endif
+    CuiFramebuffer *framebuffer = 0;
 
     switch (window->base.renderer->type)
     {
@@ -3272,16 +3210,8 @@ _cui_window_draw(CuiWindow *window)
 
                 case CUI_LINUX_BACKEND_WAYLAND:
                 {
-                    _cui_wayland_acquire_framebuffer(window, framebuffer_width, framebuffer_height);
-
-                    CuiFramebuffer *framebuffer = window->renderer.software.current_framebuffer;
-
-                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-                    _cui_renderer_software_render(renderer_software, &framebuffer->bitmap, command_buffer, CuiHexColor(0x00000000));
-
-#    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-                    screenshot_bitmap = framebuffer->bitmap;
-#    endif
+                    _cui_wayland_acquire_framebuffer(window, width, height);
+                    framebuffer = &window->current_framebuffer->base;
                 } break;
 
 #  endif
@@ -3290,16 +3220,8 @@ _cui_window_draw(CuiWindow *window)
 
                 case CUI_LINUX_BACKEND_X11:
                 {
-                    _cui_x11_acquire_framebuffer(window, framebuffer_width, framebuffer_height);
-
-                    CuiFramebuffer *framebuffer = window->renderer.software.current_framebuffer;
-
-                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-                    _cui_renderer_software_render(renderer_software, &framebuffer->bitmap, command_buffer, CuiHexColor(0xFF000000));
-
-#    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-                    screenshot_bitmap = framebuffer->bitmap;
-#    endif
+                    _cui_x11_acquire_framebuffer(window, width, height);
+                    framebuffer = &window->current_framebuffer->base;
                 } break;
 
 #  endif
@@ -3327,43 +3249,27 @@ _cui_window_draw(CuiWindow *window)
                 case CUI_LINUX_BACKEND_WAYLAND:
                 {
                     // TODO: change only if needed
-#if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->renderer.opengles2.egl_surface,
-                                             window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context));
-#else
-                    eglMakeCurrent(_cui_context.egl_display, window->renderer.opengles2.egl_surface,
-                                   window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context);
-#endif
+#    if CUI_DEBUG_BUILD
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                             window->opengles2.egl_surface, window->opengles2.egl_context));
+#    else
+                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                   window->opengles2.egl_surface, window->opengles2.egl_context);
+#    endif
 
                     int32_t surface_width, surface_height;
 
                     wl_egl_window_get_attached_size(window->wayland_egl_window, &surface_width, &surface_height);
 
-                    if ((framebuffer_width != surface_width) || (framebuffer_height != surface_height))
+                    if ((width != surface_width) || (height != surface_height))
                     {
-                        wl_egl_window_resize(window->wayland_egl_window, framebuffer_width, framebuffer_height, 0, 0);
+                        wl_egl_window_resize(window->wayland_egl_window, width, height, 0, 0);
                     }
 
-                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
-                    _cui_renderer_opengles2_render(renderer_opengles2, command_buffer, framebuffer_width,
-                                                   framebuffer_height, CuiHexColor(0x00000000));
+                    framebuffer = &window->framebuffers[0].base;
 
-#    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-                    if (window->take_screenshot)
-                    {
-                        bgra = false;
-                        top_to_bottom = false;
-
-                        screenshot_bitmap.width = framebuffer_width;
-                        screenshot_bitmap.height = framebuffer_height;
-                        screenshot_bitmap.stride = screenshot_bitmap.width * 4;
-                        screenshot_bitmap.pixels = cui_alloc(&screenshot_arena, screenshot_bitmap.stride * screenshot_bitmap.height,
-                                                             CuiDefaultAllocationParams());
-
-                        glReadPixels(0, 0, screenshot_bitmap.width, screenshot_bitmap.height, GL_RGBA, GL_UNSIGNED_BYTE,
-                                     screenshot_bitmap.pixels);
-                    }
-#    endif
+                    framebuffer->width = width;
+                    framebuffer->height = height;
                 } break;
 
 #  endif
@@ -3373,34 +3279,18 @@ _cui_window_draw(CuiWindow *window)
                 case CUI_LINUX_BACKEND_X11:
                 {
                     // TODO: change only if needed
-#if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->renderer.opengles2.egl_surface,
-                                             window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context));
-#else
-                    eglMakeCurrent(_cui_context.egl_display, window->renderer.opengles2.egl_surface,
-                                   window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context);
-#endif
-
-                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
-                    _cui_renderer_opengles2_render(renderer_opengles2, command_buffer, framebuffer_width,
-                                                   framebuffer_height, CuiHexColor(0xFF000000));
-
-#    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-                    if (window->take_screenshot)
-                    {
-                        bgra = false;
-                        top_to_bottom = false;
-
-                        screenshot_bitmap.width = framebuffer_width;
-                        screenshot_bitmap.height = framebuffer_height;
-                        screenshot_bitmap.stride = screenshot_bitmap.width * 4;
-                        screenshot_bitmap.pixels = cui_alloc(&screenshot_arena, screenshot_bitmap.stride * screenshot_bitmap.height,
-                                                             CuiDefaultAllocationParams());
-
-                        glReadPixels(0, 0, screenshot_bitmap.width, screenshot_bitmap.height, GL_RGBA, GL_UNSIGNED_BYTE,
-                                     screenshot_bitmap.pixels);
-                    }
+#    if CUI_DEBUG_BUILD
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                             window->opengles2.egl_surface, window->opengles2.egl_context));
+#    else
+                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                   window->opengles2.egl_surface, window->opengles2.egl_context);
 #    endif
+
+                    framebuffer = &window->framebuffers[0].base;
+
+                    framebuffer->width = cui_rect_get_width(window->backbuffer_rect);
+                    framebuffer->height = cui_rect_get_height(window->backbuffer_rect);
                 } break;
 
 #  endif
@@ -3422,28 +3312,7 @@ _cui_window_draw(CuiWindow *window)
         } break;
     }
 
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-
-    if (window->take_screenshot)
-    {
-        CuiString bmp_data = cui_image_encode_bmp(screenshot_bitmap, top_to_bottom, bgra, &screenshot_arena);
-
-        CuiFile *screenshot_file = cui_platform_file_create(&screenshot_arena, CuiStringLiteral("screenshot_cui.bmp"));
-
-        if (screenshot_file)
-        {
-            cui_platform_file_truncate(screenshot_file, bmp_data.count);
-            cui_platform_file_write(screenshot_file, bmp_data.data, 0, bmp_data.count);
-            cui_platform_file_close(screenshot_file);
-        }
-
-        cui_arena_deallocate(&screenshot_arena);
-
-        window->take_screenshot = false;
-    }
-
-#endif
-
+    return framebuffer;
 }
 
 void
@@ -4017,13 +3886,13 @@ cui_window_create(uint32_t creation_flags)
                 int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
                 int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
 
-                for (uint32_t i = 0; i < CuiArrayCount(window->renderer.software.framebuffers); i += 1)
+                for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
                 {
-                    CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + i;
+                    CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
                     _cui_wayland_allocate_framebuffer(framebuffer, framebuffer_width, framebuffer_height);
                 }
 
-                window->renderer.software.current_framebuffer = 0;
+                window->current_framebuffer = 0;
 
                 renderer_initialized = true;
             }
@@ -4087,13 +3956,13 @@ cui_window_create(uint32_t creation_flags)
                 int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
                 int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
 
-                for (uint32_t i = 0; i < CuiArrayCount(window->renderer.software.framebuffers); i += 1)
+                for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
                 {
-                    CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + i;
+                    CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
                     _cui_x11_allocate_framebuffer(framebuffer, framebuffer_width, framebuffer_height);
                 }
 
-                window->renderer.software.current_framebuffer = 0;
+                window->current_framebuffer = 0;
             }
 
 #  endif
@@ -4550,9 +4419,9 @@ cui_window_destroy(CuiWindow *window)
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {
 #  if CUI_RENDERER_SOFTWARE_ENABLED
-                    for (uint32_t i = 0; i < CuiArrayCount(window->renderer.software.framebuffers); i += 1)
+                    for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
                     {
-                        CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + i;
+                        CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
 
                         if (framebuffer->is_busy)
                         {
@@ -4561,7 +4430,7 @@ cui_window_destroy(CuiWindow *window)
 
                         wl_buffer_destroy(framebuffer->backend.wayland.buffer);
                         wl_shm_pool_destroy(framebuffer->backend.wayland.shared_memory_pool);
-                        munmap(framebuffer->bitmap.pixels, framebuffer->shared_memory_size);
+                        munmap(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
                         close(framebuffer->backend.wayland.shared_memory_fd);
                     }
 
@@ -4577,11 +4446,11 @@ cui_window_destroy(CuiWindow *window)
 #  if CUI_RENDERER_OPENGLES2_ENABLED
                     // TODO: change only if needed
 #if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->renderer.opengles2.egl_surface,
-                                             window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context));
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                             window->opengles2.egl_surface, window->opengles2.egl_context));
 #else
-                    eglMakeCurrent(_cui_context.egl_display, window->renderer.opengles2.egl_surface,
-                                   window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context);
+                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                   window->opengles2.egl_surface, window->opengles2.egl_context);
 #endif
 
                     CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
@@ -4589,11 +4458,11 @@ cui_window_destroy(CuiWindow *window)
 
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-                    CuiAssert(window->renderer.opengles2.egl_context != EGL_NO_CONTEXT);
-                    eglDestroyContext(_cui_context.egl_display, window->renderer.opengles2.egl_context);
+                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
+                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
 
-                    CuiAssert(window->renderer.opengles2.egl_surface != EGL_NO_SURFACE);
-                    eglDestroySurface(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
+                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
 
                     wl_egl_window_destroy(window->wayland_egl_window);
 #  else
@@ -4637,9 +4506,9 @@ cui_window_destroy(CuiWindow *window)
 #  if CUI_RENDERER_SOFTWARE_ENABLED
                     if (_cui_context.has_shared_memory_extension)
                     {
-                        for (uint32_t i = 0; i < CuiArrayCount(window->renderer.software.framebuffers); i += 1)
+                        for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
                         {
-                            CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + i;
+                            CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
 
                             while (framebuffer->is_busy)
                             {
@@ -4653,8 +4522,8 @@ cui_window_destroy(CuiWindow *window)
                     }
                     else
                     {
-                        CuiFramebuffer *framebuffer = window->renderer.software.framebuffers;
-                        cui_platform_deallocate(framebuffer->bitmap.pixels, framebuffer->shared_memory_size);
+                        CuiLinuxFramebuffer *framebuffer = window->framebuffers;
+                        cui_platform_deallocate(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
                     }
 
                     CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
@@ -4669,9 +4538,9 @@ cui_window_destroy(CuiWindow *window)
 #  if CUI_RENDERER_OPENGLES2_ENABLED
                     // TODO: change only if needed
 #if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->renderer.opengles2.egl_context));
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->opengles2.egl_context));
 #else
-                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->renderer.opengles2.egl_context);
+                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->opengles2.egl_context);
 #endif
 
                     CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
@@ -4679,11 +4548,11 @@ cui_window_destroy(CuiWindow *window)
 
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-                    CuiAssert(window->renderer.opengles2.egl_context != EGL_NO_CONTEXT);
-                    eglDestroyContext(_cui_context.egl_display, window->renderer.opengles2.egl_context);
+                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
+                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
 
-                    CuiAssert(window->renderer.opengles2.egl_surface != EGL_NO_SURFACE);
-                    eglDestroySurface(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
+                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
 #  else
                     CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif
@@ -5104,10 +4973,10 @@ cui_step(void)
                         if (window->x11_window == event->drawable)
                         {
                             for (uint32_t framebuffer_index = 0;
-                                 framebuffer_index < CuiArrayCount(window->renderer.software.framebuffers);
+                                 framebuffer_index < CuiArrayCount(window->framebuffers);
                                  framebuffer_index += 1)
                             {
-                                CuiFramebuffer *framebuffer = window->renderer.software.framebuffers + framebuffer_index;
+                                CuiLinuxFramebuffer *framebuffer = window->framebuffers + framebuffer_index;
 
                                 if (framebuffer->backend.x11.shared_memory_info.shmseg == event->shmseg)
                                 {
@@ -5316,7 +5185,7 @@ cui_step(void)
 #if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                                     if (key == XK_F2)
                                     {
-                                        window->take_screenshot = true;
+                                        window->base.take_screenshot = true;
                                         window->base.needs_redraw = true;
                                     }
                                     else
@@ -5371,27 +5240,27 @@ cui_step(void)
 
                 if (window->is_mapped && window->base.needs_redraw)
                 {
-                    _cui_window_draw(window);
+                    _cui_window_draw(window, cui_rect_get_width(window->backbuffer_rect), cui_rect_get_height(window->backbuffer_rect));
 
                     switch (window->base.renderer->type)
                     {
                         case CUI_RENDERER_TYPE_SOFTWARE:
                         {
 #  if CUI_RENDERER_SOFTWARE_ENABLED
-                            CuiFramebuffer *framebuffer = window->renderer.software.current_framebuffer;
+                            CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
 
                             XImage backbuffer;
-                            backbuffer.width = framebuffer->bitmap.width;
-                            backbuffer.height = framebuffer->bitmap.height;
+                            backbuffer.width = framebuffer->base.bitmap.width;
+                            backbuffer.height = framebuffer->base.bitmap.height;
                             backbuffer.xoffset = 0;
                             backbuffer.format = ZPixmap;
-                            backbuffer.data = (char *) framebuffer->bitmap.pixels;
+                            backbuffer.data = (char *) framebuffer->base.bitmap.pixels;
                             backbuffer.byte_order = LSBFirst;
                             backbuffer.bitmap_unit = 32;
                             backbuffer.bitmap_bit_order = LSBFirst;
                             backbuffer.bitmap_pad = 32;
                             backbuffer.depth = 24;
-                            backbuffer.bytes_per_line = framebuffer->bitmap.stride;
+                            backbuffer.bytes_per_line = framebuffer->base.bitmap.stride;
                             backbuffer.bits_per_pixel = 32;
                             backbuffer.red_mask = 0xFF0000;
                             backbuffer.green_mask = 0x00FF00;
@@ -5414,7 +5283,7 @@ cui_step(void)
                                 framebuffer->is_busy = false;
                             }
 
-                            window->renderer.software.current_framebuffer = 0;
+                            window->current_framebuffer = 0;
 #  else
                             CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #  endif
@@ -5423,7 +5292,7 @@ cui_step(void)
                         case CUI_RENDERER_TYPE_OPENGLES2:
                         {
 #  if CUI_RENDERER_OPENGLES2_ENABLED
-                            eglSwapBuffers(_cui_context.egl_display, window->renderer.opengles2.egl_surface);
+                            eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
 #  else
                             CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif

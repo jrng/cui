@@ -168,100 +168,23 @@ _cui_initialize_direct3d11(CuiWindow *window)
 
 #endif
 
-static void
-_cui_window_draw(CuiWindow *window)
+static CuiFramebuffer *
+_cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
-
-    if (window->base.platform_root_widget)
-    {
-        if (!window->base.glyph_cache.allocated)
-        {
-            _cui_glyph_cache_initialize(&window->base.glyph_cache, command_buffer,
-                                        cui_window_allocate_texture_id(window));
-        }
-        else
-        {
-            _cui_glyph_cache_maybe_reset(&window->base.glyph_cache, command_buffer);
-        }
-
-        CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&window->base.temporary_memory);
-
-        CuiRect window_rect = cui_make_rect(0, 0, window->width, window->height);
-
-        CuiGraphicsContext ctx;
-        ctx.clip_rect_offset = 0;
-        ctx.clip_rect = window_rect;
-        ctx.window_rect = window_rect;
-        ctx.command_buffer = command_buffer;
-        ctx.glyph_cache = &window->base.glyph_cache;
-        ctx.temporary_memory = &window->base.temporary_memory;
-        ctx.font_manager = &window->base.font_manager;
-
-        const CuiColorTheme *color_theme = &cui_color_theme_default_dark;
-
-        if (window->base.color_theme)
-        {
-            color_theme = window->base.color_theme;
-        }
-
-        cui_widget_draw(window->base.platform_root_widget, &ctx, color_theme);
-
-#if 0
-        int32_t texture_width = ctx.glyph_cache->texture.width;
-        int32_t texture_height = ctx.glyph_cache->texture.height;
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(0.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(10, 10, 10 + texture_width, 10 + texture_height),
-                                cui_make_rect(0, 0, texture_width, texture_height), cui_make_color(1.0f, 1.0f, 1.0f, 1.0f),
-                                ctx.glyph_cache->texture_id, 0);
-#endif
-
-#if 0
-        int32_t framebuffer_width = window->width;
-        int32_t framebuffer_height = window->height;
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, 0, framebuffer_width, 2),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, framebuffer_height - 2, framebuffer_width, framebuffer_height),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(0, 2, 2, framebuffer_height - 2),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-        _cui_push_textured_rect(ctx.command_buffer, cui_make_rect(framebuffer_width - 2, 2, framebuffer_width, framebuffer_height - 2),
-                                cui_make_rect(0, 0, 0, 0), cui_make_color(1.0f, 0.0f, 0.0f, 1.0f), ctx.glyph_cache->texture_id, 0);
-#endif
-
-        cui_end_temporary_memory(temp_memory);
-    }
-
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-
-    CuiArena screenshot_arena;
-    CuiBitmap screenshot_bitmap;
-
-    if (window->take_screenshot)
-    {
-        cui_arena_allocate(&screenshot_arena, CuiMiB(32));
-    }
-
-#endif
+    CuiFramebuffer *framebuffer = 0;
 
     switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
 #if CUI_RENDERER_SOFTWARE_ENABLED
-            if ((window->renderer.software.backbuffer.width != window->width) || (window->renderer.software.backbuffer.height != window->height))
+            if ((window->renderer.software.backbuffer.width != width) || (window->renderer.software.backbuffer.height != height))
             {
-                _cui_window_resize_backbuffer(window, window->width, window->height);
+                _cui_window_resize_backbuffer(window, width, height);
             }
 
-            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-            _cui_renderer_software_render(renderer_software, &window->renderer.software.backbuffer,
-                                          command_buffer, CuiHexColor(0xFF000000));
-
-#  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-            screenshot_bitmap = window->renderer.software.backbuffer;
-#  endif
+            window->framebuffer.bitmap = window->renderer.software.backbuffer;
+            framebuffer = &window->framebuffer;
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #endif
@@ -280,44 +203,17 @@ _cui_window_draw(CuiWindow *window)
         case CUI_RENDERER_TYPE_DIRECT3D11:
         {
 #if CUI_RENDERER_DIRECT3D11_ENABLED
-            CuiRendererDirect3D11 *renderer_direct3d11 = CuiContainerOf(window->base.renderer, CuiRendererDirect3D11, base);
-            _cui_renderer_direct3d11_render(renderer_direct3d11, command_buffer, window->width,
-                                            window->height, CuiHexColor(0xFF000000));
+            framebuffer = &window->framebuffer;
 
-#  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-            if (window->take_screenshot)
-            {
-                CuiAssert(!"CUI_FRAMEBUFFER_SCREENSHOT is not supported with CUI_RENDERER_DIRECT3D11.");
-            }
-#  endif
+            framebuffer->width = width;
+            framebuffer->height = height;
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
 #endif
         } break;
     }
 
-#if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
-
-    if (window->take_screenshot)
-    {
-        CuiString bmp_data = cui_image_encode_bmp(screenshot_bitmap, true, true, &screenshot_arena);
-
-        CuiFile *screenshot_file = cui_platform_file_create(&screenshot_arena, CuiStringLiteral("screenshot_cui.bmp"));
-
-        if (screenshot_file)
-        {
-            cui_platform_file_truncate(screenshot_file, bmp_data.count);
-            cui_platform_file_write(screenshot_file, bmp_data.data, 0, bmp_data.count);
-            cui_platform_file_close(screenshot_file);
-        }
-
-        cui_arena_deallocate(&screenshot_arena);
-
-        window->take_screenshot = false;
-    }
-
-#endif
-
+    return framebuffer;
 }
 
 static inline bool
@@ -424,7 +320,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
                         cui_widget_layout(window->base.platform_root_widget, rect);
                     }
 
-                    _cui_window_draw(window);
+                    _cui_window_draw(window, window->width, window->height);
 
                     // TODO: check for errors
                     IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 0, DXGI_PRESENT_RESTART);
@@ -577,7 +473,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 #if CUI_RENDERER_SOFTWARE_ENABLED
                     if (window->base.needs_redraw)
                     {
-                        _cui_window_draw(window);
+                        _cui_window_draw(window, window->width, window->height);
                         window->base.needs_redraw = false;
                     }
 
@@ -809,7 +705,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 #if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                     if (w_param == VK_F2)
                     {
-                        window->take_screenshot = true;
+                        window->base.take_screenshot = true;
                         window->base.needs_redraw = true;
                     }
                     else
@@ -1935,7 +1831,7 @@ cui_step(void)
 
         if (window->base.needs_redraw)
         {
-            _cui_window_draw(window);
+            _cui_window_draw(window, window->width, window->height);
 
             switch (window->base.renderer->type)
             {

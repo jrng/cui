@@ -237,8 +237,7 @@ _cui_renderer_direct3d11_begin_command_buffer(CuiRendererDirect3D11 *renderer)
 }
 
 static void
-_cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffer *command_buffer,
-                               int32_t window_width, int32_t window_height, CuiColor clear_color)
+_cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiFramebuffer *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
@@ -329,31 +328,31 @@ _cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffe
         }
     }
 
-    if ((renderer->framebuffer_width != window_width) || (renderer->framebuffer_height != window_height))
+    if ((renderer->framebuffer_width != framebuffer->width) || (renderer->framebuffer_height != framebuffer->height))
     {
         ID3D11RenderTargetView_Release(renderer->framebuffer_view);
 
-        IDXGISwapChain_ResizeBuffers(renderer->swapchain, 0, window_width, window_height, DXGI_FORMAT_UNKNOWN, 0);
+        IDXGISwapChain_ResizeBuffers(renderer->swapchain, 0, framebuffer->width, framebuffer->height, DXGI_FORMAT_UNKNOWN, 0);
 
-        ID3D11Texture2D *framebuffer;
+        ID3D11Texture2D *framebuffer_texture;
 
-        IDXGISwapChain_GetBuffer(renderer->swapchain, 0, &IID_ID3D11Texture2D, (void **) &framebuffer);
-        ID3D11Device_CreateRenderTargetView(renderer->device, (ID3D11Resource *) framebuffer, 0, &renderer->framebuffer_view);
+        IDXGISwapChain_GetBuffer(renderer->swapchain, 0, &IID_ID3D11Texture2D, (void **) &framebuffer_texture);
+        ID3D11Device_CreateRenderTargetView(renderer->device, (ID3D11Resource *) framebuffer_texture, 0, &renderer->framebuffer_view);
 
-        ID3D11Texture2D_Release(framebuffer);
+        ID3D11Texture2D_Release(framebuffer_texture);
 
         D3D11_VIEWPORT viewport;
         viewport.TopLeftX = 0.0f;
         viewport.TopLeftY = 0.0f;
-        viewport.Width    = (float) window_width;
-        viewport.Height   = (float) window_height;
+        viewport.Width    = (float) framebuffer->width;
+        viewport.Height   = (float) framebuffer->height;
         viewport.MinDepth = 0.0f;
         viewport.MaxDepth = 0.0f;
 
         ID3D11DeviceContext_RSSetViewports(renderer->device_context, 1, &viewport);
 
-        renderer->framebuffer_width = window_width;
-        renderer->framebuffer_height = window_height;
+        renderer->framebuffer_width = framebuffer->width;
+        renderer->framebuffer_height = framebuffer->height;
     }
 
     ID3D11DeviceContext_OMSetRenderTargets(renderer->device_context, 1, &renderer->framebuffer_view, 0);
@@ -361,8 +360,8 @@ _cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffe
     D3D11_RECT scissor_rect;
     scissor_rect.left   = 0;
     scissor_rect.top    = 0;
-    scissor_rect.right  = window_width;
-    scissor_rect.bottom = window_height;
+    scissor_rect.right  = framebuffer->width;
+    scissor_rect.bottom = framebuffer->height;
 
     ID3D11DeviceContext_RSSetScissorRects(renderer->device_context, 1, &scissor_rect);
 
@@ -370,8 +369,8 @@ _cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffe
 
     ID3D11DeviceContext_ClearRenderTargetView(renderer->device_context, renderer->framebuffer_view, clear);
 
-    float a = 2.0f / window_width;
-    float b = 2.0f / window_height;
+    float a = 2.0f / framebuffer->width;
+    float b = 2.0f / framebuffer->height;
 
     float vertex_transform[] = {
             a, 0.0f, 0.0f, 0.0f,
@@ -458,8 +457,8 @@ _cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffe
                 {
                     scissor_rect.left   = 0;
                     scissor_rect.top    = 0;
-                    scissor_rect.right  = window_width;
-                    scissor_rect.bottom = window_height;
+                    scissor_rect.right  = framebuffer->width;
+                    scissor_rect.bottom = framebuffer->height;
                 }
 
                 ID3D11DeviceContext_RSSetScissorRects(renderer->device_context, 1, &scissor_rect);

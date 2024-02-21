@@ -54,20 +54,18 @@ struct CuiWindow
     uint32_t max_texture_state_count;
     CuiTextureState *texture_states;
 
-    union
-    {
+    CuiFramebuffer framebuffer;
 
 #if CUI_RENDERER_OPENGLES2_ENABLED
 
-        struct
-        {
-            EGLSurface egl_surface;
-            EGLContext egl_context;
-        } opengles2;
+    struct
+    {
+        EGLSurface egl_surface;
+        EGLContext egl_context;
+    } opengles2;
 
 #endif
 
-    } renderer;
 };
 
 typedef struct CuiContext

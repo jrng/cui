@@ -314,8 +314,7 @@ _cui_renderer_metal_begin_command_buffer(CuiRendererMetal *renderer)
 }
 
 static void
-_cui_renderer_metal_render(CuiRendererMetal *renderer, id<CAMetalDrawable> drawable,
-                           int32_t window_width, int32_t window_height,
+_cui_renderer_metal_render(CuiRendererMetal *renderer, CuiFramebuffer *framebuffer,
                            CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
@@ -376,10 +375,10 @@ _cui_renderer_metal_render(CuiRendererMetal *renderer, id<CAMetalDrawable> drawa
     id<MTLCommandBuffer> cmd_buffer = [renderer->command_queue commandBuffer];
 
     renderer->render_pass.colorAttachments[0].clearColor  = MTLClearColorMake(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-    renderer->render_pass.colorAttachments[0].texture = drawable.texture;
+    renderer->render_pass.colorAttachments[0].texture = framebuffer->drawable.texture;
 
-    float a = 2.0f / (float) window_width;
-    float b = 2.0f / (float) window_height;
+    float a = 2.0f / (float) framebuffer->width;
+    float b = 2.0f / (float) framebuffer->height;
 
     float vertex_transform[] = {
             a, 0.0f, 0.0f, 0.0f,
@@ -397,8 +396,8 @@ _cui_renderer_metal_render(CuiRendererMetal *renderer, id<CAMetalDrawable> drawa
     MTLViewport viewport;
     viewport.originX = 0.0;
     viewport.originY = 0.0;
-    viewport.width = (double) window_width;
-    viewport.height = (double) window_height;
+    viewport.width = (double) framebuffer->width;
+    viewport.height = (double) framebuffer->height;
     viewport.znear = 0.0;
     viewport.zfar = 1.0;
 

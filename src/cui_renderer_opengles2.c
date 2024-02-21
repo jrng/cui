@@ -304,8 +304,7 @@ _cui_renderer_opengles2_begin_command_buffer(CuiRendererOpengles2 *renderer)
 }
 
 static void
-_cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer *command_buffer,
-                               int32_t window_width, int32_t window_height, CuiColor clear_color)
+_cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
@@ -386,8 +385,8 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer 
         draw_command->texture_scale = cui_make_float_point(1.0f, 1.0f);
         draw_command->clip_rect_x = 0;
         draw_command->clip_rect_y = 0;
-        draw_command->clip_rect_width = window_width;
-        draw_command->clip_rect_height = window_height;
+        draw_command->clip_rect_width = framebuffer->width;
+        draw_command->clip_rect_height = framebuffer->height;
 
         for (uint32_t i = 0; i < command_buffer->index_buffer_count; i += 1)
         {
@@ -431,7 +430,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer 
                         CuiClipRect *rect = (CuiClipRect *) (command_buffer->push_buffer + textured_rect->clip_rect - 1);
 
                         draw_command->clip_rect_x = rect->x_min;
-                        draw_command->clip_rect_y = window_height - rect->y_max;
+                        draw_command->clip_rect_y = framebuffer->height - rect->y_max;
                         draw_command->clip_rect_width = rect->x_max - rect->x_min;
                         draw_command->clip_rect_height = rect->y_max - rect->y_min;
                     }
@@ -439,8 +438,8 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer 
                     {
                         draw_command->clip_rect_x = 0;
                         draw_command->clip_rect_y = 0;
-                        draw_command->clip_rect_width = window_width;
-                        draw_command->clip_rect_height = window_height;
+                        draw_command->clip_rect_width = framebuffer->width;
+                        draw_command->clip_rect_height = framebuffer->height;
                     }
 
                     current_clip_rect = textured_rect->clip_rect;
@@ -480,8 +479,8 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer 
         draw_command->vertex_count = vertex_buffer_count - draw_command->vertex_offset;
     }
 
-    glViewport(0, 0, window_width, window_height);
-    glScissor(0, 0, window_width, window_height);
+    glViewport(0, 0, framebuffer->width, framebuffer->height);
+    glScissor(0, 0, framebuffer->width, framebuffer->height);
 
     glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -493,8 +492,8 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer 
 
     glUseProgram(renderer->program);
 
-    float a = 2.0f / window_width;
-    float b = 2.0f / window_height;
+    float a = 2.0f / framebuffer->width;
+    float b = 2.0f / framebuffer->height;
 
     glUniform1i(renderer->texture_location, 0);
     glUniform2f(renderer->vertex_scale_location, a, -b);
