@@ -31,7 +31,7 @@ compile_no_jobs () {
     $1
 }
 
-COMPILER_FLAGS="-std=c99 -municode -Wno-missing-field-initializers -Wno-cast-function-type"
+COMPILER_FLAGS="-std=c99 -Wno-missing-field-initializers -Wno-cast-function-type -Wno-unused-parameter"
 LINKER_FLAGS="-luser32 -lgdi32 -lshell32 -luxtheme"
 DEFINES=""
 
@@ -87,6 +87,8 @@ cd "${REL_PATH}/build"
 
 # shape compile
 compile "${COMPILER} ${COMPILER_FLAGS} -o shape_compile ../src/shape_compile.c"
+
+COMPILER_FLAGS="${COMPILER_FLAGS} -municode"
 
 # dynamic library
 # compile "${COMPILER} ${DEFINES} ${COMPILER_FLAGS} -fPIC -shared -I../include -o libcui.so ../src/cui.c ${LINKER_FLAGS}"
