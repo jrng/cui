@@ -1001,6 +1001,7 @@ cui_main_loop(void)
 #include "cui_renderer_direct3d11.c"
 #endif
 
+#include "cui_renderer.c"
 #include "cui_widget.c"
 #include "cui_window.c"
 #include "cui_draw.c"

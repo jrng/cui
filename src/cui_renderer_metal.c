@@ -1,5 +1,5 @@
-static CuiRendererMetal *
-_cui_create_metal_renderer(CuiArena *temporary_memory, id<MTLDevice> metal_device)
+static CuiRenderer *
+_cui_renderer_metal_create(CuiArena *temporary_memory, id<MTLDevice> metal_device)
 {
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
 
@@ -15,6 +15,7 @@ _cui_create_metal_renderer(CuiArena *temporary_memory, id<MTLDevice> metal_devic
 
     CuiClearStruct(*renderer);
 
+    renderer->base.type = CUI_RENDERER_TYPE_METAL;
     renderer->allocation_size = allocation_size;
     renderer->device = metal_device;
 
@@ -266,11 +267,11 @@ _cui_create_metal_renderer(CuiArena *temporary_memory, id<MTLDevice> metal_devic
 
     cui_end_temporary_memory(temp_memory);
 
-    return renderer;
+    return &renderer->base;
 }
 
 static void
-_cui_destroy_metal_renderer(CuiRendererMetal *renderer)
+_cui_renderer_metal_destroy(CuiRendererMetal *renderer)
 {
     for (uint32_t texture_index = 0;
          texture_index < CuiArrayCount(renderer->textures);
@@ -301,7 +302,7 @@ _cui_destroy_metal_renderer(CuiRendererMetal *renderer)
 }
 
 static CuiCommandBuffer *
-_cui_metal_renderer_begin_command_buffer(CuiRendererMetal *renderer)
+_cui_renderer_metal_begin_command_buffer(CuiRendererMetal *renderer)
 {
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
 
@@ -313,7 +314,7 @@ _cui_metal_renderer_begin_command_buffer(CuiRendererMetal *renderer)
 }
 
 static void
-_cui_metal_renderer_render(CuiRendererMetal *renderer, id<CAMetalDrawable> drawable,
+_cui_renderer_metal_render(CuiRendererMetal *renderer, id<CAMetalDrawable> drawable,
                            int32_t window_width, int32_t window_height,
                            CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {

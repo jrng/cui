@@ -166,7 +166,7 @@
 static void
 _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiAssert(window->base.renderer_type == CUI_RENDERER_TYPE_SOFTWARE);
+    CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
 
     CuiAssert((window->renderer.software.backbuffer.width != width) || (window->renderer.software.backbuffer.height != height));
 
@@ -206,38 +206,7 @@ _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 static void
 _cui_window_draw(CuiWindow *window)
 {
-    CuiCommandBuffer *command_buffer = 0;
-
-    switch (window->base.renderer_type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-#if CUI_RENDERER_SOFTWARE_ENABLED
-            command_buffer = _cui_software_renderer_begin_command_buffer(window->renderer.software.renderer_software);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-#if CUI_RENDERER_METAL_ENABLED
-            command_buffer = _cui_metal_renderer_begin_command_buffer(window->renderer.metal.renderer_metal);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-        } break;
-    }
+    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
 
     if (window->base.platform_root_widget)
     {
@@ -296,7 +265,7 @@ _cui_window_draw(CuiWindow *window)
     }
 #endif
 
-    switch (window->base.renderer_type)
+    switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
@@ -307,8 +276,8 @@ _cui_window_draw(CuiWindow *window)
                 _cui_window_resize_backbuffer(window, window->width, window->height);
             }
 
-            _cui_software_renderer_render(window->renderer.software.renderer_software,
-                                          &window->renderer.software.backbuffer,
+            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+            _cui_renderer_software_render(renderer_software, &window->renderer.software.backbuffer,
                                           command_buffer, CuiHexColor(0xFF000000));
 
 #  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
@@ -340,9 +309,9 @@ _cui_window_draw(CuiWindow *window)
 
             if (drawable)
             {
-                _cui_metal_renderer_render(window->renderer.metal.renderer_metal, drawable,
-                                           window->width, window->height, command_buffer,
-                                           CuiHexColor(0xFF000000));
+                CuiRendererMetal *renderer_metal = CuiContainerOf(window->base.renderer, CuiRendererMetal, base);
+                _cui_renderer_metal_render(renderer_metal, drawable, window->width,
+                                           window->height, command_buffer, CuiHexColor(0xFF000000));
 
 #  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                 if (window->take_screenshot)
@@ -517,7 +486,7 @@ _cui_window_draw(CuiWindow *window)
 
         _cui_window_draw(cui_window);
 
-        switch (cui_window->base.renderer_type)
+        switch (cui_window->base.renderer->type)
         {
             case CUI_RENDERER_TYPE_SOFTWARE:
             {
@@ -568,7 +537,7 @@ _cui_window_draw(CuiWindow *window)
 
 #if CUI_RENDERER_METAL_ENABLED
 
-        if (cui_window->base.renderer_type == CUI_RENDERER_TYPE_METAL)
+        if (cui_window->base.renderer->type == CUI_RENDERER_TYPE_METAL)
         {
             self.layer = [CAMetalLayer layer];
 
@@ -1329,12 +1298,10 @@ cui_window_create(uint32_t creation_flags)
             printf("[Metal Device] is low power = %s\n", [metal_device isLowPower] ? "true" : "false");
 #endif
 
-            CuiRendererMetal *metal_renderer = _cui_create_metal_renderer(&window->base.temporary_memory, metal_device);
+            window->base.renderer = _cui_renderer_metal_create(&window->base.temporary_memory, metal_device);
 
-            if (metal_renderer)
+            if (window->base.renderer)
             {
-                window->base.renderer_type = CUI_RENDERER_TYPE_METAL;
-                window->renderer.metal.renderer_metal = metal_renderer;
                 renderer_initialized = true;
             }
         }
@@ -1344,8 +1311,7 @@ cui_window_create(uint32_t creation_flags)
 #if CUI_RENDERER_SOFTWARE_ENABLED
     if (!renderer_initialized)
     {
-        window->base.renderer_type = CUI_RENDERER_TYPE_SOFTWARE;
-        window->renderer.software.renderer_software = _cui_create_software_renderer();
+        window->base.renderer = _cui_renderer_software_create();
         renderer_initialized = true;
     }
 #endif
@@ -1519,7 +1485,7 @@ cui_window_close(CuiWindow *window)
 void
 cui_window_destroy(CuiWindow *window)
 {
-    switch (window->base.renderer_type)
+    switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
@@ -1530,7 +1496,8 @@ cui_window_destroy(CuiWindow *window)
                                         window->renderer.software.backbuffer_memory_size);
             }
 
-            _cui_destroy_software_renderer(window->renderer.software.renderer_software);
+            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+            _cui_renderer_software_destroy(renderer_software);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #endif
@@ -1544,7 +1511,8 @@ cui_window_destroy(CuiWindow *window)
         case CUI_RENDERER_TYPE_METAL:
         {
 #if CUI_RENDERER_METAL_ENABLED
-            _cui_destroy_metal_renderer(window->renderer.metal.renderer_metal);
+            CuiRendererMetal *renderer_metal = CuiContainerOf(window->base.renderer, CuiRendererMetal, base);
+            _cui_renderer_metal_destroy(renderer_metal);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
 #endif
@@ -1644,7 +1612,7 @@ cui_step(void)
             {
                 _cui_window_draw(window);
 
-                switch (window->base.renderer_type)
+                switch (window->base.renderer->type)
                 {
                     case CUI_RENDERER_TYPE_SOFTWARE:
                     {

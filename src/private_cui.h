@@ -342,6 +342,11 @@ typedef enum CuiRendererType
     CUI_RENDERER_TYPE_DIRECT3D11 = 3,
 } CuiRendererType;
 
+typedef struct CuiRenderer
+{
+    CuiRendererType type;
+} CuiRenderer;
+
 typedef struct CuiPointerCapture
 {
     int32_t pointer_index;
@@ -387,7 +392,7 @@ typedef struct CuiWindowBase
     CuiWidget *pressed_widget;
     CuiWidget *focused_widget;
 
-    CuiRendererType renderer_type;
+    CuiRenderer *renderer;
 
     CuiEvent event;
 
@@ -465,6 +470,8 @@ typedef struct CuiContextCommon
 
 typedef struct CuiRendererSoftware
 {
+    CuiRenderer base;
+
     CuiCommandBuffer command_buffer;
     CuiBitmap bitmaps[CUI_MAX_TEXTURE_COUNT];
 
@@ -502,6 +509,8 @@ typedef struct CuiOpengles2DrawCommand
 
 typedef struct CuiRendererOpengles2
 {
+    CuiRenderer base;
+
     CuiCommandBuffer command_buffer;
 
 #if 0
@@ -540,6 +549,8 @@ typedef struct CuiRendererOpengles2
 
 typedef struct CuiRendererMetal
 {
+    CuiRenderer base;
+
     CuiCommandBuffer command_buffer;
 
     id<MTLDevice> device;
@@ -566,6 +577,7 @@ typedef struct CuiRendererMetal
 
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <d3dcompiler.h>
 
 #undef COBJMACROS
 
@@ -584,6 +596,8 @@ typedef struct CuiDirect3D11Vertex
 
 typedef struct CuiRendererDirect3D11
 {
+    CuiRenderer base;
+
     CuiCommandBuffer command_buffer;
 
     int32_t framebuffer_width;

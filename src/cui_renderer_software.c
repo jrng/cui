@@ -1,8 +1,8 @@
 #define CUI_SOFTWARE_RENDERER_TILE_COUNT_X 8
 #define CUI_SOFTWARE_RENDERER_TILE_COUNT_Y 4
 
-static CuiRendererSoftware *
-_cui_create_software_renderer(void)
+static CuiRenderer *
+_cui_renderer_software_create(void)
 {
     uint64_t renderer_size          = CuiAlign(sizeof(CuiRendererSoftware), 16);
     uint64_t texture_operation_size = CuiAlign(_CUI_MAX_TEXTURE_OPERATION_COUNT * sizeof(CuiTextureOperation), 16);
@@ -18,6 +18,7 @@ _cui_create_software_renderer(void)
 
     CuiClearStruct(*renderer);
 
+    renderer->base.type = CUI_RENDERER_TYPE_SOFTWARE;
     renderer->allocation_size = allocation_size;
 
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
@@ -36,17 +37,17 @@ _cui_create_software_renderer(void)
     command_buffer->max_push_buffer_size = _CUI_MAX_PUSH_BUFFER_SIZE;
     command_buffer->push_buffer = (uint8_t *) allocation;
 
-    return renderer;
+    return &renderer->base;
 }
 
 static void
-_cui_destroy_software_renderer(CuiRendererSoftware *renderer)
+_cui_renderer_software_destroy(CuiRendererSoftware *renderer)
 {
     cui_platform_deallocate(renderer, renderer->allocation_size);
 }
 
 static CuiCommandBuffer *
-_cui_software_renderer_begin_command_buffer(CuiRendererSoftware *renderer)
+_cui_renderer_software_begin_command_buffer(CuiRendererSoftware *renderer)
 {
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
 
@@ -58,7 +59,7 @@ _cui_software_renderer_begin_command_buffer(CuiRendererSoftware *renderer)
 }
 
 static void
-_cui_software_renderer_render_tile(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer,
+_cui_renderer_software_render_tile(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer,
                                    CuiRect tile_rect, CuiColor clear_color)
 {
     CuiBitmap clear_bitmap = *framebuffer;
@@ -158,14 +159,14 @@ typedef struct CuiRenderWork
 } CuiRenderWork;
 
 static void
-_cui_software_renderer_do_render_work(void *data)
+_cui_renderer_software_do_render_work(void *data)
 {
     CuiRenderWork *job = (CuiRenderWork *) data;
-    _cui_software_renderer_render_tile(job->renderer, job->framebuffer, job->command_buffer, job->tile_rect, job->clear_color);
+    _cui_renderer_software_render_tile(job->renderer, job->framebuffer, job->command_buffer, job->tile_rect, job->clear_color);
 }
 
 static void
-_cui_software_renderer_render(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
+_cui_renderer_software_render(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
@@ -208,7 +209,7 @@ _cui_software_renderer_render(CuiRendererSoftware *renderer, CuiBitmap *framebuf
     CuiRect framebuffer_rect = cui_make_rect(0, 0, framebuffer->width, framebuffer->height);
 
     CuiWorkerThreadQueue *queue = &_cui_context.common.worker_thread_queue;
-    CuiWorkerThreadTaskGroup render_group = _cui_begin_worker_thread_task_group(_cui_software_renderer_do_render_work);
+    CuiWorkerThreadTaskGroup render_group = _cui_begin_worker_thread_task_group(_cui_renderer_software_do_render_work);
 
     uint32_t job_index = 0;
 

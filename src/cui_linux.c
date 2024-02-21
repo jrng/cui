@@ -247,7 +247,7 @@ static inline void
 _cui_wait_for_frame_completion(CuiWindow *window)
 {
     CuiAssert(_cui_context.has_shared_memory_extension);
-    CuiAssert(window->base.renderer_type == CUI_RENDERER_TYPE_SOFTWARE);
+    CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
 
     CuiX11FrameCompletionData frame_completion;
     frame_completion.event_type = _cui_context.x11_frame_completion_event;
@@ -325,7 +325,7 @@ _cui_x11_resize_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int32_t 
 static void
 _cui_x11_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiAssert(window->base.renderer_type == CUI_RENDERER_TYPE_SOFTWARE);
+    CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
     CuiAssert(!window->renderer.software.current_framebuffer);
 
     for (;;)
@@ -619,10 +619,9 @@ _cui_initialize_opengles2_x11(CuiWindow *window, XSetWindowAttributes window_att
 
                 window->renderer.opengles2.egl_surface = egl_surface;
                 window->renderer.opengles2.egl_context = egl_context;
-                window->base.renderer_type = CUI_RENDERER_TYPE_OPENGLES2;
-                window->renderer.opengles2.renderer_opengles2 = _cui_create_opengles2_renderer();
+                window->base.renderer = _cui_renderer_opengles2_create();
 
-                if (!window->renderer.opengles2.renderer_opengles2)
+                if (!window->base.renderer)
                 {
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
                     eglDestroyContext(_cui_context.egl_display, egl_context);
@@ -742,7 +741,7 @@ _cui_wayland_resize_framebuffer(CuiFramebuffer *framebuffer, int32_t width, int3
 static void
 _cui_wayland_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiAssert(window->base.renderer_type == CUI_RENDERER_TYPE_SOFTWARE);
+    CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
     CuiAssert(!window->renderer.software.current_framebuffer);
 
     for (;;)
@@ -805,7 +804,7 @@ _cui_wayland_commit_frame(CuiWindow *window)
     wl_surface_set_input_region(window->wayland_surface, input_region);
     wl_region_destroy(input_region);
 
-    switch (window->base.renderer_type)
+    switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
@@ -3153,10 +3152,9 @@ _cui_initialize_opengles2_wayland(CuiWindow *window)
 
                 window->renderer.opengles2.egl_surface = egl_surface;
                 window->renderer.opengles2.egl_context = egl_context;
-                window->base.renderer_type = CUI_RENDERER_TYPE_OPENGLES2;
-                window->renderer.opengles2.renderer_opengles2 = _cui_create_opengles2_renderer();
+                window->base.renderer = _cui_renderer_opengles2_create();
 
-                if (!window->renderer.opengles2.renderer_opengles2)
+                if (!window->base.renderer)
                 {
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
                     eglDestroyContext(_cui_context.egl_display, egl_context);
@@ -3195,38 +3193,7 @@ _cui_initialize_opengles2_wayland(CuiWindow *window)
 static void
 _cui_window_draw(CuiWindow *window)
 {
-    CuiCommandBuffer *command_buffer = 0;
-
-    switch (window->base.renderer_type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-#if CUI_RENDERER_SOFTWARE_ENABLED
-            command_buffer = _cui_software_renderer_begin_command_buffer(window->renderer.software.renderer_software);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-#if CUI_RENDERER_OPENGLES2_ENABLED
-            command_buffer = _cui_opengles2_renderer_begin_command_buffer(window->renderer.opengles2.renderer_opengles2);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-        } break;
-    }
+    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
 
     if (window->base.platform_root_widget)
     {
@@ -3288,7 +3255,7 @@ _cui_window_draw(CuiWindow *window)
     }
 #endif
 
-    switch (window->base.renderer_type)
+    switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
@@ -3309,8 +3276,8 @@ _cui_window_draw(CuiWindow *window)
 
                     CuiFramebuffer *framebuffer = window->renderer.software.current_framebuffer;
 
-                    _cui_software_renderer_render(window->renderer.software.renderer_software,
-                                                  &framebuffer->bitmap, command_buffer, CuiHexColor(0x00000000));
+                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                    _cui_renderer_software_render(renderer_software, &framebuffer->bitmap, command_buffer, CuiHexColor(0x00000000));
 
 #    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                     screenshot_bitmap = framebuffer->bitmap;
@@ -3327,8 +3294,8 @@ _cui_window_draw(CuiWindow *window)
 
                     CuiFramebuffer *framebuffer = window->renderer.software.current_framebuffer;
 
-                    _cui_software_renderer_render(window->renderer.software.renderer_software,
-                                                  &framebuffer->bitmap, command_buffer, CuiHexColor(0xFF000000));
+                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                    _cui_renderer_software_render(renderer_software, &framebuffer->bitmap, command_buffer, CuiHexColor(0xFF000000));
 
 #    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                     screenshot_bitmap = framebuffer->bitmap;
@@ -3377,9 +3344,9 @@ _cui_window_draw(CuiWindow *window)
                         wl_egl_window_resize(window->wayland_egl_window, framebuffer_width, framebuffer_height, 0, 0);
                     }
 
-                    _cui_opengles2_renderer_render(window->renderer.opengles2.renderer_opengles2,
-                                                   command_buffer, framebuffer_width, framebuffer_height,
-                                                   CuiHexColor(0x00000000));
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_render(renderer_opengles2, command_buffer, framebuffer_width,
+                                                   framebuffer_height, CuiHexColor(0x00000000));
 
 #    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                     if (window->take_screenshot)
@@ -3414,9 +3381,9 @@ _cui_window_draw(CuiWindow *window)
                                    window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context);
 #endif
 
-                    _cui_opengles2_renderer_render(window->renderer.opengles2.renderer_opengles2,
-                                                   command_buffer, framebuffer_width, framebuffer_height,
-                                                   CuiHexColor(0xFF000000));
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_render(renderer_opengles2, command_buffer, framebuffer_width,
+                                                   framebuffer_height, CuiHexColor(0xFF000000));
 
 #    if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
                     if (window->take_screenshot)
@@ -4045,8 +4012,7 @@ cui_window_create(uint32_t creation_flags)
 
             if (!renderer_initialized)
             {
-                window->base.renderer_type = CUI_RENDERER_TYPE_SOFTWARE;
-                window->renderer.software.renderer_software = _cui_create_software_renderer();
+                window->base.renderer = _cui_renderer_software_create();
 
                 int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
                 int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
@@ -4116,8 +4082,7 @@ cui_window_create(uint32_t creation_flags)
                 window->x11_window = XCreateWindow(_cui_context.x11_display, _cui_context.x11_root_window, 0, 0,
                                                    width, height, 0, 0, InputOutput, 0, CWEventMask, &window_attr);
 
-                window->base.renderer_type = CUI_RENDERER_TYPE_SOFTWARE;
-                window->renderer.software.renderer_software = _cui_create_software_renderer();
+                window->base.renderer = _cui_renderer_software_create();
 
                 int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
                 int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
@@ -4580,7 +4545,7 @@ cui_window_destroy(CuiWindow *window)
                 _cui_context.wayland_window_under_cursor = 0;
             }
 
-            switch (window->base.renderer_type)
+            switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {
@@ -4600,7 +4565,8 @@ cui_window_destroy(CuiWindow *window)
                         close(framebuffer->backend.wayland.shared_memory_fd);
                     }
 
-                    _cui_destroy_software_renderer(window->renderer.software.renderer_software);
+                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                    _cui_renderer_software_destroy(renderer_software);
 #  else
                     CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #  endif
@@ -4618,7 +4584,8 @@ cui_window_destroy(CuiWindow *window)
                                    window->renderer.opengles2.egl_surface, window->renderer.opengles2.egl_context);
 #endif
 
-                    _cui_destroy_opengles2_renderer(window->renderer.opengles2.renderer_opengles2);
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_destroy(renderer_opengles2);
 
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
@@ -4663,7 +4630,7 @@ cui_window_destroy(CuiWindow *window)
 
         case CUI_LINUX_BACKEND_X11:
         {
-            switch (window->base.renderer_type)
+            switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {
@@ -4690,7 +4657,8 @@ cui_window_destroy(CuiWindow *window)
                         cui_platform_deallocate(framebuffer->bitmap.pixels, framebuffer->shared_memory_size);
                     }
 
-                    _cui_destroy_software_renderer(window->renderer.software.renderer_software);
+                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                    _cui_renderer_software_destroy(renderer_software);
 #  else
                     CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #  endif
@@ -4706,7 +4674,8 @@ cui_window_destroy(CuiWindow *window)
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->renderer.opengles2.egl_context);
 #endif
 
-                    _cui_destroy_opengles2_renderer(window->renderer.opengles2.renderer_opengles2);
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_destroy(renderer_opengles2);
 
                     eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
@@ -5193,6 +5162,11 @@ cui_step(void)
                         }
                     } break;
 
+                    case Expose:
+                    {
+                        window->base.needs_redraw = true;
+                    } break;
+
                     case ConfigureNotify:
                     {
                         window->x11_configure_serial = window->x11_sync_request_serial;
@@ -5399,7 +5373,7 @@ cui_step(void)
                 {
                     _cui_window_draw(window);
 
-                    switch (window->base.renderer_type)
+                    switch (window->base.renderer->type)
                     {
                         case CUI_RENDERER_TYPE_SOFTWARE:
                         {

@@ -96,13 +96,12 @@ _cui_window_create_renderer(CuiWindow *window)
 
                 window->renderer.opengles2.egl_surface = egl_surface;
                 window->renderer.opengles2.egl_context = egl_context;
-                window->base.renderer_type = CUI_RENDERER_TYPE_OPENGLES2;
-                window->renderer.opengles2.renderer_opengles2 = _cui_create_opengles2_renderer();
+                window->base.renderer = _cui_renderer_opengles2_create();
 
-                if (window->renderer.opengles2.renderer_opengles2)
+                if (window->base.renderer)
                 {
-                    _cui_opengles2_renderer_restore_textures(window->renderer.opengles2.renderer_opengles2,
-                                                             window->texture_state_count, window->texture_states);
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_restore_textures(renderer_opengles2, window->texture_state_count, window->texture_states);
                 }
                 else
                 {
@@ -131,11 +130,11 @@ _cui_window_create_renderer(CuiWindow *window)
 static inline void
 _cui_window_destroy_renderer(CuiWindow *window)
 {
-    window->texture_state_count = _cui_opengles2_renderer_store_textures(window->renderer.opengles2.renderer_opengles2,
-                                                                         window->max_texture_state_count, window->texture_states);
+    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+    window->texture_state_count = _cui_renderer_opengles2_store_textures(renderer_opengles2, window->max_texture_state_count, window->texture_states);
 
-    _cui_destroy_opengles2_renderer(window->renderer.opengles2.renderer_opengles2);
-    window->renderer.opengles2.renderer_opengles2 = 0;
+    _cui_renderer_opengles2_destroy(renderer_opengles2);
+    window->base.renderer = 0;
 
     if (_cui_context.egl_display != EGL_NO_DISPLAY)
     {
@@ -360,34 +359,7 @@ _cui_on_window_focus_changed(ANativeActivity *activity, int has_focus)
 static void
 _cui_window_draw(CuiWindow *window)
 {
-    CuiCommandBuffer *command_buffer = 0;
-
-    switch (window->base.renderer_type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-#if CUI_RENDERER_OPENGLES2_ENABLED
-            command_buffer = _cui_opengles2_renderer_begin_command_buffer(window->renderer.opengles2.renderer_opengles2);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-        } break;
-    }
+    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
 
     EGLint surface_width, surface_height;
 
@@ -443,34 +415,7 @@ _cui_window_draw(CuiWindow *window)
         cui_end_temporary_memory(temp_memory);
     }
 
-    switch (window->base.renderer_type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-            _cui_opengles2_renderer_render(window->renderer.opengles2.renderer_opengles2,
-                                           command_buffer, window->width, window->height,
-                                           CuiHexColor(0xFF000000));
-#  else
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#  endif
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-        } break;
-    }
+    _cui_renderer_render(window->base.renderer, 0, window->width, window->height, command_buffer, CuiHexColor(0xFF000000));
 }
 
 void
@@ -488,11 +433,14 @@ void
 cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
 {
     (void) temporary_memory;
+    (void) text;
 }
 
 CuiString
 cui_platform_get_clipboard_text(CuiArena *arena)
 {
+    (void) arena;
+
     CuiString result = { 0, 0 };
 
     return result;
@@ -906,7 +854,7 @@ cui_step(void)
 
                             _cui_window_draw(window);
 
-                            switch (window->base.renderer_type)
+                            switch (window->base.renderer->type)
                             {
                                 case CUI_RENDERER_TYPE_SOFTWARE:
                                 {
@@ -1006,7 +954,7 @@ cui_step(void)
 
                         _cui_window_draw(window);
 
-                        switch (window->base.renderer_type)
+                        switch (window->base.renderer->type)
                         {
                             case CUI_RENDERER_TYPE_SOFTWARE:
                             {
@@ -1173,7 +1121,7 @@ cui_step(void)
         {
             _cui_window_draw(window);
 
-            switch (window->base.renderer_type)
+            switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {

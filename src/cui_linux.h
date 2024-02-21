@@ -249,7 +249,6 @@ struct CuiWindow
 
         struct
         {
-            CuiRendererSoftware *renderer_software;
             CuiFramebuffer *current_framebuffer;
             CuiFramebuffer framebuffers[3];
         } software;
@@ -260,8 +259,6 @@ struct CuiWindow
 
         struct
         {
-            CuiRendererOpengles2 *renderer_opengles2;
-
             EGLSurface egl_surface;
             EGLContext egl_context;
         } opengles2;

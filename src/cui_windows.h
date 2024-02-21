@@ -44,8 +44,6 @@ struct CuiWindow
 
         struct
         {
-            CuiRendererSoftware *renderer_software;
-
             CuiBitmap backbuffer;
             int64_t backbuffer_memory_size;
         } software;
@@ -56,8 +54,6 @@ struct CuiWindow
 
         struct
         {
-            CuiRendererDirect3D11 *renderer_direct3d11;
-
             ID3D11Device *d3d11_device;
             ID3D11DeviceContext *d3d11_device_context;
             IDXGISwapChain1 *dxgi_swapchain;

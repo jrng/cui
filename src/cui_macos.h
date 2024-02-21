@@ -54,22 +54,11 @@ struct CuiWindow
 
         struct
         {
-            CuiRendererSoftware *renderer_software;
-
             CuiBitmap backbuffer;
             int64_t backbuffer_memory_size;
 
             CGContextRef backbuffer_context;
         } software;
-
-#endif
-
-#if CUI_RENDERER_METAL_ENABLED
-
-        struct
-        {
-            CuiRendererMetal *renderer_metal;
-        } metal;
 
 #endif
 

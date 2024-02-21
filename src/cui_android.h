@@ -61,8 +61,6 @@ struct CuiWindow
 
         struct
         {
-            CuiRendererOpengles2 *renderer_opengles2;
-
             EGLSurface egl_surface;
             EGLContext egl_context;
         } opengles2;

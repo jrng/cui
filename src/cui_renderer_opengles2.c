@@ -2,7 +2,7 @@
 #define GL_UNPACK_ROW_LENGTH_EXT          0x0CF2
 
 static void
-_cui_opengles2_renderer_check_errors(GLuint id)
+_cui_renderer_opengles2_check_errors(GLuint id)
 {
     GLint length = 0;
 
@@ -40,7 +40,7 @@ _cui_opengles2_renderer_check_errors(GLuint id)
 }
 
 static GLuint
-_cui_opengles2_renderer_create_program(char *header_source, char *vertex_source, char *fragment_source)
+_cui_renderer_opengles2_create_program(char *header_source, char *vertex_source, char *fragment_source)
 {
     GLchar const * const vertex_shader_code[] = {
         header_source,
@@ -51,7 +51,7 @@ _cui_opengles2_renderer_create_program(char *header_source, char *vertex_source,
     glShaderSource(vertex_shader_id, CuiArrayCount(vertex_shader_code),
                    vertex_shader_code, 0);
     glCompileShader(vertex_shader_id);
-    _cui_opengles2_renderer_check_errors(vertex_shader_id);
+    _cui_renderer_opengles2_check_errors(vertex_shader_id);
 
     GLchar const * const fragment_shader_code[] = {
         header_source,
@@ -62,14 +62,14 @@ _cui_opengles2_renderer_create_program(char *header_source, char *vertex_source,
     glShaderSource(fragment_shader_id, CuiArrayCount(fragment_shader_code),
                    fragment_shader_code, 0);
     glCompileShader(fragment_shader_id);
-    _cui_opengles2_renderer_check_errors(fragment_shader_id);
+    _cui_renderer_opengles2_check_errors(fragment_shader_id);
 
     GLuint program_id = glCreateProgram();
     glAttachShader(program_id, vertex_shader_id);
     glAttachShader(program_id, fragment_shader_id);
 
     glLinkProgram(program_id);
-    _cui_opengles2_renderer_check_errors(program_id);
+    _cui_renderer_opengles2_check_errors(program_id);
 
     glDeleteShader(vertex_shader_id);
     glDeleteShader(fragment_shader_id);
@@ -77,8 +77,8 @@ _cui_opengles2_renderer_create_program(char *header_source, char *vertex_source,
     return program_id;
 }
 
-static CuiRendererOpengles2 *
-_cui_create_opengles2_renderer(void)
+static CuiRenderer *
+_cui_renderer_opengles2_create(void)
 {
     GLint major_version = 2;
     glGetIntegerv(GL_MAJOR_VERSION, &major_version);
@@ -129,6 +129,7 @@ _cui_create_opengles2_renderer(void)
 
     CuiClearStruct(*renderer);
 
+    renderer->base.type = CUI_RENDERER_TYPE_OPENGLES2;
     renderer->allocation_size = allocation_size;
 
 #if 0
@@ -200,7 +201,7 @@ _cui_create_opengles2_renderer(void)
     "    gl_FragColor = v_color * texture2D(u_texture, v_uv).bgra;\n"
     "}\n";
 
-    renderer->program = _cui_opengles2_renderer_create_program(header, vertex_source, fragment_source);
+    renderer->program = _cui_renderer_opengles2_create_program(header, vertex_source, fragment_source);
     renderer->texture_scale_location = glGetUniformLocation(renderer->program, "u_texture_scale");
     renderer->vertex_scale_location = glGetUniformLocation(renderer->program, "u_vertex_scale");
     renderer->texture_location = glGetUniformLocation(renderer->program, "u_texture");
@@ -210,11 +211,11 @@ _cui_create_opengles2_renderer(void)
 
     glReleaseShaderCompiler();
 
-    return renderer;
+    return &renderer->base;
 }
 
 static void
-_cui_destroy_opengles2_renderer(CuiRendererOpengles2 *renderer)
+_cui_renderer_opengles2_destroy(CuiRendererOpengles2 *renderer)
 {
     glDeleteTextures(CuiArrayCount(renderer->textures), renderer->textures);
     glDeleteProgram(renderer->program);
@@ -226,7 +227,7 @@ _cui_destroy_opengles2_renderer(CuiRendererOpengles2 *renderer)
 #if CUI_PLATFORM_ANDROID
 
 static uint32_t
-_cui_opengles2_renderer_store_textures(CuiRendererOpengles2 *renderer, uint32_t max_texture_state_count, CuiTextureState *texture_states)
+_cui_renderer_opengles2_store_textures(CuiRendererOpengles2 *renderer, uint32_t max_texture_state_count, CuiTextureState *texture_states)
 {
     uint32_t count = 0;
 
@@ -249,7 +250,7 @@ _cui_opengles2_renderer_store_textures(CuiRendererOpengles2 *renderer, uint32_t 
 }
 
 static void
-_cui_opengles2_renderer_restore_textures(CuiRendererOpengles2 *renderer, uint32_t texture_state_count, CuiTextureState *texture_states)
+_cui_renderer_opengles2_restore_textures(CuiRendererOpengles2 *renderer, uint32_t texture_state_count, CuiTextureState *texture_states)
 {
     for (uint32_t i = 0; i < texture_state_count; i += 1)
     {
@@ -291,7 +292,7 @@ _cui_opengles2_renderer_restore_textures(CuiRendererOpengles2 *renderer, uint32_
 #endif
 
 static CuiCommandBuffer *
-_cui_opengles2_renderer_begin_command_buffer(CuiRendererOpengles2 *renderer)
+_cui_renderer_opengles2_begin_command_buffer(CuiRendererOpengles2 *renderer)
 {
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
 
@@ -303,7 +304,7 @@ _cui_opengles2_renderer_begin_command_buffer(CuiRendererOpengles2 *renderer)
 }
 
 static void
-_cui_opengles2_renderer_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer *command_buffer,
+_cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiCommandBuffer *command_buffer,
                                int32_t window_width, int32_t window_height, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);

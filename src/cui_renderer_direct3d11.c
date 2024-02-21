@@ -1,5 +1,5 @@
-static CuiRendererDirect3D11 *
-_cui_create_direct3d11_renderer(ID3D11Device *d3d11_device, ID3D11DeviceContext *d3d11_device_context, IDXGISwapChain1 *dxgi_swapchain)
+static CuiRenderer *
+_cui_renderer_direct3d11_create(ID3D11Device *d3d11_device, ID3D11DeviceContext *d3d11_device_context, IDXGISwapChain1 *dxgi_swapchain)
 {
     uint64_t renderer_size          = CuiAlign(sizeof(CuiRendererDirect3D11), 16);
     uint64_t texture_operation_size = CuiAlign(_CUI_MAX_TEXTURE_OPERATION_COUNT * sizeof(CuiTextureOperation), 16);
@@ -15,6 +15,7 @@ _cui_create_direct3d11_renderer(ID3D11Device *d3d11_device, ID3D11DeviceContext 
 
     CuiClearStruct(*renderer);
 
+    renderer->base.type = CUI_RENDERER_TYPE_DIRECT3D11;
     renderer->allocation_size = allocation_size;
 
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
@@ -88,6 +89,7 @@ _cui_create_direct3d11_renderer(ID3D11Device *d3d11_device, ID3D11DeviceContext 
     if (FAILED(D3DCompile(shader_source.data, shader_source.count, "cui_shader.hlsl", 0, 0, "vertex_main", "vs_5_0", 0, 0, &vertex_binary, &errors)))
     {
         CuiString error_string = cui_make_string(ID3D10Blob_GetBufferPointer(errors), ID3D10Blob_GetBufferSize(errors));
+        (void) error_string;
         __debugbreak();
         cui_platform_deallocate(renderer, renderer->allocation_size);
         return 0;
@@ -96,6 +98,7 @@ _cui_create_direct3d11_renderer(ID3D11Device *d3d11_device, ID3D11DeviceContext 
     if (FAILED(D3DCompile(shader_source.data, shader_source.count, "cui_shader.hlsl", 0, 0, "pixel_main", "ps_5_0", 0, 0, &pixel_binary, &errors)))
     {
         CuiString error_string = cui_make_string(ID3D10Blob_GetBufferPointer(errors), ID3D10Blob_GetBufferSize(errors));
+        (void) error_string;
         __debugbreak();
         cui_platform_deallocate(renderer, renderer->allocation_size);
         return 0;
@@ -108,8 +111,6 @@ _cui_create_direct3d11_renderer(ID3D11Device *d3d11_device, ID3D11DeviceContext 
 
     ID3D11DeviceContext_VSSetShader(renderer->device_context, renderer->vertex_shader, 0, 0);
     ID3D11DeviceContext_PSSetShader(renderer->device_context, renderer->pixel_shader, 0, 0);
-
-    ID3D11InputLayout *vertex_layout;
 
     const D3D11_INPUT_ELEMENT_DESC vertex_layout_description[] = {
         { "POS", 0, DXGI_FORMAT_R32G32_FLOAT,       0, CuiOffsetOf(CuiDirect3D11Vertex, position), D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -203,11 +204,11 @@ _cui_create_direct3d11_renderer(ID3D11Device *d3d11_device, ID3D11DeviceContext 
     ID3D11DeviceContext_RSSetViewports(renderer->device_context, 1, &viewport);
     ID3D11DeviceContext_IASetPrimitiveTopology(renderer->device_context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    return renderer;
+    return &renderer->base;
 }
 
 static void
-_cui_destroy_direct3d11_renderer(CuiRendererDirect3D11 *renderer)
+_cui_renderer_direct3d11_destroy(CuiRendererDirect3D11 *renderer)
 {
     ID3D11DeviceContext_ClearState(renderer->device_context);
 
@@ -224,7 +225,7 @@ _cui_destroy_direct3d11_renderer(CuiRendererDirect3D11 *renderer)
 }
 
 static CuiCommandBuffer *
-_cui_direct3d11_renderer_begin_command_buffer(CuiRendererDirect3D11 *renderer)
+_cui_renderer_direct3d11_begin_command_buffer(CuiRendererDirect3D11 *renderer)
 {
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
 
@@ -236,7 +237,7 @@ _cui_direct3d11_renderer_begin_command_buffer(CuiRendererDirect3D11 *renderer)
 }
 
 static void
-_cui_direct3d11_renderer_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffer *command_buffer,
+_cui_renderer_direct3d11_render(CuiRendererDirect3D11 *renderer, CuiCommandBuffer *command_buffer,
                                int32_t window_width, int32_t window_height, CuiColor clear_color)
 {
     CuiAssert(&renderer->command_buffer == command_buffer);

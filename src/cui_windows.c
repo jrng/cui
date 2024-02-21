@@ -42,7 +42,7 @@ _cui_background_thread_proc(void *data)
 static void
 _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 {
-    CuiAssert(window->base.renderer_type == CUI_RENDERER_TYPE_SOFTWARE);
+    CuiAssert(window->base.renderer->type == CUI_RENDERER_TYPE_SOFTWARE);
 
     CuiAssert((window->renderer.software.backbuffer.width != width) || (window->renderer.software.backbuffer.height != height));
 
@@ -133,10 +133,9 @@ _cui_initialize_direct3d11(CuiWindow *window)
             {
                 IDXGIFactory2_MakeWindowAssociation(dxgi_factory, window->window_handle, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
 
-                window->base.renderer_type = CUI_RENDERER_TYPE_DIRECT3D11;
-                window->renderer.direct3d11.renderer_direct3d11 = _cui_create_direct3d11_renderer(d3d11_base_device, d3d11_base_context, dxgi_swapchain);
+                window->base.renderer = _cui_renderer_direct3d11_create(d3d11_base_device, d3d11_base_context, dxgi_swapchain);
 
-                if (window->renderer.direct3d11.renderer_direct3d11)
+                if (window->base.renderer)
                 {
                     window->renderer.direct3d11.d3d11_device = d3d11_base_device;
                     window->renderer.direct3d11.d3d11_device_context = d3d11_base_context;
@@ -172,38 +171,7 @@ _cui_initialize_direct3d11(CuiWindow *window)
 static void
 _cui_window_draw(CuiWindow *window)
 {
-    CuiCommandBuffer *command_buffer = 0;
-
-    switch (window->base.renderer_type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-#if CUI_RENDERER_SOFTWARE_ENABLED
-            command_buffer = _cui_software_renderer_begin_command_buffer(window->renderer.software.renderer_software);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-#if CUI_RENDERER_DIRECT3D11_ENABLED
-            command_buffer = _cui_direct3d11_renderer_begin_command_buffer(window->renderer.direct3d11.renderer_direct3d11);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
-#endif
-        } break;
-    }
+    CuiCommandBuffer *command_buffer = _cui_renderer_begin_command_buffer(window->base.renderer);
 
     if (window->base.platform_root_widget)
     {
@@ -277,7 +245,7 @@ _cui_window_draw(CuiWindow *window)
 
 #endif
 
-    switch (window->base.renderer_type)
+    switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
@@ -287,8 +255,8 @@ _cui_window_draw(CuiWindow *window)
                 _cui_window_resize_backbuffer(window, window->width, window->height);
             }
 
-            _cui_software_renderer_render(window->renderer.software.renderer_software,
-                                          &window->renderer.software.backbuffer,
+            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+            _cui_renderer_software_render(renderer_software, &window->renderer.software.backbuffer,
                                           command_buffer, CuiHexColor(0xFF000000));
 
 #  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
@@ -312,8 +280,9 @@ _cui_window_draw(CuiWindow *window)
         case CUI_RENDERER_TYPE_DIRECT3D11:
         {
 #if CUI_RENDERER_DIRECT3D11_ENABLED
-            _cui_direct3d11_renderer_render(window->renderer.direct3d11.renderer_direct3d11, command_buffer,
-                                            window->width, window->height, CuiHexColor(0xFF000000));
+            CuiRendererDirect3D11 *renderer_direct3d11 = CuiContainerOf(window->base.renderer, CuiRendererDirect3D11, base);
+            _cui_renderer_direct3d11_render(renderer_direct3d11, command_buffer, window->width,
+                                            window->height, CuiHexColor(0xFF000000));
 
 #  if CUI_FRAMEBUFFER_SCREENSHOT_ENABLED
             if (window->take_screenshot)
@@ -428,8 +397,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
 #if CUI_RENDERER_DIRECT3D11_ENABLED
 
-            if ((window->base.renderer_type == CUI_RENDERER_TYPE_DIRECT3D11) &&
-                window->renderer.direct3d11.renderer_direct3d11)
+            if (window->base.renderer && (window->base.renderer->type == CUI_RENDERER_TYPE_DIRECT3D11))
             {
                 RECT *client_rect;
 
@@ -602,7 +570,7 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_PAINT:
         {
-            switch (window->base.renderer_type)
+            switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {
@@ -1681,8 +1649,7 @@ cui_window_create(uint32_t creation_flags)
 
     if (!renderer_initialized)
     {
-        window->base.renderer_type = CUI_RENDERER_TYPE_SOFTWARE;
-        window->renderer.software.renderer_software = _cui_create_software_renderer();
+        window->base.renderer = _cui_renderer_software_create();
         renderer_initialized = true;
     }
 
@@ -1849,7 +1816,7 @@ cui_window_close(CuiWindow *window)
 void
 cui_window_destroy(CuiWindow *window)
 {
-    switch (window->base.renderer_type)
+    switch (window->base.renderer->type)
     {
         case CUI_RENDERER_TYPE_SOFTWARE:
         {
@@ -1859,7 +1826,8 @@ cui_window_destroy(CuiWindow *window)
                 cui_platform_deallocate(window->renderer.software.backbuffer.pixels, window->renderer.software.backbuffer_memory_size);
             }
 
-            _cui_destroy_software_renderer(window->renderer.software.renderer_software);
+            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+            _cui_renderer_software_destroy(renderer_software);
 #else
             CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #endif
@@ -1878,7 +1846,8 @@ cui_window_destroy(CuiWindow *window)
         case CUI_RENDERER_TYPE_DIRECT3D11:
         {
 #if CUI_RENDERER_DIRECT3D11_ENABLED
-            _cui_destroy_direct3d11_renderer(window->renderer.direct3d11.renderer_direct3d11);
+            CuiRendererDirect3D11 *renderer_direct3d11 = CuiContainerOf(window->base.renderer, CuiRendererDirect3D11, base);
+            _cui_renderer_direct3d11_destroy(renderer_direct3d11);
 
             CuiAssert(window->renderer.direct3d11.dxgi_swapchain);
             IDXGISwapChain1_Release(window->renderer.direct3d11.dxgi_swapchain);
@@ -1968,7 +1937,7 @@ cui_step(void)
         {
             _cui_window_draw(window);
 
-            switch (window->base.renderer_type)
+            switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {
