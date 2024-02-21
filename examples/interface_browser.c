@@ -7,6 +7,11 @@ typedef struct InterfaceBrowser
 
     CuiWidget root_widget;
 
+    CuiWidget action_label;
+    CuiWidget action_row;
+    CuiWidget actions[2];
+    CuiWidget last_action;
+
     CuiWidget checkbox_label;
 
     CuiWidget checkbox_row;
@@ -48,6 +53,25 @@ typedef struct InterfaceBrowser
 
 static InterfaceBrowser app;
 
+static void
+on_resize_button(CuiWidget *widget)
+{
+    CuiWindow *window = widget->window;
+    CuiAssert(window);
+
+    cui_window_resize(window, lroundf(cui_window_get_ui_scale(window) * 400),
+                              lroundf(cui_window_get_ui_scale(window) * 200));
+}
+
+static void
+on_fullscreen_button(CuiWidget *widget)
+{
+    CuiWindow *window = widget->window;
+    CuiAssert(window);
+
+    cui_window_set_fullscreen(window, !cui_window_is_fullscreen(window));
+}
+
 CUI_PLATFORM_MAIN
 {
     if (!CUI_PLATFORM_INIT)
@@ -60,7 +84,7 @@ CUI_PLATFORM_MAIN
 
     cui_window_set_title(app.window1, CuiStringLiteral("🔥🔥🔥 Interface Browser 🔥🔥🔥"));
     cui_window_resize(app.window1, lroundf(cui_window_get_ui_scale(app.window1) * 640),
-                                  lroundf(cui_window_get_ui_scale(app.window1) * 480));
+                                   lroundf(cui_window_get_ui_scale(app.window1) * 480));
 
     cui_window_set_title(app.window2, CuiStringLiteral("Window 2"));
 
@@ -70,6 +94,38 @@ CUI_PLATFORM_MAIN
     cui_widget_set_y_axis_gravity(&app.root_widget, CUI_GRAVITY_START);
     cui_widget_set_inline_padding(&app.root_widget, 8.0f);
     cui_widget_set_padding(&app.root_widget, 8.0f, 8.0f, 8.0f, 8.0f);
+
+    { // action label
+        cui_widget_init(&app.action_label, CUI_WIDGET_TYPE_LABEL);
+        cui_widget_set_label(&app.action_label, CuiStringLiteral("Actions"));
+        cui_widget_set_x_axis_gravity(&app.action_label, CUI_GRAVITY_START);
+        cui_widget_set_y_axis_gravity(&app.action_label, CUI_GRAVITY_START);
+
+        cui_widget_append_child(&app.root_widget, &app.action_label);
+    }
+
+    { // action row
+        cui_widget_init(&app.action_row, CUI_WIDGET_TYPE_BOX);
+        cui_widget_set_main_axis(&app.action_row, CUI_AXIS_X);
+        cui_widget_set_x_axis_gravity(&app.action_row, CUI_GRAVITY_START);
+        cui_widget_set_inline_padding(&app.action_row, 8.0f);
+
+        cui_widget_init(app.actions + 0, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.actions + 1, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(&app.last_action, CUI_WIDGET_TYPE_BOX);
+
+        app.actions[0].on_action = on_resize_button;
+        app.actions[1].on_action = on_fullscreen_button;
+
+        cui_widget_set_label(app.actions + 0, CuiStringLiteral("Resize"));
+        cui_widget_set_label(app.actions + 1, CuiStringLiteral("Toggle Fullscreen"));
+
+        cui_widget_append_child(&app.action_row, app.actions + 0);
+        cui_widget_append_child(&app.action_row, app.actions + 1);
+        cui_widget_append_child(&app.action_row, &app.last_action);
+
+        cui_widget_append_child(&app.root_widget, &app.action_row);
+    }
 
     { // checkbox label
         cui_widget_init(&app.checkbox_label, CUI_WIDGET_TYPE_LABEL);
