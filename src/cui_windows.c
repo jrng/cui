@@ -3,6 +3,8 @@
 #include <uxtheme.h>
 #include <vssym32.h>
 
+// #define CUI_WINDOWS_CALLBACK_TRACING
+
 static DWORD
 _cui_worker_thread_proc(void *data)
 {
@@ -124,7 +126,16 @@ _cui_initialize_direct3d11(CuiWindow *window)
             swapchain_description.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
             swapchain_description.BufferCount        = 2;
             swapchain_description.Scaling            = DXGI_SCALING_NONE;
-            swapchain_description.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+            if (IsWindows10OrGreater())
+            {
+                swapchain_description.SwapEffect     = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+            }
+            else
+            {
+                swapchain_description.SwapEffect     = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+            }
+
             swapchain_description.AlphaMode          = DXGI_ALPHA_MODE_IGNORE;
             swapchain_description.Flags              = 0;
 
@@ -167,6 +178,66 @@ _cui_initialize_direct3d11(CuiWindow *window)
 }
 
 #endif
+
+static void
+_cui_window_destroy(CuiWindow *window)
+{
+    switch (window->base.renderer->type)
+    {
+        case CUI_RENDERER_TYPE_SOFTWARE:
+        {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+            if (window->renderer.software.backbuffer.pixels)
+            {
+                cui_platform_deallocate(window->renderer.software.backbuffer.pixels, window->renderer.software.backbuffer_memory_size);
+            }
+
+            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+            _cui_renderer_software_destroy(renderer_software);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+        } break;
+
+        case CUI_RENDERER_TYPE_OPENGLES2:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_METAL:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_DIRECT3D11:
+        {
+#if CUI_RENDERER_DIRECT3D11_ENABLED
+            CuiRendererDirect3D11 *renderer_direct3d11 = CuiContainerOf(window->base.renderer, CuiRendererDirect3D11, base);
+            _cui_renderer_direct3d11_destroy(renderer_direct3d11);
+
+            CuiAssert(window->renderer.direct3d11.dxgi_swapchain);
+            IDXGISwapChain1_Release(window->renderer.direct3d11.dxgi_swapchain);
+
+            CuiAssert(window->renderer.direct3d11.d3d11_device_context);
+            ID3D11DeviceContext_Release(window->renderer.direct3d11.d3d11_device_context);
+
+            CuiAssert(window->renderer.direct3d11.d3d11_device);
+            ID3D11Device_Release(window->renderer.direct3d11.d3d11_device);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
+#endif
+        } break;
+    }
+
+    cui_arena_deallocate(&window->arena);
+    _cui_remove_window(window);
+}
+
+static void
+_cui_window_close(CuiWindow *window)
+{
+    DestroyWindow(window->window_handle);
+}
 
 static CuiFramebuffer *
 _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
@@ -231,6 +302,70 @@ _cui_window_is_maximized(CuiWindow *window)
     return result;
 }
 
+static void
+_cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
+{
+    if (cui_window_is_fullscreen(window))
+    {
+        if (!fullscreen)
+        {
+            DWORD window_style = GetWindowLong(window->window_handle, GWL_STYLE);
+
+            window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
+
+            if (window->use_custom_decoration)
+            {
+                SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
+                cui_widget_set_preferred_size(window->titlebar, 0.0f, window->titlebar_height);
+            }
+            else
+            {
+                SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_OVERLAPPEDWINDOW);
+            }
+
+            SetWindowPlacement(window->window_handle, &window->windowed_placement);
+            SetWindowPos(window->window_handle, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+    }
+    else
+    {
+        if (fullscreen)
+        {
+            DWORD window_style = GetWindowLong(window->window_handle, GWL_STYLE);
+
+            window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
+
+            MONITORINFO monitor_info = { sizeof(monitor_info) };
+
+            window->windowed_placement.length = sizeof(window->windowed_placement);
+
+            if (GetWindowPlacement(window->window_handle, &window->windowed_placement) &&
+                GetMonitorInfo(MonitorFromWindow(window->window_handle, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
+            {
+                if (window->use_custom_decoration)
+                {
+                    SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~(WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX));
+                    cui_widget_set_preferred_size(window->titlebar, 0.0f, 0.0f);
+                }
+                else
+                {
+                    SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~WS_OVERLAPPEDWINDOW);
+                }
+
+                SetWindowPos(window->window_handle, HWND_TOP,
+                             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                             monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                             monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            }
+        }
+    }
+}
+
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+static int32_t window_callback_indent = 0;
+#endif
+
 LRESULT CALLBACK
 _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -238,6 +373,10 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
     if (message == WM_NCCREATE)
     {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+        fprintf(stderr, "%*sWM_NCCREATE\n", window_callback_indent, "");
+#endif
+
         LPCREATESTRUCT create_struct = (LPCREATESTRUCT) l_param;
         window = (CuiWindow *) create_struct->lpCreateParams;
         SetWindowLongPtr(window_handle, GWLP_USERDATA, (LONG_PTR) window);
@@ -247,12 +386,38 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
         window = (CuiWindow *) GetWindowLongPtr(window_handle, GWLP_USERDATA);
     }
 
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+    window_callback_indent += 2;
+#endif
+
     LRESULT result = FALSE;
 
     switch (message)
     {
+        case WM_SETCURSOR:
+        {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_SETCURSOR\n", window_callback_indent, "");
+#endif
+
+            result = DefWindowProc(window_handle, message, w_param, l_param);
+        } break;
+
+        case WM_SYSCOMMAND:
+        {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_SYSCOMMAND\n", window_callback_indent, "");
+#endif
+
+            result = DefWindowProc(window_handle, message, w_param, l_param);
+        } break;
+
         case WM_NCCALCSIZE:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_NCCALCSIZE\n", window_callback_indent, "");
+#endif
+
             if (w_param && window->use_custom_decoration)
             {
                 if (!cui_window_is_fullscreen(window))
@@ -320,13 +485,24 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
                         cui_widget_layout(window->base.platform_root_widget, rect);
                     }
 
-                    _cui_window_draw(window, window->width, window->height);
+                    window->base.needs_redraw = true;
+                    window->base.width = window->width;
+                    window->base.height = window->height;
 
-                    // TODO: check for errors
-                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 0, DXGI_PRESENT_RESTART);
-                    IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 1, DXGI_PRESENT_DO_NOT_SEQUENCE);
+                    CuiWindowFrameResult window_frame_result = { 0 };
+                    CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
 
-                    window->base.needs_redraw = false;
+                    if (framebuffer)
+                    {
+                        // TODO: check for errors
+                        IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 0, DXGI_PRESENT_RESTART);
+                        IDXGISwapChain1_Present(window->renderer.direct3d11.dxgi_swapchain, 1, DXGI_PRESENT_DO_NOT_SEQUENCE);
+                    }
+
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
+                    {
+                        _cui_window_close(window);
+                    }
                 }
             }
 
@@ -336,6 +512,10 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_NCHITTEST:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_NCHITTEST\n", window_callback_indent, "");
+#endif
+
             if (window->use_custom_decoration)
             {
                 LRESULT hit = DefWindowProc(window_handle, message, w_param, l_param);
@@ -414,6 +594,10 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_CREATE:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_CREATE\n", window_callback_indent, "");
+#endif
+
             if (window->use_custom_decoration)
             {
                 RECT window_rect;
@@ -427,6 +611,10 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_DPICHANGED:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_DPICHANGED\n", window_callback_indent, "");
+#endif
+
             window->dpi = HIWORD(w_param);
             float ui_scale = (float) window->dpi / 96.0f;
 
@@ -443,6 +631,10 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_SIZE:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_SIZE\n", window_callback_indent, "");
+#endif
+
             RECT client_rect;
             GetClientRect(window_handle, &client_rect);
 
@@ -466,33 +658,52 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_PAINT:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sWM_PAINT\n", window_callback_indent, "");
+#endif
+
             switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
                 {
 #if CUI_RENDERER_SOFTWARE_ENABLED
-                    if (window->base.needs_redraw)
+                    ValidateRect(window->window_handle, 0);
+
+                    window->base.width = window->width;
+                    window->base.height = window->height;
+
+                    CuiWindowFrameResult window_frame_result = { 0 };
+                    CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
+
+                    if (framebuffer)
                     {
-                        _cui_window_draw(window, window->width, window->height);
-                        window->base.needs_redraw = false;
+                        HDC device_context = GetDC(window->window_handle);
+
+                        BITMAPINFO bitmap;
+                        bitmap.bmiHeader.biSize        = sizeof(bitmap.bmiHeader);
+                        bitmap.bmiHeader.biWidth       = window->renderer.software.backbuffer.stride / sizeof(uint32_t);
+                        bitmap.bmiHeader.biHeight      = -(LONG) window->renderer.software.backbuffer.height;
+                        bitmap.bmiHeader.biPlanes      = 1;
+                        bitmap.bmiHeader.biBitCount    = 32;
+                        bitmap.bmiHeader.biCompression = BI_RGB;
+
+                        StretchDIBits(device_context, 0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
+                                      0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
+                                      window->renderer.software.backbuffer.pixels, &bitmap, DIB_RGB_COLORS, SRCCOPY);
+
+                        ReleaseDC(window->window_handle, device_context);
                     }
 
-                    PAINTSTRUCT paint;
-                    HDC device_context = BeginPaint(window_handle, &paint);
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
+                    {
+                        _cui_window_close(window);
+                        break;
+                    }
 
-                    BITMAPINFO bitmap;
-                    bitmap.bmiHeader.biSize        = sizeof(bitmap.bmiHeader);
-                    bitmap.bmiHeader.biWidth       = window->renderer.software.backbuffer.stride / sizeof(uint32_t);
-                    bitmap.bmiHeader.biHeight      = -(LONG) window->renderer.software.backbuffer.height;
-                    bitmap.bmiHeader.biPlanes      = 1;
-                    bitmap.bmiHeader.biBitCount    = 32;
-                    bitmap.bmiHeader.biCompression = BI_RGB;
-
-                    StretchDIBits(device_context, 0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
-                                  0, 0, window->renderer.software.backbuffer.width, window->renderer.software.backbuffer.height,
-                                  window->renderer.software.backbuffer.pixels, &bitmap, DIB_RGB_COLORS, SRCCOPY);
-
-                    EndPaint(window_handle, &paint);
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN)
+                    {
+                        _cui_window_set_fullscreen(window, window_frame_result.should_be_fullscreen);
+                    }
 #else
                     CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #endif
@@ -545,10 +756,11 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
                 POINT cursor_point = { .x = GET_X_LPARAM(l_param), .y = GET_Y_LPARAM(l_param) };
                 ScreenToClient(window->window_handle, &cursor_point);
 
-                window->base.event.mouse.x = cursor_point.x;
-                window->base.event.mouse.y = cursor_point.y;
+                CuiEvent *event = cui_array_append(window->base.events);
 
-                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+                event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+                event->mouse.x = cursor_point.x;
+                event->mouse.y = cursor_point.y;
             }
             else
             {
@@ -575,10 +787,11 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
                 window->is_tracking_mouse = true;
             }
 
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+            CuiEvent *event = cui_array_append(window->base.events);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+            event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+            event->mouse.x = GET_X_LPARAM(l_param);
+            event->mouse.y = GET_Y_LPARAM(l_param);
         } break;
 
         case WM_NCMOUSELEAVE:
@@ -588,7 +801,8 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
                 // OutputDebugString(L"WM_NCMOUSELEAVE\n");
 
                 window->is_tracking_ncmouse = false;
-                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+                CuiEvent *event = cui_array_append(window->base.events);
+                event->type = CUI_EVENT_TYPE_MOUSE_LEAVE;
             }
         } break;
 
@@ -599,7 +813,8 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
                 // OutputDebugString(L"WM_MOUSELEAVE\n");
 
                 window->is_tracking_mouse = false;
-                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+                CuiEvent *event = cui_array_append(window->base.events);
+                event->type = CUI_EVENT_TYPE_MOUSE_LEAVE;
             }
         } break;
 
@@ -619,71 +834,91 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
         {
             // OutputDebugString(L"WM_LBUTTONDOWN\n");
             // TODO: SetCapture(window->window_handle) ?
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+            CuiEvent *event = cui_array_append(window->base.events);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_DOWN);
+            event->type = CUI_EVENT_TYPE_LEFT_DOWN;
+            event->mouse.x = GET_X_LPARAM(l_param);
+            event->mouse.y = GET_Y_LPARAM(l_param);
         } break;
 
         case WM_LBUTTONDBLCLK:
         {
             // OutputDebugString(L"WM_LBUTTONDBLCLK\n");
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+            CuiEvent *event = cui_array_append(window->base.events);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+            event->type = CUI_EVENT_TYPE_DOUBLE_CLICK;
+            event->mouse.x = GET_X_LPARAM(l_param);
+            event->mouse.y = GET_Y_LPARAM(l_param);
         } break;
 
         case WM_LBUTTONUP:
         {
             // TODO: ReleaseCapture(window->window_handle) ?
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+            CuiEvent *event = cui_array_append(window->base.events);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_UP);
+            event->type = CUI_EVENT_TYPE_LEFT_UP;
+            event->mouse.x = GET_X_LPARAM(l_param);
+            event->mouse.y = GET_Y_LPARAM(l_param);
         } break;
 
         case WM_RBUTTONDOWN:
         {
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+            CuiEvent *event = cui_array_append(window->base.events);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_DOWN);
+            event->type = CUI_EVENT_TYPE_RIGHT_DOWN;
+            event->mouse.x = GET_X_LPARAM(l_param);
+            event->mouse.y = GET_Y_LPARAM(l_param);
         } break;
 
         case WM_RBUTTONUP:
         {
-            window->base.event.mouse.x = GET_X_LPARAM(l_param);
-            window->base.event.mouse.y = GET_Y_LPARAM(l_param);
+            CuiEvent *event = cui_array_append(window->base.events);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
+            event->type = CUI_EVENT_TYPE_RIGHT_UP;
+            event->mouse.x = GET_X_LPARAM(l_param);
+            event->mouse.y = GET_Y_LPARAM(l_param);
         } break;
 
         case WM_MOUSEHWHEEL:
         {
-            window->base.event.wheel.is_precise_scrolling = false;
-            // TODO: where should this 3 be applied?
-            window->base.event.wheel.dx = (float) ((3 * GET_WHEEL_DELTA_WPARAM(w_param)) / WHEEL_DELTA);
+            POINT mouse_position = { .x = GET_X_LPARAM(l_param), .y = GET_Y_LPARAM(l_param) };
+            ScreenToClient(window->window_handle, &mouse_position);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+            CuiEvent *event = cui_array_append(window->base.events);
+
+            event->type = CUI_EVENT_TYPE_MOUSE_WHEEL;
+            event->mouse.x = mouse_position.x;
+            event->mouse.y = mouse_position.y;
+            event->wheel.is_precise_scrolling = false;
+            // TODO: where should this 3 be applied?
+            event->wheel.dx = (float) ((3 * GET_WHEEL_DELTA_WPARAM(w_param)) / WHEEL_DELTA);
+            event->wheel.dy = 0.0f;
         } break;
 
         case WM_MOUSEWHEEL:
         {
-            window->base.event.wheel.is_precise_scrolling = false;
-            // TODO: where should this 3 be applied?
-            window->base.event.wheel.dy = (float) ((3 * GET_WHEEL_DELTA_WPARAM(w_param)) / WHEEL_DELTA);
+            POINT mouse_position = { .x = GET_X_LPARAM(l_param), .y = GET_Y_LPARAM(l_param) };
+            ScreenToClient(window->window_handle, &mouse_position);
 
-            cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+            CuiEvent *event = cui_array_append(window->base.events);
+
+            event->type = CUI_EVENT_TYPE_MOUSE_WHEEL;
+            event->mouse.x = mouse_position.x;
+            event->mouse.y = mouse_position.y;
+            event->wheel.is_precise_scrolling = false;
+            // TODO: where should this 3 be applied?
+            event->wheel.dx = 0.0f;
+            event->wheel.dy = (float) ((3 * GET_WHEEL_DELTA_WPARAM(w_param)) / WHEEL_DELTA);
         } break;
 
-#define _CUI_KEY_DOWN_EVENT(key_id)                                 \
-    window->base.event.key.codepoint       = (key_id);              \
-    window->base.event.key.alt_is_down     = window->alt_is_down;   \
-    window->base.event.key.ctrl_is_down    = window->ctrl_is_down;  \
-    window->base.event.key.shift_is_down   = window->shift_is_down; \
-    window->base.event.key.command_is_down = false;                 \
-    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_DOWN);
+#define _CUI_KEY_DOWN_EVENT(key_id)                         \
+    CuiEvent *event = cui_array_append(window->base.events);\
+    event->type = CUI_EVENT_TYPE_KEY_DOWN;                  \
+    event->key.codepoint       = (key_id);                  \
+    event->key.alt_is_down     = window->alt_is_down;       \
+    event->key.ctrl_is_down    = window->ctrl_is_down;      \
+    event->key.shift_is_down   = window->shift_is_down;     \
+    event->key.command_is_down = false;
 
         case WM_KEYDOWN:
         {
@@ -806,14 +1041,21 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 
         case WM_DESTROY:
         {
-            cui_window_destroy(window);
+            _cui_window_destroy(window);
         } break;
 
         default:
         {
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+            fprintf(stderr, "%*sMESSAGE %u\n", window_callback_indent, "", message);
+#endif
             result = DefWindowProc(window_handle, message, w_param, l_param);
         } break;
     }
+
+#if defined(CUI_WINDOWS_CALLBACK_TRACING)
+    window_callback_indent -= 2;
+#endif
 
     return result;
 }
@@ -1526,7 +1768,7 @@ cui_window_create(uint32_t creation_flags)
 
     if (!window->window_handle)
     {
-        cui_window_destroy(window);
+        _cui_window_destroy(window);
         return 0;
     }
 
@@ -1637,130 +1879,10 @@ cui_window_show(CuiWindow *window)
     window->base.needs_redraw = true;
 }
 
-void
-cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
-{
-    if (cui_window_is_fullscreen(window))
-    {
-        if (!fullscreen)
-        {
-            DWORD window_style = GetWindowLong(window->window_handle, GWL_STYLE);
-
-            window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
-
-            if (window->use_custom_decoration)
-            {
-                SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
-                cui_widget_set_preferred_size(window->titlebar, 0.0f, window->titlebar_height);
-            }
-            else
-            {
-                SetWindowLong(window->window_handle, GWL_STYLE, window_style | WS_OVERLAPPEDWINDOW);
-            }
-
-            SetWindowPlacement(window->window_handle, &window->windowed_placement);
-            SetWindowPos(window->window_handle, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-        }
-    }
-    else
-    {
-        if (fullscreen)
-        {
-            DWORD window_style = GetWindowLong(window->window_handle, GWL_STYLE);
-
-            window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
-
-            MONITORINFO monitor_info = { sizeof(monitor_info) };
-
-            window->windowed_placement.length = sizeof(window->windowed_placement);
-
-            if (GetWindowPlacement(window->window_handle, &window->windowed_placement) &&
-                GetMonitorInfo(MonitorFromWindow(window->window_handle, MONITOR_DEFAULTTOPRIMARY), &monitor_info))
-            {
-                if (window->use_custom_decoration)
-                {
-                    SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~(WS_SIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX));
-                    cui_widget_set_preferred_size(window->titlebar, 0.0f, 0.0f);
-                }
-                else
-                {
-                    SetWindowLong(window->window_handle, GWL_STYLE, window_style & ~WS_OVERLAPPEDWINDOW);
-                }
-
-                SetWindowPos(window->window_handle, HWND_TOP,
-                             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
-                             monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
-                             monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-            }
-        }
-    }
-}
-
 float
 cui_window_get_titlebar_height(CuiWindow *window)
 {
     return window->titlebar_height;
-}
-
-void
-cui_window_close(CuiWindow *window)
-{
-    DestroyWindow(window->window_handle);
-}
-
-void
-cui_window_destroy(CuiWindow *window)
-{
-    switch (window->base.renderer->type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-#if CUI_RENDERER_SOFTWARE_ENABLED
-            if (window->renderer.software.backbuffer.pixels)
-            {
-                cui_platform_deallocate(window->renderer.software.backbuffer.pixels, window->renderer.software.backbuffer_memory_size);
-            }
-
-            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-            _cui_renderer_software_destroy(renderer_software);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-#if CUI_RENDERER_DIRECT3D11_ENABLED
-            CuiRendererDirect3D11 *renderer_direct3d11 = CuiContainerOf(window->base.renderer, CuiRendererDirect3D11, base);
-            _cui_renderer_direct3d11_destroy(renderer_direct3d11);
-
-            CuiAssert(window->renderer.direct3d11.dxgi_swapchain);
-            IDXGISwapChain1_Release(window->renderer.direct3d11.dxgi_swapchain);
-
-            CuiAssert(window->renderer.direct3d11.d3d11_device_context);
-            ID3D11DeviceContext_Release(window->renderer.direct3d11.d3d11_device_context);
-
-            CuiAssert(window->renderer.direct3d11.d3d11_device);
-            ID3D11Device_Release(window->renderer.direct3d11.d3d11_device);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not enabled.");
-#endif
-        } break;
-    }
-
-    cui_arena_deallocate(&window->arena);
-    _cui_remove_window(window);
 }
 
 void
@@ -1829,10 +1951,14 @@ cui_step(void)
     {
         CuiWindow *window = _cui_context.common.windows[window_index];
 
-        if (window->base.needs_redraw)
-        {
-            _cui_window_draw(window, window->width, window->height);
+        window->base.width = window->width;
+        window->base.height = window->height;
 
+        CuiWindowFrameResult window_frame_result = { 0 };
+        CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
+
+        if (framebuffer)
+        {
             switch (window->base.renderer->type)
             {
                 case CUI_RENDERER_TYPE_SOFTWARE:
@@ -1879,8 +2005,17 @@ cui_step(void)
 #endif
                 } break;
             }
+        }
 
-            window->base.needs_redraw = false;
+        if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
+        {
+            _cui_window_close(window);
+            continue;
+        }
+
+        if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN)
+        {
+            _cui_window_set_fullscreen(window, window_frame_result.should_be_fullscreen);
         }
     }
 }

@@ -154,6 +154,14 @@ _cui_window_destroy_renderer(CuiWindow *window)
     }
 }
 
+static void
+_cui_window_destroy(CuiWindow *window)
+{
+    _cui_context.window = 0;
+    cui_arena_deallocate(&window->arena);
+    _cui_remove_window(window);
+}
+
 int main(int argc, char **argv);
 
 static void *
@@ -683,13 +691,6 @@ cui_window_resize(CuiWindow *window, int32_t width, int32_t height)
 }
 
 void
-cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
-{
-    (void) window;
-    (void) fullscreen;
-}
-
-void
 cui_window_show(CuiWindow *window)
 {
     (void) window;
@@ -701,20 +702,6 @@ cui_window_get_titlebar_height(CuiWindow *window)
     (void) window;
 
     return 0.0f;
-}
-
-void
-cui_window_close(CuiWindow *window)
-{
-    (void) window;
-}
-
-void
-cui_window_destroy(CuiWindow *window)
-{
-    _cui_context.window = 0;
-    cui_arena_deallocate(&window->arena);
-    _cui_remove_window(window);
 }
 
 void
@@ -809,37 +796,39 @@ cui_step(void)
                                 cui_widget_layout(window->base.platform_root_widget, rect);
                             }
 
-                            // The framebuffer size is queried in _cui_acquire_framebuffer()
-                            _cui_window_draw(window, 0, 0);
+                            CuiWindowFrameResult window_frame_result = { 0 };
+                            window->base.needs_redraw = true;
+                            CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
 
-                            switch (window->base.renderer->type)
+                            if (framebuffer)
                             {
-                                case CUI_RENDERER_TYPE_SOFTWARE:
+                                switch (window->base.renderer->type)
                                 {
-                                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
-                                } break;
+                                    case CUI_RENDERER_TYPE_SOFTWARE:
+                                    {
+                                        CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
+                                    } break;
 
-                                case CUI_RENDERER_TYPE_OPENGLES2:
-                                {
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-                                    eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
-#  else
-                                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#  endif
-                                } break;
+                                    case CUI_RENDERER_TYPE_OPENGLES2:
+                                    {
+#if CUI_RENDERER_OPENGLES2_ENABLED
+                                        eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
+#else
+                                        CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#endif
+                                    } break;
 
-                                case CUI_RENDERER_TYPE_METAL:
-                                {
-                                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                                } break;
+                                    case CUI_RENDERER_TYPE_METAL:
+                                    {
+                                        CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                                    } break;
 
-                                case CUI_RENDERER_TYPE_DIRECT3D11:
-                                {
-                                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                                } break;
+                                    case CUI_RENDERER_TYPE_DIRECT3D11:
+                                    {
+                                        CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                                    } break;
+                                }
                             }
-
-                            window->base.needs_redraw = false;
 
                             _cui_context.redraw_done = true;
 
@@ -910,37 +899,39 @@ cui_step(void)
                     {
                         pthread_mutex_lock(&_cui_context.platform_mutex);
 
-                        // The framebuffer size is queried in _cui_acquire_framebuffer()
-                        _cui_window_draw(window, 0, 0);
+                        CuiWindowFrameResult window_frame_result = { 0 };
+                        window->base.needs_redraw = true;
+                        CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
 
-                        switch (window->base.renderer->type)
+                        if (framebuffer)
                         {
-                            case CUI_RENDERER_TYPE_SOFTWARE:
+                            switch (window->base.renderer->type)
                             {
-                                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
-                            } break;
+                                case CUI_RENDERER_TYPE_SOFTWARE:
+                                {
+                                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
+                                } break;
 
-                            case CUI_RENDERER_TYPE_OPENGLES2:
-                            {
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-                                eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
-#  else
-                                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#  endif
-                            } break;
+                                case CUI_RENDERER_TYPE_OPENGLES2:
+                                {
+#if CUI_RENDERER_OPENGLES2_ENABLED
+                                    eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
+#else
+                                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#endif
+                                } break;
 
-                            case CUI_RENDERER_TYPE_METAL:
-                            {
-                                CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                            } break;
+                                case CUI_RENDERER_TYPE_METAL:
+                                {
+                                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                                } break;
 
-                            case CUI_RENDERER_TYPE_DIRECT3D11:
-                            {
-                                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                            } break;
+                                case CUI_RENDERER_TYPE_DIRECT3D11:
+                                {
+                                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                                } break;
+                            }
                         }
-
-                        window->base.needs_redraw = false;
 
                         _cui_context.redraw_done = true;
 
@@ -989,13 +980,14 @@ cui_step(void)
                                 case AKEY_EVENT_ACTION_DOWN:
                                 {
 
-#define _CUI_KEY_DOWN_EVENT(key_id)                             \
-    window->base.event.key.codepoint       = (key_id);          \
-    window->base.event.key.alt_is_down     = false;             \
-    window->base.event.key.ctrl_is_down    = false;             \
-    window->base.event.key.shift_is_down   = false;             \
-    window->base.event.key.command_is_down = false;             \
-    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_DOWN);
+#define _CUI_KEY_DOWN_EVENT(key_id)                         \
+    CuiEvent *event = cui_array_append(window->base.events);\
+    event->type = CUI_EVENT_TYPE_KEY_DOWN;                  \
+    event->key.codepoint       = (key_id);                  \
+    event->key.alt_is_down     = false;                     \
+    event->key.ctrl_is_down    = false;                     \
+    event->key.shift_is_down   = false;                     \
+    event->key.command_is_down = false;
 
                                     switch (keycode)
                                     {
@@ -1040,26 +1032,32 @@ cui_step(void)
                             {
                                 case AMOTION_EVENT_ACTION_DOWN:
                                 {
-                                    window->base.event.pointer.index = pointer_index;
-                                    window->base.event.pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
-                                    window->base.event.pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
-                                    cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_DOWN);
+                                    CuiEvent *event = cui_array_append(window->base.events);
+
+                                    event->type = CUI_EVENT_TYPE_POINTER_DOWN;
+                                    event->pointer.index = pointer_index;
+                                    event->pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
+                                    event->pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
                                 } break;
 
                                 case AMOTION_EVENT_ACTION_UP:
                                 {
-                                    window->base.event.pointer.index = pointer_index;
-                                    window->base.event.pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
-                                    window->base.event.pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
-                                    cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_UP);
+                                    CuiEvent *event = cui_array_append(window->base.events);
+
+                                    event->type = CUI_EVENT_TYPE_POINTER_UP;
+                                    event->pointer.index = pointer_index;
+                                    event->pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
+                                    event->pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
                                 } break;
 
                                 case AMOTION_EVENT_ACTION_MOVE:
                                 {
-                                    window->base.event.pointer.index = pointer_index;
-                                    window->base.event.pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
-                                    window->base.event.pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
-                                    cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_MOVE);
+                                    CuiEvent *event = cui_array_append(window->base.events);
+
+                                    event->type = CUI_EVENT_TYPE_POINTER_MOVE;
+                                    event->pointer.index = pointer_index;
+                                    event->pointer.position.x = (int32_t) AMotionEvent_getX(ev, pointer_index);
+                                    event->pointer.position.y = (int32_t) AMotionEvent_getY(ev, pointer_index);
                                 } break;
                             }
                         } break;
@@ -1076,39 +1074,40 @@ cui_step(void)
     {
         CuiWindow *window = _cui_context.common.windows[window_index];
 
-        if (_cui_context.native_window && window->base.needs_redraw)
+        if (_cui_context.native_window)
         {
-            // The framebuffer size is queried in _cui_acquire_framebuffer()
-            _cui_window_draw(window, 0, 0);
+            CuiWindowFrameResult window_frame_result = { 0 };
+            CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
 
-            switch (window->base.renderer->type)
+            if (framebuffer)
             {
-                case CUI_RENDERER_TYPE_SOFTWARE:
+                switch (window->base.renderer->type)
                 {
-                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
-                } break;
+                    case CUI_RENDERER_TYPE_SOFTWARE:
+                    {
+                        CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not supported.");
+                    } break;
 
-                case CUI_RENDERER_TYPE_OPENGLES2:
-                {
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-                    eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
-#  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#  endif
-                } break;
+                    case CUI_RENDERER_TYPE_OPENGLES2:
+                    {
+#if CUI_RENDERER_OPENGLES2_ENABLED
+                        eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
+#else
+                        CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#endif
+                    } break;
 
-                case CUI_RENDERER_TYPE_METAL:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                } break;
+                    case CUI_RENDERER_TYPE_METAL:
+                    {
+                        CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                    } break;
 
-                case CUI_RENDERER_TYPE_DIRECT3D11:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                } break;
+                    case CUI_RENDERER_TYPE_DIRECT3D11:
+                    {
+                        CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                    } break;
+                }
             }
-
-            window->base.needs_redraw = false;
         }
     }
 }

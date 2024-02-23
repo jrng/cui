@@ -877,11 +877,12 @@ _cui_add_window(uint32_t creation_flags)
 
         window->base.creation_flags = creation_flags;
 
-        cui_arena_allocate(&window->base.arena, CuiKiB(1));
+        cui_arena_allocate(&window->base.arena, CuiKiB(16));
         cui_arena_allocate(&window->base.temporary_memory, CuiMiB(2));
         cui_arena_allocate(&window->base.font_manager.arena, CuiMiB(1));
 
         cui_array_init(window->base.pointer_captures, 4, &window->base.arena);
+        cui_array_init(window->base.events, 16, &window->base.arena);
 
         window->base.font_manager.sized_fonts = 0;
         window->base.font_manager.font_file_manager = &_cui_context.common.font_file_manager;

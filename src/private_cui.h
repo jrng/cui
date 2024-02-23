@@ -368,7 +368,11 @@ typedef struct CuiWindowBase
     uint32_t creation_flags;
     uint32_t state;
 
+    // size and scale of the whole window with decoration and drop shadow.
+    // so it's the size of the backbuffer.
     float ui_scale;
+    int32_t width;
+    int32_t height;
 
     bool needs_redraw;
 
@@ -385,6 +389,7 @@ typedef struct CuiWindowBase
     CuiArena arena;
     CuiArena temporary_memory;
 
+    CuiEvent *events;
     CuiPointerCapture *pointer_captures;
 
     const CuiColorTheme *color_theme;
@@ -399,6 +404,9 @@ typedef struct CuiWindowBase
     CuiRenderer *renderer;
 
     CuiEvent event;
+
+    // TODO: remove this, this should be handled by the window_frame_routine
+    CuiWindowFrameResult window_frame_result;
 
     CuiGlyphCache glyph_cache;
     CuiFontManager font_manager;

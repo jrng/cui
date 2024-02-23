@@ -960,6 +960,8 @@ typedef enum CuiKeyId
 // TODO: do we need this to be public?
 typedef struct CuiEvent
 {
+    CuiEventType type;
+
     CuiPoint mouse;
 
     struct {
@@ -1041,6 +1043,19 @@ typedef enum CuiWindowCreationFlags
      */
     CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR   = (1 << 2),
 } CuiWindowCreationFlags;
+
+typedef enum CuiWindowFrameActions
+{
+    CUI_WINDOW_FRAME_ACTION_CLOSE           = (1 << 0),
+    CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN  = (1 << 1),
+} CuiWindowFrameActions;
+
+typedef struct CuiWindowFrameResult
+{
+    uint32_t window_frame_actions;
+
+    bool should_be_fullscreen;
+} CuiWindowFrameResult;
 
 typedef struct CuiWindow CuiWindow;
 typedef struct CuiGraphicsContext CuiGraphicsContext;
@@ -1324,14 +1339,13 @@ void cui_window_set_title(CuiWindow *window, CuiString title);
 void cui_window_resize(CuiWindow *window, int32_t width, int32_t height);
 void cui_window_show(CuiWindow *window);
 void cui_window_pack(CuiWindow *window);
-void cui_window_set_fullscreen(CuiWindow *window, bool fullscreen);
+void cui_window_set_fullscreen(CuiWindow *window, bool fullscreen); // TODO: remove
 bool cui_window_is_maximized(CuiWindow *window);
 bool cui_window_is_fullscreen(CuiWindow *window);
 bool cui_window_is_tiled(CuiWindow *window);
 float cui_window_get_ui_scale(CuiWindow *window);
 float cui_window_get_titlebar_height(CuiWindow *window);
-void cui_window_close(CuiWindow *window);
-void cui_window_destroy(CuiWindow *window);
+void cui_window_close(CuiWindow *window); // TODO: remove
 void cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget);
 bool cui_window_handle_event(CuiWindow *window, CuiEventType event_type);
 void cui_window_set_hovered(CuiWindow *window, CuiWidget *widget);

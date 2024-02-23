@@ -261,6 +261,67 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
     return framebuffer;
 }
 
+static void
+_cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
+{
+    if ((window->base.state & CUI_WINDOW_STATE_FULLSCREEN) != (fullscreen ? CUI_WINDOW_STATE_FULLSCREEN : 0))
+    {
+        [window->appkit_window toggleFullScreen: nil];
+    }
+}
+
+static void
+_cui_window_destroy(CuiWindow *window)
+{
+    switch (window->base.renderer->type)
+    {
+        case CUI_RENDERER_TYPE_SOFTWARE:
+        {
+#if CUI_RENDERER_SOFTWARE_ENABLED
+            if (window->renderer.software.backbuffer.pixels)
+            {
+                cui_platform_deallocate(window->renderer.software.backbuffer.pixels,
+                                        window->renderer.software.backbuffer_memory_size);
+            }
+
+            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+            _cui_renderer_software_destroy(renderer_software);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#endif
+        } break;
+
+        case CUI_RENDERER_TYPE_OPENGLES2:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+        } break;
+
+        case CUI_RENDERER_TYPE_METAL:
+        {
+#if CUI_RENDERER_METAL_ENABLED
+            CuiRendererMetal *renderer_metal = CuiContainerOf(window->base.renderer, CuiRendererMetal, base);
+            _cui_renderer_metal_destroy(renderer_metal);
+#else
+            CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
+#endif
+        } break;
+
+        case CUI_RENDERER_TYPE_DIRECT3D11:
+        {
+            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+        } break;
+    }
+
+    cui_arena_deallocate(&window->arena);
+    _cui_remove_window(window);
+}
+
+static void
+_cui_window_close(CuiWindow *window)
+{
+    [window->appkit_window close];
+}
+
 @implementation AppKitWindowDelegate
 
 - (instancetype) initWithCuiWindow: (CuiWindow *) window
@@ -284,7 +345,7 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 - (void) windowWillClose: (NSNotification *) sender
 {
     [cui_window->appkit_view clearCuiWindow];
-    cui_window_destroy(cui_window);
+    _cui_window_destroy(cui_window);
     cui_window = 0;
 }
 
@@ -379,37 +440,54 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
             cui_widget_layout(cui_window->base.platform_root_widget, rect);
         }
 
-        _cui_window_draw(cui_window, cui_window->width, cui_window->height);
+        cui_window->base.width = cui_window->width;
+        cui_window->base.height = cui_window->height;
 
-        switch (cui_window->base.renderer->type)
+        CuiWindowFrameResult window_frame_result = { 0 };
+        cui_window->base.needs_redraw = true;
+        CuiFramebuffer *framebuffer = _cui_window_frame_routine(cui_window, cui_window->base.events, &window_frame_result);
+
+        if (framebuffer)
         {
-            case CUI_RENDERER_TYPE_SOFTWARE:
+            switch (cui_window->base.renderer->type)
             {
+                case CUI_RENDERER_TYPE_SOFTWARE:
+                {
 #if CUI_RENDERER_SOFTWARE_ENABLED
-                [cui_window->appkit_view setNeedsDisplay: YES];
+                    [cui_window->appkit_view setNeedsDisplay: YES];
 #else
-                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #endif
-            } break;
+                } break;
 
-            case CUI_RENDERER_TYPE_OPENGLES2:
-            {
-                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
-            } break;
+                case CUI_RENDERER_TYPE_OPENGLES2:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
+                } break;
 
-            case CUI_RENDERER_TYPE_METAL:
-            {
+                case CUI_RENDERER_TYPE_METAL:
+                {
 #if CUI_RENDERER_METAL_ENABLED
-                [cui_window->framebuffer.drawable present];
+                    [cui_window->framebuffer.drawable present];
 #else
-                CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
+                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
 #endif
-            } break;
+                } break;
 
-            case CUI_RENDERER_TYPE_DIRECT3D11:
-            {
-                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-            } break;
+                case CUI_RENDERER_TYPE_DIRECT3D11:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                } break;
+            }
+        }
+
+        if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
+        {
+            _cui_window_close(cui_window);
+        }
+        else if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN)
+        {
+            _cui_window_set_fullscreen(cui_window, window_frame_result.should_be_fullscreen);
         }
     }
 }
@@ -506,16 +584,18 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
     // printf("mouse entered (%f, %f)\n", point_in_backing.x, (double) cui_window->height - point_in_backing.y);
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_MOUSE_MOVE);
+    event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) mouseExited: (NSEvent *) ev
 {
     // printf("mouse exited\n");
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
+    event->type = CUI_EVENT_TYPE_MOUSE_LEAVE;
 }
 
 - (void) mouseMoved: (NSEvent *) ev
@@ -526,10 +606,11 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
     // printf("mouse moved (%f, %f)\n", point_in_backing.x, (double) cui_window->height - point_in_backing.y);
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_MOUSE_MOVE);
+    event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) mouseDragged: (NSEvent *) ev
@@ -540,10 +621,11 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
     // printf("mouse dragged (%f, %f)\n", point_in_backing.x, (double) cui_window->height - point_in_backing.y);
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_MOUSE_MOVE);
+    event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) rightMouseDragged: (NSEvent *) ev
@@ -554,10 +636,11 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
     // printf("mouse dragged (%f, %f)\n", point_in_backing.x, (double) cui_window->height - point_in_backing.y);
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_MOUSE_MOVE);
+    event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) mouseDown: (NSEvent *) ev
@@ -581,29 +664,40 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
         }
     }
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
-
     if (([ev clickCount] % 2) == 0)
     {
-        bool handled = cui_window_handle_event(cui_window, CUI_EVENT_TYPE_DOUBLE_CLICK);
-
+        // TODO: check the mouse position against the exclusion zone provided by the app
         if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE) &&
             !(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
-            mouse_is_in_titlebar && !handled)
+            mouse_is_in_titlebar)
         {
             [cui_window->appkit_window zoom: nil];
+        }
+        else
+        {
+            CuiEvent *event = cui_array_append(cui_window->base.events);
+
+            event->type = CUI_EVENT_TYPE_DOUBLE_CLICK;
+            event->mouse.x = lroundf(point_in_backing.x);
+            event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
         }
     }
     else
     {
-        bool handled = cui_window_handle_event(cui_window, CUI_EVENT_TYPE_LEFT_DOWN);
-
+        // TODO: check the mouse position against the exclusion zone provided by the app
         if (!(cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_PREFER_SYSTEM_DECORATION) &&
             (cui_window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_MACOS_UNIFIED_TITLEBAR) &&
-            mouse_is_in_titlebar && !handled)
+            mouse_is_in_titlebar)
         {
             [cui_window->appkit_window performWindowDragWithEvent: ev];
+        }
+        else
+        {
+            CuiEvent *event = cui_array_append(cui_window->base.events);
+
+            event->type = CUI_EVENT_TYPE_LEFT_DOWN;
+            event->mouse.x = lroundf(point_in_backing.x);
+            event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
         }
     }
 }
@@ -614,10 +708,11 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
                                       fromView: nil];
     NSPoint point_in_backing = [self convertPointToBacking: point_in_view];
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_LEFT_UP);
+    event->type = CUI_EVENT_TYPE_LEFT_UP;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) rightMouseDown: (NSEvent *) ev
@@ -626,10 +721,11 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
                                       fromView: nil];
     NSPoint point_in_backing = [self convertPointToBacking: point_in_view];
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_RIGHT_DOWN);
+    event->type = CUI_EVENT_TYPE_RIGHT_DOWN;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) rightMouseUp: (NSEvent *) ev
@@ -638,40 +734,50 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
                                       fromView: nil];
     NSPoint point_in_backing = [self convertPointToBacking: point_in_view];
 
-    cui_window->base.event.mouse.x = lroundf(point_in_backing.x);
-    cui_window->base.event.mouse.y = cui_window->height - lroundf(point_in_backing.y);
+    CuiEvent *event = cui_array_append(cui_window->base.events);
 
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_RIGHT_UP);
+    event->type = CUI_EVENT_TYPE_RIGHT_UP;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
 }
 
 - (void) scrollWheel: (NSEvent *) ev
 {
+    NSPoint point_in_view = [self convertPoint: [ev locationInWindow]
+                                      fromView: nil];
+    NSPoint point_in_backing = [self convertPointToBacking: point_in_view];
+
+    CuiEvent *event = cui_array_append(cui_window->base.events);
+
+    event->type = CUI_EVENT_TYPE_MOUSE_WHEEL;
+    event->mouse.x = lroundf(point_in_backing.x);
+    event->mouse.y = cui_window->height - lroundf(point_in_backing.y);
+
     if (ev.hasPreciseScrollingDeltas)
     {
-        cui_window->base.event.wheel.is_precise_scrolling = true;
-        cui_window->base.event.wheel.dx = cui_window->backbuffer_scale * (float) ev.scrollingDeltaX;
-        cui_window->base.event.wheel.dy = cui_window->backbuffer_scale * (float) ev.scrollingDeltaY;
+        event->wheel.is_precise_scrolling = true;
+        event->wheel.dx = cui_window->backbuffer_scale * (float) ev.scrollingDeltaX;
+        event->wheel.dy = cui_window->backbuffer_scale * (float) ev.scrollingDeltaY;
     }
     else
     {
-        cui_window->base.event.wheel.is_precise_scrolling = false;
-        cui_window->base.event.wheel.dx = (float) ev.scrollingDeltaX;
-        cui_window->base.event.wheel.dy = (float) ev.scrollingDeltaY;
+        event->wheel.is_precise_scrolling = false;
+        event->wheel.dx = (float) ev.scrollingDeltaX;
+        event->wheel.dy = (float) ev.scrollingDeltaY;
     }
-
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_MOUSE_WHEEL);
 }
 
 - (void) keyDown: (NSEvent *) ev
 {
 
-#define _CUI_KEY_DOWN_EVENT(key_id)                                                                                 \
-    cui_window->base.event.key.codepoint       = (key_id);                                                          \
-    cui_window->base.event.key.alt_is_down     = (ev.modifierFlags & NSEventModifierFlagOption) ? true : false;     \
-    cui_window->base.event.key.ctrl_is_down    = (ev.modifierFlags & NSEventModifierFlagControl) ? true : false;    \
-    cui_window->base.event.key.shift_is_down   = (ev.modifierFlags & NSEventModifierFlagShift) ? true : false;      \
-    cui_window->base.event.key.command_is_down = (ev.modifierFlags & NSEventModifierFlagCommand) ? true : false;    \
-    cui_window_handle_event(cui_window, CUI_EVENT_TYPE_KEY_DOWN);
+#define _CUI_KEY_DOWN_EVENT(key_id)                                                             \
+    CuiEvent *event = cui_array_append(cui_window->base.events);                                \
+    event->type = CUI_EVENT_TYPE_KEY_DOWN;                                                      \
+    event->key.codepoint       = (key_id);                                                      \
+    event->key.alt_is_down     = (ev.modifierFlags & NSEventModifierFlagOption) ? true : false; \
+    event->key.ctrl_is_down    = (ev.modifierFlags & NSEventModifierFlagControl) ? true : false;\
+    event->key.shift_is_down   = (ev.modifierFlags & NSEventModifierFlagShift) ? true : false;  \
+    event->key.command_is_down = (ev.modifierFlags & NSEventModifierFlagCommand) ? true : false;
 
     switch (ev.keyCode)
     {
@@ -774,12 +880,14 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
         if ((codepoint >= 32) && (codepoint != CUI_KEY_DELETE))
         {
-            cui_window->base.event.key.codepoint       = codepoint;
-            cui_window->base.event.key.alt_is_down     = false;
-            cui_window->base.event.key.ctrl_is_down    = false;
-            cui_window->base.event.key.shift_is_down   = false;
-            cui_window->base.event.key.command_is_down = false;
-            cui_window_handle_event(cui_window, CUI_EVENT_TYPE_KEY_DOWN);
+            CuiEvent *event = cui_array_append(cui_window->base.events);
+
+            event->type = CUI_EVENT_TYPE_KEY_DOWN;
+            event->key.codepoint       = codepoint;
+            event->key.alt_is_down     = false;
+            event->key.ctrl_is_down    = false;
+            event->key.shift_is_down   = false;
+            event->key.command_is_down = false;
         }
     }
 
@@ -1358,71 +1466,10 @@ cui_window_show(CuiWindow *window)
     window->base.needs_redraw = true;
 }
 
-void
-cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
-{
-    if ((window->base.state & CUI_WINDOW_STATE_FULLSCREEN) != (fullscreen ? CUI_WINDOW_STATE_FULLSCREEN : 0))
-    {
-        [window->appkit_window toggleFullScreen: nil];
-    }
-}
-
 float
 cui_window_get_titlebar_height(CuiWindow *window)
 {
     return window->titlebar_height;
-}
-
-void
-cui_window_close(CuiWindow *window)
-{
-    [window->appkit_window close];
-}
-
-void
-cui_window_destroy(CuiWindow *window)
-{
-    switch (window->base.renderer->type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-#if CUI_RENDERER_SOFTWARE_ENABLED
-            if (window->renderer.software.backbuffer.pixels)
-            {
-                cui_platform_deallocate(window->renderer.software.backbuffer.pixels,
-                                        window->renderer.software.backbuffer_memory_size);
-            }
-
-            CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-            _cui_renderer_software_destroy(renderer_software);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-#if CUI_RENDERER_METAL_ENABLED
-            CuiRendererMetal *renderer_metal = CuiContainerOf(window->base.renderer, CuiRendererMetal, base);
-            _cui_renderer_metal_destroy(renderer_metal);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-        } break;
-    }
-
-    cui_arena_deallocate(&window->arena);
-    _cui_remove_window(window);
 }
 
 void
@@ -1505,10 +1552,14 @@ cui_step(void)
         {
             CuiWindow *window = _cui_context.common.windows[window_index];
 
-            if (window->base.needs_redraw)
-            {
-                _cui_window_draw(window, window->width, window->height);
+            window->base.width = window->width;
+            window->base.height = window->height;
 
+            CuiWindowFrameResult window_frame_result = { 0 };
+            CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
+
+            if (framebuffer)
+            {
                 switch (window->base.renderer->type)
                 {
                     case CUI_RENDERER_TYPE_SOFTWARE:
@@ -1539,8 +1590,15 @@ cui_step(void)
                         CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
                     } break;
                 }
+            }
 
-                window->base.needs_redraw = false;
+            if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
+            {
+                _cui_window_close(window);
+            }
+            else if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN)
+            {
+                _cui_window_set_fullscreen(window, window_frame_result.should_be_fullscreen);
             }
         }
     }

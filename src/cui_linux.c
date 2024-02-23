@@ -657,6 +657,224 @@ _cui_initialize_opengles2_x11(CuiWindow *window, XSetWindowAttributes window_att
 
 #endif
 
+static void
+_cui_window_destroy(CuiWindow *window)
+{
+    switch (_cui_context.backend)
+    {
+        case CUI_LINUX_BACKEND_NONE:
+        {
+            CuiAssert(!"unsupported");
+        } break;
+
+#if CUI_BACKEND_WAYLAND_ENABLED
+
+        case CUI_LINUX_BACKEND_WAYLAND:
+        {
+            if (_cui_context.wayland_keyboard_focused_window == window)
+            {
+                _cui_context.wayland_keyboard_focused_window = 0;
+            }
+
+            if (_cui_context.wayland_window_under_cursor == window)
+            {
+                _cui_context.wayland_window_under_cursor = 0;
+            }
+
+            switch (window->base.renderer->type)
+            {
+                case CUI_RENDERER_TYPE_SOFTWARE:
+                {
+#  if CUI_RENDERER_SOFTWARE_ENABLED
+                    for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
+                    {
+                        CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
+
+                        if (framebuffer->is_busy)
+                        {
+                            // TODO: wait for framebuffer not busy
+                        }
+
+                        wl_buffer_destroy(framebuffer->backend.wayland.buffer);
+                        wl_shm_pool_destroy(framebuffer->backend.wayland.shared_memory_pool);
+                        munmap(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
+                        close(framebuffer->backend.wayland.shared_memory_fd);
+                    }
+
+                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                    _cui_renderer_software_destroy(renderer_software);
+#  else
+                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#  endif
+                } break;
+
+                case CUI_RENDERER_TYPE_OPENGLES2:
+                {
+#  if CUI_RENDERER_OPENGLES2_ENABLED
+                    // TODO: change only if needed
+#if CUI_DEBUG_BUILD
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                             window->opengles2.egl_surface, window->opengles2.egl_context));
+#else
+                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                   window->opengles2.egl_surface, window->opengles2.egl_context);
+#endif
+
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_destroy(renderer_opengles2);
+
+                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
+                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
+
+                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
+                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
+
+                    wl_egl_window_destroy(window->wayland_egl_window);
+#  else
+                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#  endif
+                } break;
+
+                case CUI_RENDERER_TYPE_METAL:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_DIRECT3D11:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                } break;
+            }
+
+            if (window->wayland_xdg_decoration)
+            {
+                zxdg_toplevel_decoration_v1_destroy(window->wayland_xdg_decoration);
+            }
+
+            xdg_toplevel_destroy(window->wayland_xdg_toplevel);
+            xdg_surface_destroy(window->wayland_xdg_surface);
+            wl_surface_destroy(window->wayland_surface);
+
+            cui_arena_deallocate(&window->arena);
+        } break;
+
+#endif
+
+#if CUI_BACKEND_X11_ENABLED
+
+        case CUI_LINUX_BACKEND_X11:
+        {
+            switch (window->base.renderer->type)
+            {
+                case CUI_RENDERER_TYPE_SOFTWARE:
+                {
+#  if CUI_RENDERER_SOFTWARE_ENABLED
+                    if (_cui_context.has_shared_memory_extension)
+                    {
+                        for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
+                        {
+                            CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
+
+                            while (framebuffer->is_busy)
+                            {
+                                _cui_wait_for_frame_completion(window);
+                            }
+
+                            XShmDetach(_cui_context.x11_display, &framebuffer->backend.x11.shared_memory_info);
+                            shmdt(framebuffer->backend.x11.shared_memory_info.shmaddr);
+                            shmctl(framebuffer->backend.x11.shared_memory_info.shmid, IPC_RMID, 0);
+                        }
+                    }
+                    else
+                    {
+                        CuiLinuxFramebuffer *framebuffer = window->framebuffers;
+                        cui_platform_deallocate(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
+                    }
+
+                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                    _cui_renderer_software_destroy(renderer_software);
+#  else
+                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#  endif
+                } break;
+
+                case CUI_RENDERER_TYPE_OPENGLES2:
+                {
+#  if CUI_RENDERER_OPENGLES2_ENABLED
+                    // TODO: change only if needed
+#if CUI_DEBUG_BUILD
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->opengles2.egl_context));
+#else
+                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->opengles2.egl_context);
+#endif
+
+                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                    _cui_renderer_opengles2_destroy(renderer_opengles2);
+
+                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
+                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
+
+                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
+                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
+#  else
+                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#  endif
+                } break;
+
+                case CUI_RENDERER_TYPE_METAL:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_DIRECT3D11:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                } break;
+            }
+        } break;
+
+#endif
+
+    }
+
+    _cui_remove_window(window);
+}
+
+static void
+_cui_window_close(CuiWindow *window)
+{
+    switch (_cui_context.backend)
+    {
+        case CUI_LINUX_BACKEND_NONE:
+        {
+            CuiAssert(!"unsupported");
+        } break;
+
+#if CUI_BACKEND_WAYLAND_ENABLED
+
+        case CUI_LINUX_BACKEND_WAYLAND:
+        {
+            _cui_window_destroy(window);
+        } break;
+
+#endif
+
+#if CUI_BACKEND_X11_ENABLED
+
+        case CUI_LINUX_BACKEND_X11:
+        {
+            XDestroyWindow(_cui_context.x11_display, window->x11_window);
+        } break;
+
+#endif
+
+    }
+}
+
 #if CUI_BACKEND_WAYLAND_ENABLED
 
 #include "xdg-shell.c"
@@ -769,76 +987,6 @@ _cui_wayland_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t heigh
 }
 
 #  endif
-
-static inline void
-_cui_wayland_commit_frame(CuiWindow *window)
-{
-    _cui_window_draw(window, cui_rect_get_width(window->backbuffer_rect), cui_rect_get_height(window->backbuffer_rect));
-
-    if (window->wayland_configure_serial)
-    {
-        xdg_surface_ack_configure(window->wayland_xdg_surface, window->wayland_configure_serial);
-        window->wayland_configure_serial = 0;
-    }
-
-    wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
-
-    xdg_surface_set_window_geometry(window->wayland_xdg_surface, window->wayland_window_rect.min.x, window->wayland_window_rect.min.y,
-                                    cui_rect_get_width(window->wayland_window_rect), cui_rect_get_height(window->wayland_window_rect));
-
-    if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE)
-    {
-        xdg_toplevel_set_min_size(window->wayland_xdg_toplevel,
-                                  cui_rect_get_width(window->wayland_window_rect),
-                                  cui_rect_get_height(window->wayland_window_rect));
-        xdg_toplevel_set_max_size(window->wayland_xdg_toplevel,
-                                  cui_rect_get_width(window->wayland_window_rect),
-                                  cui_rect_get_height(window->wayland_window_rect));
-    }
-
-    struct wl_region *input_region = wl_compositor_create_region(_cui_context.wayland_compositor);
-    wl_region_add(input_region, window->wayland_input_rect.min.x, window->wayland_input_rect.min.y,
-                  cui_rect_get_width(window->wayland_input_rect), cui_rect_get_height(window->wayland_input_rect));
-    wl_surface_set_input_region(window->wayland_surface, input_region);
-    wl_region_destroy(input_region);
-
-    switch (window->base.renderer->type)
-    {
-        case CUI_RENDERER_TYPE_SOFTWARE:
-        {
-#  if CUI_RENDERER_SOFTWARE_ENABLED
-            CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
-
-            wl_surface_attach(window->wayland_surface, framebuffer->backend.wayland.buffer, 0, 0);
-            wl_surface_damage(window->wayland_surface, 0, 0, INT32_MAX, INT32_MAX);
-            wl_surface_commit(window->wayland_surface);
-
-            window->current_framebuffer = 0;
-#  else
-            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#  endif
-        } break;
-
-        case CUI_RENDERER_TYPE_OPENGLES2:
-        {
-#if CUI_RENDERER_OPENGLES2_ENABLED
-            eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
-#else
-            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#endif
-        } break;
-
-        case CUI_RENDERER_TYPE_METAL:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-        } break;
-
-        case CUI_RENDERER_TYPE_DIRECT3D11:
-        {
-            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-        } break;
-    }
-}
 
 static inline CuiWaylandMonitor *
 _cui_wayland_get_monitor_from_output(struct wl_output *output)
@@ -1385,9 +1533,84 @@ _cui_wayland_handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_su
 
     if (!window->is_mapped)
     {
-        _cui_wayland_commit_frame(window);
+        window->base.needs_redraw = true;
+
+        window->base.width = cui_rect_get_width(window->backbuffer_rect);
+        window->base.height = cui_rect_get_height(window->backbuffer_rect);
+
+        CuiWindowFrameResult window_frame_result = { 0 };
+        CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
+
+        // TODO: check window_frame_result
+
+        if (framebuffer)
+        {
+            if (window->wayland_configure_serial)
+            {
+                xdg_surface_ack_configure(window->wayland_xdg_surface, window->wayland_configure_serial);
+                window->wayland_configure_serial = 0;
+            }
+
+            wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
+
+            xdg_surface_set_window_geometry(window->wayland_xdg_surface, window->wayland_window_rect.min.x, window->wayland_window_rect.min.y,
+                                            cui_rect_get_width(window->wayland_window_rect), cui_rect_get_height(window->wayland_window_rect));
+
+            if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE)
+            {
+                xdg_toplevel_set_min_size(window->wayland_xdg_toplevel,
+                                          cui_rect_get_width(window->wayland_window_rect),
+                                          cui_rect_get_height(window->wayland_window_rect));
+                xdg_toplevel_set_max_size(window->wayland_xdg_toplevel,
+                                          cui_rect_get_width(window->wayland_window_rect),
+                                          cui_rect_get_height(window->wayland_window_rect));
+            }
+
+            struct wl_region *input_region = wl_compositor_create_region(_cui_context.wayland_compositor);
+            wl_region_add(input_region, window->wayland_input_rect.min.x, window->wayland_input_rect.min.y,
+                          cui_rect_get_width(window->wayland_input_rect), cui_rect_get_height(window->wayland_input_rect));
+            wl_surface_set_input_region(window->wayland_surface, input_region);
+            wl_region_destroy(input_region);
+
+            switch (window->base.renderer->type)
+            {
+                case CUI_RENDERER_TYPE_SOFTWARE:
+                {
+#  if CUI_RENDERER_SOFTWARE_ENABLED
+                    CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
+
+                    wl_surface_attach(window->wayland_surface, framebuffer->backend.wayland.buffer, 0, 0);
+                    wl_surface_damage(window->wayland_surface, 0, 0, INT32_MAX, INT32_MAX);
+                    wl_surface_commit(window->wayland_surface);
+
+                    window->current_framebuffer = 0;
+#  else
+                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#  endif
+                } break;
+
+                case CUI_RENDERER_TYPE_OPENGLES2:
+                {
+#if CUI_RENDERER_OPENGLES2_ENABLED
+                    eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
+#else
+                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#endif
+                } break;
+
+                case CUI_RENDERER_TYPE_METAL:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                } break;
+
+                case CUI_RENDERER_TYPE_DIRECT3D11:
+                {
+                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                } break;
+            }
+        }
+
         window->is_mapped = true;
-        window->base.needs_redraw = false;
     }
 }
 
@@ -1758,12 +1981,11 @@ _cui_wayland_handle_touch_down(void *data, struct wl_touch *touch, uint32_t seri
     CuiPoint touch_position = cui_make_point(wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(x))),
                                              wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(y))));
 
-    window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-    window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+    CuiEvent *event = cui_array_append(window->base.events);
 
-    window->base.event.pointer.index = id;
-    window->base.event.pointer.position = touch_position;
-    cui_window_handle_event(window, CUI_EVENT_TYPE_POINTER_DOWN);
+    event->type = CUI_EVENT_TYPE_POINTER_DOWN;
+    event->pointer.index = id;
+    event->pointer.position = touch_position;
 }
 
 static void
@@ -1842,10 +2064,10 @@ _cui_handle_pointer_enter(CuiWindow *window, uint32_t serial, wl_fixed_t x, wl_f
 
     _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
 
-    window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-    window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+    CuiEvent *event = cui_array_append(window->base.events);
 
-    cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+    event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+    event->mouse = _cui_context.wayland_application_mouse_position;
 }
 
 static void
@@ -1859,7 +2081,8 @@ _cui_handle_pointer_leave(CuiWindow *window)
 
     if (window)
     {
-        cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+        CuiEvent *event = cui_array_append(window->base.events);
+        event->type = CUI_EVENT_TYPE_MOUSE_LEAVE;
     }
 }
 
@@ -1872,10 +2095,10 @@ _cui_handle_pointer_motion(CuiWindow *window, wl_fixed_t x, wl_fixed_t y)
 
     _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
 
-    window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-    window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+    CuiEvent *event = cui_array_append(window->base.events);
 
-    cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+    event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+    event->mouse = _cui_context.wayland_application_mouse_position;
 }
 
 static void
@@ -1910,10 +2133,10 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                             }
                             else
                             {
-                                window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-                                window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+                                CuiEvent *event = cui_array_append(window->base.events);
 
-                                cui_window_handle_event(window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+                                event->type = CUI_EVENT_TYPE_DOUBLE_CLICK;
+                                event->mouse = _cui_context.wayland_application_mouse_position;
                             }
                         }
                         else
@@ -1942,10 +2165,10 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                             {
                                 window->pointer_button_mask |= CUI_WAYLAND_POINTER_BUTTON_LEFT;
 
-                                window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-                                window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+                                CuiEvent *event = cui_array_append(window->base.events);
 
-                                cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_DOWN);
+                                event->type = CUI_EVENT_TYPE_LEFT_DOWN;
+                                event->mouse = _cui_context.wayland_application_mouse_position;
                             }
                         }
                         else
@@ -1986,10 +2209,10 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                         else
                         {
 #if 0
-                            window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-                            window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+                            CuiEvent *event = cui_array_append(window->base.events);
 
-                            cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_DOWN);
+                            event->type = CUI_EVENT_TYPE_RIGHT_DOWN;
+                            event->mouse = _cui_context.wayland_application_mouse_position;
 #endif
                         }
                     }
@@ -2003,10 +2226,10 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
             {
                 case BTN_LEFT:
                 {
-                    window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-                    window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+                    CuiEvent *event = cui_array_append(window->base.events);
 
-                    cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_UP);
+                    event->type = CUI_EVENT_TYPE_LEFT_UP;
+                    event->mouse = _cui_context.wayland_application_mouse_position;
 
                     window->pointer_button_mask &= ~CUI_WAYLAND_POINTER_BUTTON_LEFT;
                     _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
@@ -2021,10 +2244,10 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
                 case BTN_RIGHT:
                 {
 #if 0
-                    window->base.event.mouse.x = _cui_context.wayland_application_mouse_position.x;
-                    window->base.event.mouse.y = _cui_context.wayland_application_mouse_position.y;
+                    CuiEvent *event = cui_array_append(window->base.events);
 
-                    cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
+                    event->type = CUI_EVENT_TYPE_RIGHT_UP;
+                    event->mouse = _cui_context.wayland_application_mouse_position;
 #endif
                     window->pointer_button_mask &= ~CUI_WAYLAND_POINTER_BUTTON_RIGHT;
                     _cui_wayland_update_platform_cursor(window, _cui_context.wayland_platform_mouse_position);
@@ -2037,19 +2260,25 @@ _cui_handle_pointer_button(CuiWindow *window, uint32_t serial, uint32_t time, ui
 static void
 _cui_handle_pointer_axis(CuiWindow *window, float dx, float dy)
 {
-    window->base.event.wheel.is_precise_scrolling = true;
-    window->base.event.wheel.dx = dx;
-    window->base.event.wheel.dy = dy;
-    cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+    CuiEvent *event = cui_array_append(window->base.events);
+
+    event->type = CUI_EVENT_TYPE_MOUSE_WHEEL;
+    event->mouse = _cui_context.wayland_application_mouse_position;
+    event->wheel.is_precise_scrolling = true;
+    event->wheel.dx = dx;
+    event->wheel.dy = dy;
 }
 
 static void
 _cui_handle_pointer_axis_discrete(CuiWindow *window, int32_t dx, int32_t dy)
 {
-    window->base.event.wheel.is_precise_scrolling = false;
-    window->base.event.wheel.dx = (float) dx;
-    window->base.event.wheel.dy = (float) dy;
-    cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+    CuiEvent *event = cui_array_append(window->base.events);
+
+    event->type = CUI_EVENT_TYPE_MOUSE_WHEEL;
+    event->mouse = _cui_context.wayland_application_mouse_position;
+    event->wheel.is_precise_scrolling = false;
+    event->wheel.dx = (float) dx;
+    event->wheel.dy = (float) dy;
 }
 
 static void
@@ -2398,13 +2627,14 @@ _cui_wayland_handle_key_down(CuiWindow *window, uint32_t keycode)
     char buffer[32];
     xkb_keysym_t sym = xkb_state_key_get_one_sym(_cui_context.xkb_state, keycode);
 
-#define _CUI_KEY_DOWN_EVENT(key_id)                                                                                                             \
-    window->base.event.key.codepoint       = (key_id);                                                                                          \
-    window->base.event.key.alt_is_down     = xkb_state_mod_name_is_active(_cui_context.xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE);  \
-    window->base.event.key.ctrl_is_down    = xkb_state_mod_name_is_active(_cui_context.xkb_state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE); \
-    window->base.event.key.shift_is_down   = xkb_state_mod_name_is_active(_cui_context.xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE);\
-    window->base.event.key.command_is_down = false;                                                                                             \
-    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_DOWN);
+#define _CUI_KEY_DOWN_EVENT(key_id)                                                                                                 \
+    CuiEvent *event = cui_array_append(window->base.events);                                                                        \
+    event->type = CUI_EVENT_TYPE_KEY_DOWN;                                                                                          \
+    event->key.codepoint       = (key_id);                                                                                          \
+    event->key.alt_is_down     = xkb_state_mod_name_is_active(_cui_context.xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE);  \
+    event->key.ctrl_is_down    = xkb_state_mod_name_is_active(_cui_context.xkb_state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE); \
+    event->key.shift_is_down   = xkb_state_mod_name_is_active(_cui_context.xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE);\
+    event->key.command_is_down = false;
 
     if ((xkb_compose_state_feed(_cui_context.xkb_compose_state, sym) == XKB_COMPOSE_FEED_IGNORED) ||
         (xkb_compose_state_get_status(_cui_context.xkb_compose_state) == XKB_COMPOSE_NOTHING))
@@ -3315,6 +3545,159 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
     return framebuffer;
 }
 
+static void
+_cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
+{
+    switch (_cui_context.backend)
+    {
+        case CUI_LINUX_BACKEND_NONE:
+        {
+            CuiAssert(!"unsupported");
+        } break;
+
+#if CUI_BACKEND_WAYLAND_ENABLED
+
+        case CUI_LINUX_BACKEND_WAYLAND:
+        {
+            if (cui_window_is_fullscreen(window))
+            {
+                if (!fullscreen)
+                {
+                    xdg_toplevel_unset_fullscreen(window->wayland_xdg_toplevel);
+                }
+            }
+            else
+            {
+                if (fullscreen)
+                {
+                    CuiWaylandMonitor *monitor = _cui_wayland_get_fullscreen_monitor_for_window(window);
+                    xdg_toplevel_set_fullscreen(window->wayland_xdg_toplevel, monitor->output);
+                }
+            }
+        } break;
+
+#endif
+
+#if CUI_BACKEND_X11_ENABLED
+
+        case CUI_LINUX_BACKEND_X11:
+        {
+            if (cui_window_is_fullscreen(window))
+            {
+                if (!fullscreen)
+                {
+                    XDeleteProperty(_cui_context.x11_display, window->x11_window, _cui_context.x11_atom_wm_fullscreen_monitors);
+
+                    {
+                        XEvent e = { 0 };
+                        e.xclient.type = ClientMessage;
+                        e.xclient.message_type = _cui_context.x11_atom_wm_state;
+                        e.xclient.format       = 32;
+                        e.xclient.window       = window->x11_window;
+                        e.xclient.data.l[0]    = _cui_context.x11_atom_wm_state_remove;
+                        e.xclient.data.l[1]    = _cui_context.x11_atom_wm_state_fullscreen;
+                        e.xclient.data.l[3]    = 1;
+
+                        XSendEvent(_cui_context.x11_display, _cui_context.x11_root_window, 0,
+                                   SubstructureNotifyMask | SubstructureRedirectMask, &e);
+                    }
+
+                    XMoveResizeWindow(_cui_context.x11_display, window->x11_window, window->windowed_x,
+                                      window->windowed_y, window->windowed_width, window->windowed_height);
+
+                    window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
+                }
+            }
+            else
+            {
+                if (fullscreen)
+                {
+                    window->windowed_width = cui_rect_get_width(window->content_rect);
+                    window->windowed_height = cui_rect_get_height(window->content_rect);
+
+                    XWindowAttributes window_attr = { 0 };
+                    XGetWindowAttributes(_cui_context.x11_display, window->x11_window, &window_attr);
+
+                    Window child;
+                    XTranslateCoordinates(_cui_context.x11_display, window->x11_window, _cui_context.x11_root_window,
+                                          0, 0, &window->windowed_x, &window->windowed_y, &child);
+
+                    int32_t center_x = window->windowed_x + window->windowed_width / 2;
+                    int32_t center_y = window->windowed_y + window->windowed_height / 2;
+
+                    int32_t target_x = 0;
+                    int32_t target_y = 0;
+                    int32_t target_width = 0;
+                    int32_t target_height = 0;
+                    int32_t target_monitor_index = 0;
+
+                    int monitor_count = 0;
+                    XRRMonitorInfo *monitors = XRRGetMonitors(_cui_context.x11_display, _cui_context.x11_root_window, false, &monitor_count);
+
+                    for (int monitor_index = 0; monitor_index < monitor_count; monitor_index += 1)
+                    {
+                        XRRMonitorInfo *monitor_info = monitors + monitor_index;
+
+                        if ((monitor_info->width > 0) && (monitor_info->height > 0))
+                        {
+                            if ((center_x >= monitor_info->x) && (center_y >= monitor_info->y) &&
+                                (center_x < (monitor_info->x + monitor_info->width)) &&
+                                (center_y < (monitor_info->y + monitor_info->height)))
+                            {
+                                target_x = monitor_info->x;
+                                target_y = monitor_info->y;
+                                target_width = monitor_info->width;
+                                target_height = monitor_info->height;
+                                target_monitor_index = monitor_index;
+                                break;
+                            }
+                        }
+                    }
+
+                    XRRFreeMonitors(monitors);
+
+                    {
+                        XEvent e = { 0 };
+                        e.xclient.type         = ClientMessage;
+                        e.xclient.message_type = _cui_context.x11_atom_wm_fullscreen_monitors;
+                        e.xclient.format       = 32;
+                        e.xclient.window       = window->x11_window;
+                        e.xclient.data.l[0]    = target_monitor_index; /* top */
+                        e.xclient.data.l[1]    = target_monitor_index; /* bottom */
+                        e.xclient.data.l[2]    = target_monitor_index; /* left */
+                        e.xclient.data.l[3]    = target_monitor_index; /* right */
+                        e.xclient.data.l[4]    = 0;
+
+                        XSendEvent(_cui_context.x11_display, _cui_context.x11_root_window, 0,
+                                   SubstructureNotifyMask | SubstructureRedirectMask, &e);
+                    }
+
+                    {
+                        XEvent e = { 0 };
+                        e.xclient.type = ClientMessage;
+                        e.xclient.message_type = _cui_context.x11_atom_wm_state;
+                        e.xclient.format       = 32;
+                        e.xclient.window       = window->x11_window;
+                        e.xclient.data.l[0]    = _cui_context.x11_atom_wm_state_add;
+                        e.xclient.data.l[1]    = _cui_context.x11_atom_wm_state_fullscreen;
+                        e.xclient.data.l[3]    = 1;
+
+                        XSendEvent(_cui_context.x11_display, _cui_context.x11_root_window, 0,
+                                   SubstructureNotifyMask | SubstructureRedirectMask, &e);
+                    }
+
+                    XMoveResizeWindow(_cui_context.x11_display, window->x11_window, target_x, target_y, target_width, target_height);
+
+                    window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
+                }
+            }
+        } break;
+
+#endif
+
+    }
+}
+
 void
 cui_signal_main_thread(void)
 {
@@ -4021,7 +4404,7 @@ cui_window_create(uint32_t creation_flags)
 
             if (!window->x11_input_context)
             {
-                cui_window_destroy(window);
+                _cui_window_destroy(window);
                 return 0;
             }
 
@@ -4169,159 +4552,6 @@ cui_window_show(CuiWindow *window)
     }
 }
 
-void
-cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
-{
-    switch (_cui_context.backend)
-    {
-        case CUI_LINUX_BACKEND_NONE:
-        {
-            CuiAssert(!"unsupported");
-        } break;
-
-#if CUI_BACKEND_WAYLAND_ENABLED
-
-        case CUI_LINUX_BACKEND_WAYLAND:
-        {
-            if (cui_window_is_fullscreen(window))
-            {
-                if (!fullscreen)
-                {
-                    xdg_toplevel_unset_fullscreen(window->wayland_xdg_toplevel);
-                }
-            }
-            else
-            {
-                if (fullscreen)
-                {
-                    CuiWaylandMonitor *monitor = _cui_wayland_get_fullscreen_monitor_for_window(window);
-                    xdg_toplevel_set_fullscreen(window->wayland_xdg_toplevel, monitor->output);
-                }
-            }
-        } break;
-
-#endif
-
-#if CUI_BACKEND_X11_ENABLED
-
-        case CUI_LINUX_BACKEND_X11:
-        {
-            if (cui_window_is_fullscreen(window))
-            {
-                if (!fullscreen)
-                {
-                    XDeleteProperty(_cui_context.x11_display, window->x11_window, _cui_context.x11_atom_wm_fullscreen_monitors);
-
-                    {
-                        XEvent e = { 0 };
-                        e.xclient.type = ClientMessage;
-                        e.xclient.message_type = _cui_context.x11_atom_wm_state;
-                        e.xclient.format       = 32;
-                        e.xclient.window       = window->x11_window;
-                        e.xclient.data.l[0]    = _cui_context.x11_atom_wm_state_remove;
-                        e.xclient.data.l[1]    = _cui_context.x11_atom_wm_state_fullscreen;
-                        e.xclient.data.l[3]    = 1;
-
-                        XSendEvent(_cui_context.x11_display, _cui_context.x11_root_window, 0,
-                                   SubstructureNotifyMask | SubstructureRedirectMask, &e);
-                    }
-
-                    XMoveResizeWindow(_cui_context.x11_display, window->x11_window, window->windowed_x,
-                                      window->windowed_y, window->windowed_width, window->windowed_height);
-
-                    window->base.state &= ~CUI_WINDOW_STATE_FULLSCREEN;
-                }
-            }
-            else
-            {
-                if (fullscreen)
-                {
-                    window->windowed_width = cui_rect_get_width(window->content_rect);
-                    window->windowed_height = cui_rect_get_height(window->content_rect);
-
-                    XWindowAttributes window_attr = { 0 };
-                    XGetWindowAttributes(_cui_context.x11_display, window->x11_window, &window_attr);
-
-                    Window child;
-                    XTranslateCoordinates(_cui_context.x11_display, window->x11_window, _cui_context.x11_root_window,
-                                          0, 0, &window->windowed_x, &window->windowed_y, &child);
-
-                    int32_t center_x = window->windowed_x + window->windowed_width / 2;
-                    int32_t center_y = window->windowed_y + window->windowed_height / 2;
-
-                    int32_t target_x = 0;
-                    int32_t target_y = 0;
-                    int32_t target_width = 0;
-                    int32_t target_height = 0;
-                    int32_t target_monitor_index = 0;
-
-                    int monitor_count = 0;
-                    XRRMonitorInfo *monitors = XRRGetMonitors(_cui_context.x11_display, _cui_context.x11_root_window, false, &monitor_count);
-
-                    for (int monitor_index = 0; monitor_index < monitor_count; monitor_index += 1)
-                    {
-                        XRRMonitorInfo *monitor_info = monitors + monitor_index;
-
-                        if ((monitor_info->width > 0) && (monitor_info->height > 0))
-                        {
-                            if ((center_x >= monitor_info->x) && (center_y >= monitor_info->y) &&
-                                (center_x < (monitor_info->x + monitor_info->width)) &&
-                                (center_y < (monitor_info->y + monitor_info->height)))
-                            {
-                                target_x = monitor_info->x;
-                                target_y = monitor_info->y;
-                                target_width = monitor_info->width;
-                                target_height = monitor_info->height;
-                                target_monitor_index = monitor_index;
-                                break;
-                            }
-                        }
-                    }
-
-                    XRRFreeMonitors(monitors);
-
-                    {
-                        XEvent e = { 0 };
-                        e.xclient.type         = ClientMessage;
-                        e.xclient.message_type = _cui_context.x11_atom_wm_fullscreen_monitors;
-                        e.xclient.format       = 32;
-                        e.xclient.window       = window->x11_window;
-                        e.xclient.data.l[0]    = target_monitor_index; /* top */
-                        e.xclient.data.l[1]    = target_monitor_index; /* bottom */
-                        e.xclient.data.l[2]    = target_monitor_index; /* left */
-                        e.xclient.data.l[3]    = target_monitor_index; /* right */
-                        e.xclient.data.l[4]    = 0;
-
-                        XSendEvent(_cui_context.x11_display, _cui_context.x11_root_window, 0,
-                                   SubstructureNotifyMask | SubstructureRedirectMask, &e);
-                    }
-
-                    {
-                        XEvent e = { 0 };
-                        e.xclient.type = ClientMessage;
-                        e.xclient.message_type = _cui_context.x11_atom_wm_state;
-                        e.xclient.format       = 32;
-                        e.xclient.window       = window->x11_window;
-                        e.xclient.data.l[0]    = _cui_context.x11_atom_wm_state_add;
-                        e.xclient.data.l[1]    = _cui_context.x11_atom_wm_state_fullscreen;
-                        e.xclient.data.l[3]    = 1;
-
-                        XSendEvent(_cui_context.x11_display, _cui_context.x11_root_window, 0,
-                                   SubstructureNotifyMask | SubstructureRedirectMask, &e);
-                    }
-
-                    XMoveResizeWindow(_cui_context.x11_display, window->x11_window, target_x, target_y, target_width, target_height);
-
-                    window->base.state |= CUI_WINDOW_STATE_FULLSCREEN;
-                }
-            }
-        } break;
-
-#endif
-
-    }
-}
-
 float
 cui_window_get_titlebar_height(CuiWindow *window)
 {
@@ -4357,224 +4587,6 @@ cui_window_get_titlebar_height(CuiWindow *window)
     }
 
     return titlebar_height;
-}
-
-void
-cui_window_close(CuiWindow *window)
-{
-    switch (_cui_context.backend)
-    {
-        case CUI_LINUX_BACKEND_NONE:
-        {
-            CuiAssert(!"unsupported");
-        } break;
-
-#if CUI_BACKEND_WAYLAND_ENABLED
-
-        case CUI_LINUX_BACKEND_WAYLAND:
-        {
-            cui_window_destroy(window);
-        } break;
-
-#endif
-
-#if CUI_BACKEND_X11_ENABLED
-
-        case CUI_LINUX_BACKEND_X11:
-        {
-            XDestroyWindow(_cui_context.x11_display, window->x11_window);
-        } break;
-
-#endif
-
-    }
-}
-
-void
-cui_window_destroy(CuiWindow *window)
-{
-    switch (_cui_context.backend)
-    {
-        case CUI_LINUX_BACKEND_NONE:
-        {
-            CuiAssert(!"unsupported");
-        } break;
-
-#if CUI_BACKEND_WAYLAND_ENABLED
-
-        case CUI_LINUX_BACKEND_WAYLAND:
-        {
-            if (_cui_context.wayland_keyboard_focused_window == window)
-            {
-                _cui_context.wayland_keyboard_focused_window = 0;
-            }
-
-            if (_cui_context.wayland_window_under_cursor == window)
-            {
-                _cui_context.wayland_window_under_cursor = 0;
-            }
-
-            switch (window->base.renderer->type)
-            {
-                case CUI_RENDERER_TYPE_SOFTWARE:
-                {
-#  if CUI_RENDERER_SOFTWARE_ENABLED
-                    for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
-                    {
-                        CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
-
-                        if (framebuffer->is_busy)
-                        {
-                            // TODO: wait for framebuffer not busy
-                        }
-
-                        wl_buffer_destroy(framebuffer->backend.wayland.buffer);
-                        wl_shm_pool_destroy(framebuffer->backend.wayland.shared_memory_pool);
-                        munmap(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
-                        close(framebuffer->backend.wayland.shared_memory_fd);
-                    }
-
-                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-                    _cui_renderer_software_destroy(renderer_software);
-#  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#  endif
-                } break;
-
-                case CUI_RENDERER_TYPE_OPENGLES2:
-                {
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-                    // TODO: change only if needed
-#if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
-                                             window->opengles2.egl_surface, window->opengles2.egl_context));
-#else
-                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
-                                   window->opengles2.egl_surface, window->opengles2.egl_context);
-#endif
-
-                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
-                    _cui_renderer_opengles2_destroy(renderer_opengles2);
-
-                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-
-                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
-                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
-
-                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
-                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
-
-                    wl_egl_window_destroy(window->wayland_egl_window);
-#  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#  endif
-                } break;
-
-                case CUI_RENDERER_TYPE_METAL:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                } break;
-
-                case CUI_RENDERER_TYPE_DIRECT3D11:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                } break;
-            }
-
-            if (window->wayland_xdg_decoration)
-            {
-                zxdg_toplevel_decoration_v1_destroy(window->wayland_xdg_decoration);
-            }
-
-            xdg_toplevel_destroy(window->wayland_xdg_toplevel);
-            xdg_surface_destroy(window->wayland_xdg_surface);
-            wl_surface_destroy(window->wayland_surface);
-
-            cui_arena_deallocate(&window->arena);
-        } break;
-
-#endif
-
-#if CUI_BACKEND_X11_ENABLED
-
-        case CUI_LINUX_BACKEND_X11:
-        {
-            switch (window->base.renderer->type)
-            {
-                case CUI_RENDERER_TYPE_SOFTWARE:
-                {
-#  if CUI_RENDERER_SOFTWARE_ENABLED
-                    if (_cui_context.has_shared_memory_extension)
-                    {
-                        for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
-                        {
-                            CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
-
-                            while (framebuffer->is_busy)
-                            {
-                                _cui_wait_for_frame_completion(window);
-                            }
-
-                            XShmDetach(_cui_context.x11_display, &framebuffer->backend.x11.shared_memory_info);
-                            shmdt(framebuffer->backend.x11.shared_memory_info.shmaddr);
-                            shmctl(framebuffer->backend.x11.shared_memory_info.shmid, IPC_RMID, 0);
-                        }
-                    }
-                    else
-                    {
-                        CuiLinuxFramebuffer *framebuffer = window->framebuffers;
-                        cui_platform_deallocate(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
-                    }
-
-                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-                    _cui_renderer_software_destroy(renderer_software);
-#  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
-#  endif
-                } break;
-
-                case CUI_RENDERER_TYPE_OPENGLES2:
-                {
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-                    // TODO: change only if needed
-#if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->opengles2.egl_context));
-#else
-                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, window->opengles2.egl_context);
-#endif
-
-                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
-                    _cui_renderer_opengles2_destroy(renderer_opengles2);
-
-                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-
-                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
-                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
-
-                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
-                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
-#  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
-#  endif
-                } break;
-
-                case CUI_RENDERER_TYPE_METAL:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                } break;
-
-                case CUI_RENDERER_TYPE_DIRECT3D11:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                } break;
-            }
-        } break;
-
-#endif
-
-    }
-
-    _cui_remove_window(window);
 }
 
 void
@@ -4776,10 +4788,91 @@ cui_step(void)
             {
                 CuiWindow *window = _cui_context.common.windows[window_index];
 
-                if (window->is_mapped && window->base.needs_redraw)
+                if (window->is_mapped)
                 {
-                    _cui_wayland_commit_frame(window);
-                    window->base.needs_redraw = false;
+                    window->base.width = cui_rect_get_width(window->backbuffer_rect);
+                    window->base.height = cui_rect_get_height(window->backbuffer_rect);
+
+                    CuiWindowFrameResult window_frame_result = { 0 };
+                    CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
+
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
+                    {
+                        _cui_window_close(window);
+                        continue;
+                    }
+
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN)
+                    {
+                        _cui_window_set_fullscreen(window, window_frame_result.should_be_fullscreen);
+                    }
+
+                    if (framebuffer)
+                    {
+                        if (window->wayland_configure_serial)
+                        {
+                            xdg_surface_ack_configure(window->wayland_xdg_surface, window->wayland_configure_serial);
+                            window->wayland_configure_serial = 0;
+                        }
+
+                        wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
+
+                        xdg_surface_set_window_geometry(window->wayland_xdg_surface, window->wayland_window_rect.min.x, window->wayland_window_rect.min.y,
+                                                        cui_rect_get_width(window->wayland_window_rect), cui_rect_get_height(window->wayland_window_rect));
+
+                        if (window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE)
+                        {
+                            xdg_toplevel_set_min_size(window->wayland_xdg_toplevel,
+                                                      cui_rect_get_width(window->wayland_window_rect),
+                                                      cui_rect_get_height(window->wayland_window_rect));
+                            xdg_toplevel_set_max_size(window->wayland_xdg_toplevel,
+                                                      cui_rect_get_width(window->wayland_window_rect),
+                                                      cui_rect_get_height(window->wayland_window_rect));
+                        }
+
+                        struct wl_region *input_region = wl_compositor_create_region(_cui_context.wayland_compositor);
+                        wl_region_add(input_region, window->wayland_input_rect.min.x, window->wayland_input_rect.min.y,
+                                      cui_rect_get_width(window->wayland_input_rect), cui_rect_get_height(window->wayland_input_rect));
+                        wl_surface_set_input_region(window->wayland_surface, input_region);
+                        wl_region_destroy(input_region);
+
+                        switch (window->base.renderer->type)
+                        {
+                            case CUI_RENDERER_TYPE_SOFTWARE:
+                            {
+#  if CUI_RENDERER_SOFTWARE_ENABLED
+                                CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
+
+                                wl_surface_attach(window->wayland_surface, framebuffer->backend.wayland.buffer, 0, 0);
+                                wl_surface_damage(window->wayland_surface, 0, 0, INT32_MAX, INT32_MAX);
+                                wl_surface_commit(window->wayland_surface);
+
+                                window->current_framebuffer = 0;
+#  else
+                                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+#  endif
+                            } break;
+
+                            case CUI_RENDERER_TYPE_OPENGLES2:
+                            {
+#if CUI_RENDERER_OPENGLES2_ENABLED
+                                eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
+#else
+                                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+#endif
+                            } break;
+
+                            case CUI_RENDERER_TYPE_METAL:
+                            {
+                                CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                            } break;
+
+                            case CUI_RENDERER_TYPE_DIRECT3D11:
+                            {
+                                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                            } break;
+                        }
+                    }
                 }
             }
         } break;
@@ -5014,7 +5107,7 @@ cui_step(void)
                             if ((Atom) ev.xclient.data.l[0] == _cui_context.x11_atom_wm_delete_window)
                             {
                                 window->is_mapped = false;
-                                cui_window_close(window);
+                                _cui_window_close(window);
                             }
                             else if ((Atom) ev.xclient.data.l[0] == _cui_context.x11_atom_wm_sync_request)
                             {
@@ -5062,21 +5155,23 @@ cui_step(void)
 
                     case DestroyNotify:
                     {
-                        cui_window_destroy(window);
+                        _cui_window_destroy(window);
                     } break;
 
                     case EnterNotify:
                     case MotionNotify:
                     {
-                        window->base.event.mouse.x = ev.xcrossing.x;
-                        window->base.event.mouse.y = ev.xcrossing.y;
+                        CuiEvent *event = cui_array_append(window->base.events);
 
-                        cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_MOVE);
+                        event->type = CUI_EVENT_TYPE_MOUSE_MOVE;
+                        event->mouse.x = ev.xcrossing.x;
+                        event->mouse.y = ev.xcrossing.y;
                     } break;
 
                     case LeaveNotify:
                     {
-                        cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_LEAVE);
+                        CuiEvent *event = cui_array_append(window->base.events);
+                        event->type = CUI_EVENT_TYPE_MOUSE_LEAVE;
                     } break;
 
                     case ButtonPress:
@@ -5085,27 +5180,30 @@ cui_step(void)
                         {
                             case Button1:
                             {
-                                window->base.event.mouse.x = ev.xbutton.x;
-                                window->base.event.mouse.y = ev.xbutton.y;
+                                CuiEvent *event = cui_array_append(window->base.events);
+
+                                event->mouse.x = ev.xbutton.x;
+                                event->mouse.y = ev.xbutton.y;
 
                                 if (((int64_t) ev.xbutton.time - window->last_left_click_time) <= (int64_t) _cui_context.double_click_time)
                                 {
                                     window->last_left_click_time = INT16_MIN;
-                                    cui_window_handle_event(window, CUI_EVENT_TYPE_DOUBLE_CLICK);
+                                    event->type = CUI_EVENT_TYPE_DOUBLE_CLICK;
                                 }
                                 else
                                 {
                                     window->last_left_click_time = (int64_t) ev.xbutton.time;
-                                    cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_DOWN);
+                                    event->type = CUI_EVENT_TYPE_LEFT_DOWN;
                                 }
                             } break;
 
                             case Button3:
                             {
-                                window->base.event.mouse.x = ev.xbutton.x;
-                                window->base.event.mouse.y = ev.xbutton.y;
+                                CuiEvent *event = cui_array_append(window->base.events);
 
-                                cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_DOWN);
+                                event->type = CUI_EVENT_TYPE_RIGHT_DOWN;
+                                event->mouse.x = ev.xbutton.x;
+                                event->mouse.y = ev.xbutton.y;
                             } break;
 
                             case Button4:
@@ -5114,10 +5212,14 @@ cui_step(void)
 #if 0
                                 printf("WHEEL %d\n", (ev.xbutton.button == Button4) ? 1 : -1);
 #endif
-                                window->base.event.wheel.is_precise_scrolling = false;
+                                CuiEvent *event = cui_array_append(window->base.events);
+
+                                event->type = CUI_EVENT_TYPE_MOUSE_WHEEL;
+                                event->mouse.x = ev.xbutton.x;
+                                event->mouse.y = ev.xbutton.y;
+                                event->wheel.is_precise_scrolling = false;
                                 // TODO: where should this 3 be applied?
-                                window->base.event.wheel.dy = (ev.xbutton.button == Button4) ? 3.0f : -3.0f;
-                                cui_window_handle_event(window, CUI_EVENT_TYPE_MOUSE_WHEEL);
+                                event->wheel.dy = (ev.xbutton.button == Button4) ? 3.0f : -3.0f;
                             } break;
                         }
                     } break;
@@ -5128,18 +5230,20 @@ cui_step(void)
                         {
                             case Button1:
                             {
-                                window->base.event.mouse.x = ev.xbutton.x;
-                                window->base.event.mouse.y = ev.xbutton.y;
+                                CuiEvent *event = cui_array_append(window->base.events);
 
-                                cui_window_handle_event(window, CUI_EVENT_TYPE_LEFT_UP);
+                                event->type = CUI_EVENT_TYPE_LEFT_UP;
+                                event->mouse.x = ev.xbutton.x;
+                                event->mouse.y = ev.xbutton.y;
                             } break;
 
                             case Button3:
                             {
-                                window->base.event.mouse.x = ev.xbutton.x;
-                                window->base.event.mouse.y = ev.xbutton.y;
+                                CuiEvent *event = cui_array_append(window->base.events);
 
-                                cui_window_handle_event(window, CUI_EVENT_TYPE_RIGHT_UP);
+                                event->type = CUI_EVENT_TYPE_RIGHT_UP;
+                                event->mouse.x = ev.xbutton.x;
+                                event->mouse.y = ev.xbutton.y;
                             } break;
                         }
                     } break;
@@ -5155,13 +5259,14 @@ cui_step(void)
 
                         CuiAssert(status != XBufferOverflow);
 
-#define _CUI_KEY_DOWN_EVENT(key_id)                                                     \
-    window->base.event.key.codepoint       = (key_id);                                  \
-    window->base.event.key.alt_is_down     = 1 & (ev.xkey.state >> Mod1MapIndex);       \
-    window->base.event.key.ctrl_is_down    = 1 & (ev.xkey.state >> ControlMapIndex);    \
-    window->base.event.key.shift_is_down   = 1 & (ev.xkey.state >> ShiftMapIndex);      \
-    window->base.event.key.command_is_down = false;                                     \
-    cui_window_handle_event(window, CUI_EVENT_TYPE_KEY_DOWN);
+#define _CUI_KEY_DOWN_EVENT(key_id)                                     \
+    CuiEvent *event = cui_array_append(window->base.events);            \
+    event->type = CUI_EVENT_TYPE_KEY_DOWN;                              \
+    event->key.codepoint       = (key_id);                              \
+    event->key.alt_is_down     = 1 & (ev.xkey.state >> Mod1MapIndex);   \
+    event->key.ctrl_is_down    = 1 & (ev.xkey.state >> ControlMapIndex);\
+    event->key.shift_is_down   = 1 & (ev.xkey.state >> ShiftMapIndex);  \
+    event->key.command_is_down = false;
 
                         if ((status == XLookupKeySym) || (status == XLookupBoth))
                         {
@@ -5238,98 +5343,112 @@ cui_step(void)
             {
                 CuiWindow *window = _cui_context.common.windows[window_index];
 
-                if (window->is_mapped && window->base.needs_redraw)
+                if (window->is_mapped)
                 {
-                    _cui_window_draw(window, cui_rect_get_width(window->backbuffer_rect), cui_rect_get_height(window->backbuffer_rect));
+                    window->base.width = cui_rect_get_width(window->backbuffer_rect);
+                    window->base.height = cui_rect_get_height(window->backbuffer_rect);
 
-                    switch (window->base.renderer->type)
+                    CuiWindowFrameResult window_frame_result = { 0 };
+                    CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
+
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_CLOSE)
                     {
-                        case CUI_RENDERER_TYPE_SOFTWARE:
+                        _cui_window_close(window);
+                        continue;
+                    }
+
+                    if (window_frame_result.window_frame_actions & CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN)
+                    {
+                        _cui_window_set_fullscreen(window, window_frame_result.should_be_fullscreen);
+                    }
+
+                    if (framebuffer)
+                    {
+                        switch (window->base.renderer->type)
                         {
+                            case CUI_RENDERER_TYPE_SOFTWARE:
+                            {
 #  if CUI_RENDERER_SOFTWARE_ENABLED
-                            CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
+                                CuiLinuxFramebuffer *framebuffer = window->current_framebuffer;
 
-                            XImage backbuffer;
-                            backbuffer.width = framebuffer->base.bitmap.width;
-                            backbuffer.height = framebuffer->base.bitmap.height;
-                            backbuffer.xoffset = 0;
-                            backbuffer.format = ZPixmap;
-                            backbuffer.data = (char *) framebuffer->base.bitmap.pixels;
-                            backbuffer.byte_order = LSBFirst;
-                            backbuffer.bitmap_unit = 32;
-                            backbuffer.bitmap_bit_order = LSBFirst;
-                            backbuffer.bitmap_pad = 32;
-                            backbuffer.depth = 24;
-                            backbuffer.bytes_per_line = framebuffer->base.bitmap.stride;
-                            backbuffer.bits_per_pixel = 32;
-                            backbuffer.red_mask = 0xFF0000;
-                            backbuffer.green_mask = 0x00FF00;
-                            backbuffer.blue_mask = 0x0000FF;
+                                XImage backbuffer;
+                                backbuffer.width = framebuffer->base.bitmap.width;
+                                backbuffer.height = framebuffer->base.bitmap.height;
+                                backbuffer.xoffset = 0;
+                                backbuffer.format = ZPixmap;
+                                backbuffer.data = (char *) framebuffer->base.bitmap.pixels;
+                                backbuffer.byte_order = LSBFirst;
+                                backbuffer.bitmap_unit = 32;
+                                backbuffer.bitmap_bit_order = LSBFirst;
+                                backbuffer.bitmap_pad = 32;
+                                backbuffer.depth = 24;
+                                backbuffer.bytes_per_line = framebuffer->base.bitmap.stride;
+                                backbuffer.bits_per_pixel = 32;
+                                backbuffer.red_mask = 0xFF0000;
+                                backbuffer.green_mask = 0x00FF00;
+                                backbuffer.blue_mask = 0x0000FF;
 
-                            if (_cui_context.has_shared_memory_extension)
-                            {
-                                backbuffer.width = CuiAlign(backbuffer.width, 16);
-                                backbuffer.obdata = (char *) &framebuffer->backend.x11.shared_memory_info;
+                                if (_cui_context.has_shared_memory_extension)
+                                {
+                                    backbuffer.width = CuiAlign(backbuffer.width, 16);
+                                    backbuffer.obdata = (char *) &framebuffer->backend.x11.shared_memory_info;
 
-                                XShmPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
-                                             0, 0, 0, 0, backbuffer.width, backbuffer.height, True);
-                            }
-                            else
-                            {
-                                XPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
-                                          0, 0, 0, 0, backbuffer.width, backbuffer.height);
-                                XFlush(_cui_context.x11_display);
+                                    XShmPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
+                                                 0, 0, 0, 0, backbuffer.width, backbuffer.height, True);
+                                }
+                                else
+                                {
+                                    XPutImage(_cui_context.x11_display, window->x11_window, _cui_context.x11_default_gc, &backbuffer,
+                                              0, 0, 0, 0, backbuffer.width, backbuffer.height);
+                                    XFlush(_cui_context.x11_display);
 
-                                framebuffer->is_busy = false;
-                            }
+                                    framebuffer->is_busy = false;
+                                }
 
-                            window->current_framebuffer = 0;
+                                window->current_framebuffer = 0;
 #  else
-                            CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+                                CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #  endif
-                        } break;
+                            } break;
 
-                        case CUI_RENDERER_TYPE_OPENGLES2:
-                        {
+                            case CUI_RENDERER_TYPE_OPENGLES2:
+                            {
 #  if CUI_RENDERER_OPENGLES2_ENABLED
-                            eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
+                                eglSwapBuffers(_cui_context.egl_display, window->opengles2.egl_surface);
 #  else
-                            CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+                                CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif
-                        } break;
+                            } break;
 
-                        case CUI_RENDERER_TYPE_METAL:
+                            case CUI_RENDERER_TYPE_METAL:
+                            {
+                                CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                            } break;
+
+                            case CUI_RENDERER_TYPE_DIRECT3D11:
+                            {
+                                CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                            } break;
+                        }
+
+                        if (window->x11_configure_serial)
                         {
-                            CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                        } break;
+                            XSyncValue counter_value;
 
-                        case CUI_RENDERER_TYPE_DIRECT3D11:
+                            XSyncIntsToValue(&counter_value, window->x11_configure_serial & 0xFFFFFFFF, window->x11_configure_serial >> 32);
+                            XSyncSetCounter(_cui_context.x11_display, window->basic_frame_counter, counter_value);
+
+                            window->x11_configure_serial = 0;
+                        }
+
+                        // On some egl implementations after you created the window and than changed the size of the window
+                        // the size of the egl backbuffer seems not to be correct or at least not probably placed in the window.
+                        // The result is a black or shifted first frame. To work around that we render a second frame right after.
+                        if (window->first_frame)
                         {
-                            CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                        } break;
-                    }
-
-                    if (window->x11_configure_serial)
-                    {
-                        XSyncValue counter_value;
-
-                        XSyncIntsToValue(&counter_value, window->x11_configure_serial & 0xFFFFFFFF, window->x11_configure_serial >> 32);
-                        XSyncSetCounter(_cui_context.x11_display, window->basic_frame_counter, counter_value);
-
-                        window->x11_configure_serial = 0;
-                    }
-
-                    // On some egl implementations after you created the window and than changed the size of the window
-                    // the size of the egl backbuffer seems not to be correct or at least not probably placed in the window.
-                    // The result is a black or shifted first frame. To work around that we render a second frame right after.
-                    if (window->first_frame)
-                    {
-                        window->first_frame = false;
-                        window->base.needs_redraw = true;
-                    }
-                    else
-                    {
-                        window->base.needs_redraw = false;
+                            window->first_frame = false;
+                            window->base.needs_redraw = true;
+                        }
                     }
                 }
             }
