@@ -330,6 +330,7 @@ cui_platform_get_canonical_filename(CuiArena *temporary_memory, CuiArena *arena,
     if (canonical_filename)
     {
         result = cui_copy_string(arena, CuiCString(canonical_filename));
+        free(canonical_filename);
     }
 
     return result;

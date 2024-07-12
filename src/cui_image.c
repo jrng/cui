@@ -273,15 +273,25 @@ cui_image_encode_bmp(CuiBitmap bitmap, bool top_to_bottom, bool bgra, CuiArena *
 
     // alpha mask
     cui_write_u32_le(result.data, 66, 0xFF000000);
-    // cs type
+
+    // colorspace data
     cui_write_u32_le(result.data, 70, 0);
+    cui_write_u32_le(result.data, 74, 0);
+    cui_write_u32_le(result.data, 78, 0);
+    cui_write_u32_le(result.data, 82, 0);
+    cui_write_u32_le(result.data, 86, 0);
+    cui_write_u32_le(result.data, 90, 0);
+    cui_write_u32_le(result.data, 94, 0);
+    cui_write_u32_le(result.data, 98, 0);
+    cui_write_u32_le(result.data, 102, 0);
+    cui_write_u32_le(result.data, 106, 0);
 
     // red gamma
-    cui_write_u32_le(result.data, 96, 0);
+    cui_write_u32_le(result.data, 110, 0);
     // green gamma
-    cui_write_u32_le(result.data, 100, 0);
+    cui_write_u32_le(result.data, 114, 0);
     // blue gamma
-    cui_write_u32_le(result.data, 104, 0);
+    cui_write_u32_le(result.data, 118, 0);
 
     if (bitmap.stride == (bitmap.width * 4))
     {
