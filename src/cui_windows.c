@@ -1236,6 +1236,33 @@ cui_platform_get_efficiency_core_count(void)
 }
 
 bool
+cui_platform_directory_exists(CuiArena *temporary_memory, CuiString directory)
+{
+    bool result;
+
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, directory);
+    DWORD file_attr = GetFileAttributes((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string));
+    result = (file_attr != INVALID_FILE_ATTRIBUTES) && (file_attr & FILE_ATTRIBUTE_DIRECTORY);
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
+void
+cui_platform_directory_create(CuiArena *temporary_memory, CuiString directory)
+{
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, directory);
+    CreateDirectory((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string), 0);
+
+    cui_end_temporary_memory(temp_memory);
+}
+
+bool
 cui_platform_file_exists(CuiArena *temporary_memory, CuiString filename)
 {
     bool result;
@@ -1244,7 +1271,7 @@ cui_platform_file_exists(CuiArena *temporary_memory, CuiString filename)
 
     CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, filename);
     DWORD file_attr = GetFileAttributes((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string));
-    result = (file_attr != INVALID_FILE_ATTRIBUTES);
+    result = (file_attr != INVALID_FILE_ATTRIBUTES) && !(file_attr & FILE_ATTRIBUTE_DIRECTORY);
 
     cui_end_temporary_memory(temp_memory);
 
