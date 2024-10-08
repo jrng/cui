@@ -1974,18 +1974,135 @@ _cui_wayland_handle_touch_down(void *data, struct wl_touch *touch, uint32_t seri
     CuiWindow *window =_cui_wayland_get_window_from_surface(surface);
     CuiAssert(window);
 
-    // TODO: this should all be handled in handle_touch_frame
+    int32_t touch_point_index = cui_array_count(_cui_context.wayland_touch_points) - 1;
 
-    // TODO: handle window decoration
+    for (; touch_point_index >= 0; touch_point_index -= 1)
+    {
+        CuiWaylandTouchPoint *touch_point = _cui_context.wayland_touch_points + touch_point_index;
 
-    CuiPoint touch_position = cui_make_point(wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(x))),
-                                             wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(y))));
+        if (touch_point->index == id)
+        {
+            break;
+        }
+    }
 
-    CuiEvent *event = cui_array_append(window->base.events);
+    if (touch_point_index < 0)
+    {
+        CuiPoint platform_position = cui_make_point(wl_fixed_to_int(x), wl_fixed_to_int(y));
+        CuiPoint application_position = cui_make_point(wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(x))),
+                                                       wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(y))));
 
-    event->type = CUI_EVENT_TYPE_POINTER_DOWN;
-    event->pointer.index = id;
-    event->pointer.position = touch_position;
+        enum xdg_toplevel_resize_edge resize_edge = _cui_wayland_get_toplevel_resize_edge(window, platform_position);
+
+        if (((int64_t) time - window->last_touch_down_time) <= (int64_t) _cui_context.double_click_time)
+        {
+            if (resize_edge == XDG_TOPLEVEL_RESIZE_EDGE_NONE)
+            {
+                bool handled = false;
+
+                if (window->title)
+                {
+                    CuiRect titlebar_rect = window->title->rect;
+                    CuiRect close_button_rect = window->close_button->rect;
+                    CuiRect minimize_button_rect = window->minimize_button->rect;
+
+                    if (cui_rect_has_point_inside(titlebar_rect, application_position) &&
+                        !cui_rect_has_point_inside(close_button_rect, application_position) &&
+                        !cui_rect_has_point_inside(minimize_button_rect, application_position) &&
+                        ((window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE) ||
+                         !cui_rect_has_point_inside(window->maximize_button->rect, application_position)))
+                    {
+                        if (cui_window_is_maximized(window))
+                        {
+                            xdg_toplevel_unset_maximized(window->wayland_xdg_toplevel);
+                        }
+                        else if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+                        {
+                            xdg_toplevel_set_maximized(window->wayland_xdg_toplevel);
+                        }
+
+                        handled = true;
+                    }
+                }
+
+                if (!handled)
+                {
+                    CuiWaylandTouchPoint *touch_point = cui_array_append(_cui_context.wayland_touch_points);
+
+                    touch_point->index = id;
+                    touch_point->window = window;
+                    touch_point->position = application_position;
+
+                    CuiWaylandTouchEvent *touch_event = cui_array_append(_cui_context.wayland_touch_events);
+
+                    touch_event->type = CUI_EVENT_TYPE_POINTER_DOWN;
+                    touch_event->index = id;
+                    touch_event->serial = serial;
+                    touch_event->window = window;
+                    touch_event->position = application_position;
+                }
+            }
+            else
+            {
+                if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+                {
+                    xdg_toplevel_resize(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial, resize_edge);
+                }
+            }
+
+            window->last_touch_down_time = INT16_MIN;
+        }
+        else
+        {
+            if (resize_edge == XDG_TOPLEVEL_RESIZE_EDGE_NONE)
+            {
+                bool handled = false;
+
+                if (window->title)
+                {
+                    CuiRect titlebar_rect = window->title->rect;
+                    CuiRect close_button_rect = window->close_button->rect;
+                    CuiRect minimize_button_rect = window->minimize_button->rect;
+
+                    if (cui_rect_has_point_inside(titlebar_rect, application_position) &&
+                        !cui_rect_has_point_inside(close_button_rect, application_position) &&
+                        !cui_rect_has_point_inside(minimize_button_rect, application_position) &&
+                        ((window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE) ||
+                         !cui_rect_has_point_inside(window->maximize_button->rect, application_position)))
+                    {
+                        xdg_toplevel_move(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial);
+                        handled = true;
+                    }
+                }
+
+                if (!handled)
+                {
+                    CuiWaylandTouchPoint *touch_point = cui_array_append(_cui_context.wayland_touch_points);
+
+                    touch_point->index = id;
+                    touch_point->window = window;
+                    touch_point->position = application_position;
+
+                    CuiWaylandTouchEvent *touch_event = cui_array_append(_cui_context.wayland_touch_events);
+
+                    touch_event->type = CUI_EVENT_TYPE_POINTER_DOWN;
+                    touch_event->index = id;
+                    touch_event->serial = serial;
+                    touch_event->window = window;
+                    touch_event->position = application_position;
+                }
+            }
+            else
+            {
+                if (!(window->base.creation_flags & CUI_WINDOW_CREATION_FLAG_NOT_USER_RESIZABLE))
+                {
+                    xdg_toplevel_resize(window->wayland_xdg_toplevel, _cui_context.wayland_seat, serial, resize_edge);
+                }
+            }
+
+            window->last_touch_down_time = (int64_t) time;
+        }
+    }
 }
 
 static void
@@ -1995,7 +2112,34 @@ _cui_wayland_handle_touch_up(void *data, struct wl_touch *touch, uint32_t serial
     (void) touch;
     (void) serial;
     (void) time;
-    (void) id;
+
+    int32_t touch_point_index = cui_array_count(_cui_context.wayland_touch_points) - 1;
+
+    for (; touch_point_index >= 0; touch_point_index -= 1)
+    {
+        CuiWaylandTouchPoint *touch_point = _cui_context.wayland_touch_points + touch_point_index;
+
+        if (touch_point->index == id)
+        {
+            break;
+        }
+    }
+
+    if (touch_point_index >= 0)
+    {
+        CuiWaylandTouchPoint *touch_point = _cui_context.wayland_touch_points + touch_point_index;
+
+        // TODO: remove all events from wayland_touch_events for this id
+
+        CuiEvent *event = cui_array_append(touch_point->window->base.events);
+
+        event->type = CUI_EVENT_TYPE_POINTER_UP;
+        event->pointer.index = id;
+        event->pointer.position = touch_point->position;
+
+        int32_t index = --_cui_array_header(_cui_context.wayland_touch_points)->count;
+        _cui_context.wayland_touch_points[touch_point_index] = _cui_context.wayland_touch_points[index];
+    }
 }
 
 static void
@@ -2004,9 +2148,37 @@ _cui_wayland_handle_touch_motion(void *data, struct wl_touch *touch, uint32_t ti
     (void) data;
     (void) touch;
     (void) time;
-    (void) id;
-    (void) x;
-    (void) y;
+
+    int32_t touch_point_index = cui_array_count(_cui_context.wayland_touch_points) - 1;
+
+    for (; touch_point_index >= 0; touch_point_index -= 1)
+    {
+        CuiWaylandTouchPoint *touch_point = _cui_context.wayland_touch_points + touch_point_index;
+
+        if (touch_point->index == id)
+        {
+            break;
+        }
+    }
+
+    if (touch_point_index >= 0)
+    {
+        CuiWaylandTouchPoint *touch_point = _cui_context.wayland_touch_points + touch_point_index;
+
+        CuiWindow *window = touch_point->window;
+
+        CuiPoint application_position = cui_make_point(wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(x))),
+                                                       wl_fixed_to_int(wl_fixed_from_double((double) window->backbuffer_scale * wl_fixed_to_double(y))));
+
+        touch_point->position = application_position;
+
+        CuiWaylandTouchEvent *touch_event = cui_array_append(_cui_context.wayland_touch_events);
+
+        touch_event->type = CUI_EVENT_TYPE_POINTER_MOVE;
+        touch_event->index = id;
+        touch_event->window = window;
+        touch_event->position = application_position;
+    }
 }
 
 static void
@@ -2014,6 +2186,19 @@ _cui_wayland_handle_touch_frame(void *data, struct wl_touch *touch)
 {
     (void) data;
     (void) touch;
+
+    for (int32_t i = 0; i < cui_array_count(_cui_context.wayland_touch_events); i += 1)
+    {
+        CuiWaylandTouchEvent *touch_event = _cui_context.wayland_touch_events + i;
+
+        CuiEvent *event = cui_array_append(touch_event->window->base.events);
+
+        event->type = touch_event->type;
+        event->pointer.index = touch_event->index;
+        event->pointer.position = touch_event->position;
+    }
+
+    _cui_array_header(_cui_context.wayland_touch_events)->count = 0;
 }
 
 static void
@@ -2021,6 +2206,8 @@ _cui_wayland_handle_touch_cancel(void *data, struct wl_touch *touch)
 {
     (void) data;
     (void) touch;
+
+    _cui_array_header(_cui_context.wayland_touch_events)->count = 0;
 }
 
 static void
@@ -3216,6 +3403,8 @@ _cui_initialize_wayland(void)
     _cui_context.wayland_keyboard_repeat_delay = 400;
 
     cui_array_init(_cui_context.wayland_monitors, 4, &_cui_context.common.arena);
+    cui_array_init(_cui_context.wayland_touch_points, 8, &_cui_context.common.arena);
+    cui_array_init(_cui_context.wayland_touch_events, 16, &_cui_context.common.arena);
 
     struct wl_registry *wayland_registry = wl_display_get_registry(_cui_context.wayland_display);
 
@@ -4376,6 +4565,7 @@ cui_window_create(uint32_t creation_flags)
             }
 
             window->last_left_click_time = INT16_MIN;
+            window->last_touch_down_time = INT16_MIN;
 
             XSizeHints sh = { 0 };
             sh.flags = PMinSize | PResizeInc | PWinGravity;

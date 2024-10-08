@@ -101,6 +101,22 @@ typedef enum CuiWaylandPointerButton
     CUI_WAYLAND_POINTER_BUTTON_RIGHT  = (1 << 2),
 } CuiWaylandPointerButton;
 
+typedef struct CuiWaylandTouchPoint
+{
+    int32_t index;
+    CuiWindow *window;
+    CuiPoint position;
+} CuiWaylandTouchPoint;
+
+typedef struct CuiWaylandTouchEvent
+{
+    CuiEventType type;
+    int32_t index;
+    uint32_t serial;
+    CuiWindow *window;
+    CuiPoint position;
+} CuiWaylandTouchEvent;
+
 #endif
 
 typedef enum CuiLinuxBackend
@@ -173,6 +189,7 @@ struct CuiWindow
     int32_t windowed_height;
 
     int64_t last_left_click_time;
+    int64_t last_touch_down_time;
 
 #if CUI_BACKEND_X11_ENABLED
 
@@ -332,6 +349,9 @@ typedef struct CuiContext
 
     CuiPoint wayland_platform_mouse_position;
     CuiPoint wayland_application_mouse_position;
+
+    CuiWaylandTouchPoint *wayland_touch_points;
+    CuiWaylandTouchEvent *wayland_touch_events;
 
     uint32_t wayland_seat_version;
 
