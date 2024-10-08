@@ -4058,11 +4058,12 @@ cui_window_create(uint32_t creation_flags)
     }
 
     window->font_id = _cui_font_manager_find_font(&window->base.temporary_memory, &window->base.font_manager, window->base.ui_scale,
-                                                  cui_make_sized_font_spec(CuiStringLiteral("Inter-Regular"),  14.0f, 1.0f),
-                                                  cui_make_sized_font_spec(CuiStringLiteral("Roboto-Regular"), 14.0f, 1.0f),
-                                                  cui_make_sized_font_spec(CuiStringLiteral("DejaVuSans"),     13.0f, 1.0f),
-                                                  cui_make_sized_font_spec(CuiStringLiteral("DroidSans"),      14.0f, 1.0f),
-                                                  cui_make_sized_font_spec(CuiStringLiteral("TwemojiMozilla"), 14.0f, 1.0f));
+                                                  cui_make_sized_font_spec(CuiStringLiteral("Inter-Regular")  , 14.0f, 1.0f),
+                                                  cui_make_sized_font_spec(CuiStringLiteral("Roboto-Regular") , 14.0f, 1.0f),
+                                                  cui_make_sized_font_spec(CuiStringLiteral("DejaVuSans")     , 13.0f, 1.0f),
+                                                  cui_make_sized_font_spec(CuiStringLiteral("DroidSans")      , 14.0f, 1.0f),
+                                                  cui_make_sized_font_spec(CuiStringLiteral("Twemoji.Mozilla"), 14.0f, 1.0f),
+                                                  cui_make_sized_font_spec(CuiStringLiteral("TwemojiMozilla") , 14.0f, 1.0f));
 
     switch (_cui_context.backend)
     {
