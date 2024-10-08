@@ -144,7 +144,7 @@ cui_platform_directory_create(CuiArena *temporary_memory, CuiString directory)
 {
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
 
-    mkdir(cui_to_c_string(temporary_memory, directory), 0755);
+    mkdir(cui_to_c_string(temporary_memory, directory), 0775);
 
     cui_end_temporary_memory(temp_memory);
 }
