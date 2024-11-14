@@ -407,9 +407,9 @@ on_rgb_changed(CuiWidget *widget)
     CuiString b_str = cui_widget_get_textinput_value(app.input_b);
 
     // TODO: these don't report if they fail
-    int32_t r = cui_parse_int32(r_str);
-    int32_t g = cui_parse_int32(g_str);
-    int32_t b = cui_parse_int32(b_str);
+    int32_t r = cui_string_parse_int32(r_str);
+    int32_t g = cui_string_parse_int32(g_str);
+    int32_t b = cui_string_parse_int32(b_str);
 
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&app.temporary_memory);
 

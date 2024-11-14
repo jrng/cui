@@ -481,7 +481,7 @@ _cui_initialize_x11(void)
                     if (value.addr && cui_string_equals(type_str, CuiStringLiteral("String")))
                     {
                         CuiString value_str = CuiCString(value.addr);
-                        int32_t desktop_scale = (cui_parse_int32(value_str) + 48) / 96;
+                        int32_t desktop_scale = (cui_string_parse_int32(value_str) + 48) / 96;
 
                         if (desktop_scale > 0)
                         {
@@ -1085,7 +1085,7 @@ _cui_wayland_get_fullscreen_monitor_for_window(CuiWindow *window)
 {
     CuiAssert(cui_array_count(window->wayland_monitors));
 
-    // TODO: better way to determin fullscreen monitor
+    // TODO: better way to determine fullscreen monitor
 
     CuiWaylandMonitor *monitor = _cui_wayland_get_monitor_from_name(window->wayland_monitors[0]);
 

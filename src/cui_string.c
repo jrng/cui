@@ -1,5 +1,20 @@
+CuiString
+cui_string_parse_identifier_advance(CuiString *str)
+{
+    CuiString result = cui_make_string(str->data, 0);
+
+    while ((result.count < str->count) && !cui_unicode_is_whitespace(str->data[result.count]))
+    {
+        result.count += 1;
+    }
+
+    cui_string_advance(str, result.count);
+
+    return result;
+}
+
 int32_t
-cui_parse_int32(CuiString str)
+cui_string_parse_int32(CuiString str)
 {
     bool sign = false;
     int32_t value = 0;
@@ -24,6 +39,43 @@ cui_parse_int32(CuiString str)
     return value;
 }
 
+int32_t
+cui_string_parse_int32_advance(CuiString *str)
+{
+    bool sign = false;
+    int32_t value = 0;
+
+    if (str->count && (str->data[0] == '-'))
+    {
+        sign = true;
+        cui_string_advance(str, 1);
+    }
+
+    int64_t index = 0;
+
+    while ((index < str->count) && cui_unicode_is_digit(str->data[index]))
+    {
+        // TODO: check for overflow
+        value = (10 * value) + (str->data[index] - '0');
+        index += 1;
+    }
+
+    cui_string_advance(str, index);
+
+    if (sign) value = -value;
+
+    return value;
+}
+
+void
+cui_string_skip_whitespace(CuiString *str)
+{
+    while ((str->count > 0) && cui_unicode_is_whitespace(str->data[0]))
+    {
+        cui_string_advance(str, 1);
+    }
+}
+
 CuiString
 cui_string_trim(CuiString str)
 {
@@ -38,6 +90,31 @@ cui_string_trim(CuiString str)
     }
 
     return str;
+}
+
+CuiString
+cui_string_get_next_line(CuiString *str)
+{
+    CuiString result = cui_make_string(str->data, 0);
+
+    while (str->count > 0)
+    {
+        if ((str->data[0] == '\r') && (str->count > 1) && (str->data[1] == '\n'))
+        {
+            cui_string_advance(str, 2);
+            break;
+        }
+        else if (str->data[0] == '\n')
+        {
+            cui_string_advance(str, 1);
+            break;
+        }
+
+        cui_string_advance(str, 1);
+        result.count += 1;
+    }
+
+    return result;
 }
 
 CuiString

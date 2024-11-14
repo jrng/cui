@@ -1166,9 +1166,13 @@ typedef struct CuiImageMetaData
 extern "C" {
 #endif
 
-int32_t cui_parse_int32(CuiString str);
+CuiString cui_string_parse_identifier_advance(CuiString *str);
+int32_t cui_string_parse_int32(CuiString str);
+int32_t cui_string_parse_int32_advance(CuiString *str);
 
+void cui_string_skip_whitespace(CuiString *str);
 CuiString cui_string_trim(CuiString str);
+CuiString cui_string_get_next_line(CuiString *str);
 CuiString cui_copy_string(CuiArena *arena, CuiString str);
 CuiString cui_string_concat_n(CuiArena *arena, int32_t n, ...);
 CuiString cui_path_concat(CuiArena *arena, CuiString a, CuiString b);
@@ -1181,6 +1185,7 @@ char * cui_to_c_string(CuiArena *arena, CuiString str);
 //
 
 bool cui_unicode_is_digit(uint32_t c);
+bool cui_unicode_is_hexdigit(uint32_t c);
 bool cui_unicode_is_whitespace(uint32_t c);
 bool cui_unicode_is_printable(uint32_t c);
 

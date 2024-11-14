@@ -5,6 +5,14 @@ cui_unicode_is_digit(uint32_t c)
 }
 
 bool
+cui_unicode_is_hexdigit(uint32_t c)
+{
+    return ((c >= '0') && (c <= '9')) ||
+           ((c >= 'a') && (c <= 'f')) ||
+           ((c >= 'A') && (c <= 'F'));
+}
+
+bool
 cui_unicode_is_whitespace(uint32_t c)
 {
     return ((c == ' ') || (c == '\t') || (c == '\r') || (c == '\n'));

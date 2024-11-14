@@ -90,7 +90,7 @@ cui_platform_get_environment_variable(CuiArena *temporary_memory, CuiArena *aren
 
 int32_t cui_platform_get_environment_variable_int32(CuiArena *temporary_memory, CuiString name)
 {
-    return cui_parse_int32(cui_platform_get_environment_variable(temporary_memory, 0, name));
+    return cui_string_parse_int32(cui_platform_get_environment_variable(temporary_memory, 0, name));
 }
 
 void *

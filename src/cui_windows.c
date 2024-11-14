@@ -1113,7 +1113,7 @@ int32_t cui_platform_get_environment_variable_int32(CuiArena *temporary_memory, 
 {
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
 
-    int32_t result = cui_parse_int32(cui_platform_get_environment_variable(temporary_memory, temporary_memory, name));
+    int32_t result = cui_string_parse_int32(cui_platform_get_environment_variable(temporary_memory, temporary_memory, name));
 
     cui_end_temporary_memory(temp_memory);
 
