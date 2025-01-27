@@ -1,3 +1,35 @@
+#if !defined(CUI_BACKEND_X11_ENABLED)
+#  define CUI_BACKEND_X11_ENABLED 0
+#endif
+
+#if !defined(CUI_BACKEND_WAYLAND_ENABLED)
+#  define CUI_BACKEND_WAYLAND_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_SOFTWARE_ENABLED)
+#  define CUI_RENDERER_SOFTWARE_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_OPENGLES2_ENABLED)
+#  define CUI_RENDERER_OPENGLES2_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_METAL_ENABLED)
+#  define CUI_RENDERER_METAL_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_DIRECT3D11_ENABLED)
+#  define CUI_RENDERER_DIRECT3D11_ENABLED 0
+#endif
+
+#if !defined(CUI_FRAMEBUFFER_SCREENSHOT_ENABLED)
+#  define CUI_FRAMEBUFFER_SCREENSHOT_ENABLED 0
+#endif
+
+#if !defined(CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED)
+#  define CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED 0
+#endif
+
 #if !CUI_PLATFORM_WINDOWS
 #include <pthread.h>
 #endif
@@ -450,34 +482,6 @@ typedef struct CuiContextCommon
     struct CuiWindow *windows[CUI_MAX_WINDOW_COUNT];
 } CuiContextCommon;
 
-#if !defined(CUI_BACKEND_X11_ENABLED)
-#  define CUI_BACKEND_X11_ENABLED 0
-#endif
-
-#if !defined(CUI_BACKEND_WAYLAND_ENABLED)
-#  define CUI_BACKEND_WAYLAND_ENABLED 0
-#endif
-
-#if !defined(CUI_RENDERER_SOFTWARE_ENABLED)
-#  define CUI_RENDERER_SOFTWARE_ENABLED 0
-#endif
-
-#if !defined(CUI_RENDERER_OPENGLES2_ENABLED)
-#  define CUI_RENDERER_OPENGLES2_ENABLED 0
-#endif
-
-#if !defined(CUI_RENDERER_METAL_ENABLED)
-#  define CUI_RENDERER_METAL_ENABLED 0
-#endif
-
-#if !defined(CUI_RENDERER_DIRECT3D11_ENABLED)
-#  define CUI_RENDERER_DIRECT3D11_ENABLED 0
-#endif
-
-#if !defined(CUI_FRAMEBUFFER_SCREENSHOT_ENABLED)
-#  define CUI_FRAMEBUFFER_SCREENSHOT_ENABLED 0
-#endif
-
 #if CUI_RENDERER_SOFTWARE_ENABLED
 
 typedef struct CuiRendererSoftware
@@ -525,7 +529,7 @@ typedef struct CuiRendererOpengles2
 
     CuiCommandBuffer command_buffer;
 
-#if 0
+#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
     uint64_t platform_performance_frequency;
 
     float min_render_time;

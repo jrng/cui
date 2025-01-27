@@ -14,6 +14,7 @@ CUI_RENDERER_SOFTWARE="on"
 CUI_RENDERER_OPENGLES2="on"
 
 CUI_FRAMEBUFFER_SCREENSHOT="off"
+CUI_RENDERER_OPENGLES2_RENDER_TIMES="off"
 
 ### END OF CONFIG ###########
 
@@ -77,6 +78,10 @@ if [ "${CUI_RENDERER_OPENGLES2}" = "on" ]; then
 
     if [ "${CUI_BACKEND_WAYLAND}" = "on" ]; then
         LINKER_FLAGS="${LINKER_FLAGS} -lwayland-egl"
+    fi
+
+    if [ "${CUI_RENDERER_OPENGLES2_RENDER_TIMES}" = "on" ]; then
+        DEFINES="${DEFINES} -DCUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED=1"
     fi
 fi
 

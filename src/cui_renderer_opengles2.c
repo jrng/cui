@@ -132,7 +132,7 @@ _cui_renderer_opengles2_create(void)
     renderer->base.type = CUI_RENDERER_TYPE_OPENGLES2;
     renderer->allocation_size = allocation_size;
 
-#if 0
+#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
     renderer->platform_performance_frequency = cui_platform_get_performance_frequency();
     renderer->min_render_time = 1000.0f;
     renderer->max_render_time = 0.0f;
@@ -308,7 +308,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
-#if 0
+#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
     uint64_t render_start = cui_platform_get_performance_counter();
 #endif
 
@@ -408,7 +408,6 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
 
                 draw_command->vertex_offset = vertex_offset;
                 last_draw_command->vertex_count = vertex_offset - last_draw_command->vertex_offset;
-
 
                 if (textured_rect->texture_id != current_texture_id)
                 {
@@ -529,7 +528,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
 
-#if 0
+#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
     uint64_t render_end = cui_platform_get_performance_counter();
     double render_time = (1000.0 * (double) (render_end - render_start)) / (double) renderer->platform_performance_frequency;
     float render_time_ms = render_time;
@@ -549,7 +548,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
 
     if (renderer->frame_count == 300)
     {
-        printf("render time:  min=%f  max=%f  avg=%f\n", renderer->min_render_time, renderer->max_render_time,
+        printf("render time:  min=%fms  max=%fms  avg=%fms\n", renderer->min_render_time, renderer->max_render_time,
                renderer->sum_render_time * (1.0 / 300.0));
 
         renderer->min_render_time = 1000.0f;
