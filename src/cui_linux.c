@@ -1048,34 +1048,37 @@ _cui_wayland_get_monitor_index_from_name(uint32_t name)
 static void
 _cui_wayland_update_window_backbuffer_scale(CuiWindow *window)
 {
-    int32_t new_backbuffer_scale = 1;
-    int32_t old_backbuffer_scale = window->backbuffer_scale;
-
-    for (int32_t i = 0; i < cui_array_count(window->wayland_monitors); i += 1)
+    if (cui_array_count(window->wayland_monitors) > 0)
     {
-        CuiWaylandMonitor *monitor = _cui_wayland_get_monitor_from_name(window->wayland_monitors[i]);
+        int32_t new_backbuffer_scale = 1;
+        int32_t old_backbuffer_scale = window->backbuffer_scale;
 
-        if (monitor->scale > new_backbuffer_scale)
+        for (int32_t i = 0; i < cui_array_count(window->wayland_monitors); i += 1)
         {
-            new_backbuffer_scale = monitor->scale;
+            CuiWaylandMonitor *monitor = _cui_wayland_get_monitor_from_name(window->wayland_monitors[i]);
+
+            if (monitor->scale > new_backbuffer_scale)
+            {
+                new_backbuffer_scale = monitor->scale;
+            }
         }
-    }
 
-    if (new_backbuffer_scale != old_backbuffer_scale)
-    {
-        window->backbuffer_scale = new_backbuffer_scale;
-
-        if (_cui_context.common.scale_factor == 0)
+        if (new_backbuffer_scale != old_backbuffer_scale)
         {
-            _cui_window_set_ui_scale(window, (float) window->backbuffer_scale);
+            window->backbuffer_scale = new_backbuffer_scale;
 
-            int32_t old_width = cui_rect_get_width(window->content_rect);
-            int32_t old_height = cui_rect_get_height(window->content_rect);
+            if (_cui_context.common.scale_factor == 0)
+            {
+                _cui_window_set_ui_scale(window, (float) window->backbuffer_scale);
 
-            int32_t new_width  = (old_width / old_backbuffer_scale) * window->backbuffer_scale;
-            int32_t new_height = (old_height / old_backbuffer_scale) * window->backbuffer_scale;
+                int32_t old_width = cui_rect_get_width(window->content_rect);
+                int32_t old_height = cui_rect_get_height(window->content_rect);
 
-            cui_window_resize(window, new_width, new_height);
+                int32_t new_width  = (old_width / old_backbuffer_scale) * window->backbuffer_scale;
+                int32_t new_height = (old_height / old_backbuffer_scale) * window->backbuffer_scale;
+
+                cui_window_resize(window, new_width, new_height);
+            }
         }
     }
 }
@@ -3667,15 +3670,6 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
                 case CUI_LINUX_BACKEND_WAYLAND:
                 {
-                    // TODO: change only if needed
-#    if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
-                                             window->opengles2.egl_surface, window->opengles2.egl_context));
-#    else
-                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
-                                   window->opengles2.egl_surface, window->opengles2.egl_context);
-#    endif
-
                     int32_t surface_width, surface_height;
 
                     wl_egl_window_get_attached_size(window->wayland_egl_window, &surface_width, &surface_height);
@@ -3689,6 +3683,15 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
 
                     framebuffer->width = width;
                     framebuffer->height = height;
+
+                    // TODO: change only if needed
+#    if CUI_DEBUG_BUILD
+                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                             window->opengles2.egl_surface, window->opengles2.egl_context));
+#    else
+                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                   window->opengles2.egl_surface, window->opengles2.egl_context);
+#    endif
                 } break;
 
 #  endif
