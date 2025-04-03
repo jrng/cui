@@ -33,6 +33,7 @@ typedef struct CuiX11FrameCompletionData
 #include <xkbcommon/xkbcommon-compose.h>
 
 #include "xdg-shell.h"
+#include "viewporter.h"
 #include "xdg-decoration-unstable-v1.h"
 
 typedef struct CuiWaylandMonitor
@@ -217,6 +218,7 @@ struct CuiWindow
 
     uint32_t pointer_button_mask;
 
+    CuiRect wayland_backbuffer_rect;
     CuiRect wayland_window_rect;
     CuiRect wayland_input_rect;
 
@@ -233,6 +235,7 @@ struct CuiWindow
     struct wl_surface *wayland_surface;
     struct xdg_surface *wayland_xdg_surface;
     struct xdg_toplevel *wayland_xdg_toplevel;
+    struct wp_viewport *wayland_viewport;
     struct zxdg_toplevel_decoration_v1 *wayland_xdg_decoration;
 
 #  if CUI_RENDERER_OPENGLES2_ENABLED
@@ -364,6 +367,7 @@ typedef struct CuiContext
     struct wl_pointer *wayland_pointer;
     struct wl_keyboard *wayland_keyboard;
     struct xdg_wm_base *wayland_xdg_wm_base;
+    struct wp_viewporter *wayland_viewporter;
     struct zxdg_decoration_manager_v1 *wayland_xdg_decoration_manager;
 
     struct wl_data_device *wayland_data_device;

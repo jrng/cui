@@ -748,6 +748,11 @@ _cui_window_destroy(CuiWindow *window)
                 } break;
             }
 
+            if (window->wayland_viewport)
+            {
+                wp_viewport_destroy(window->wayland_viewport);
+            }
+
             if (window->wayland_xdg_decoration)
             {
                 zxdg_toplevel_decoration_v1_destroy(window->wayland_xdg_decoration);
@@ -878,6 +883,7 @@ _cui_window_close(CuiWindow *window)
 #if CUI_BACKEND_WAYLAND_ENABLED
 
 #include "xdg-shell.c"
+#include "viewporter.c"
 #include "xdg-decoration-unstable-v1.c"
 
 #include <linux/input.h>
@@ -1270,6 +1276,11 @@ _cui_wayland_update_window_with_window_size(CuiWindow *window, int32_t width, in
         window->content_rect.max.x = window->window_rect.max.x;
         window->content_rect.max.y = window->window_rect.max.y;
 
+        window->wayland_backbuffer_rect.min.x = 0;
+        window->wayland_backbuffer_rect.min.y = 0;
+        window->wayland_backbuffer_rect.max.x = window->backbuffer_rect.max.x / window->backbuffer_scale;
+        window->wayland_backbuffer_rect.max.y = window->backbuffer_rect.max.y / window->backbuffer_scale;
+
         window->wayland_window_rect.min.x = window->window_rect.min.x / window->backbuffer_scale;
         window->wayland_window_rect.min.y = window->window_rect.min.y / window->backbuffer_scale;
         window->wayland_window_rect.max.x = window->window_rect.max.x / window->backbuffer_scale;
@@ -1298,12 +1309,13 @@ _cui_wayland_update_window_with_window_size(CuiWindow *window, int32_t width, in
         window->window_rect = window->backbuffer_rect;
         window->content_rect = window->backbuffer_rect;
 
-        window->wayland_window_rect.min.x = 0;
-        window->wayland_window_rect.min.y = 0;
-        window->wayland_window_rect.max.x = width / window->backbuffer_scale;
-        window->wayland_window_rect.max.y = height / window->backbuffer_scale;
+        window->wayland_backbuffer_rect.min.x = 0;
+        window->wayland_backbuffer_rect.min.y = 0;
+        window->wayland_backbuffer_rect.max.x = width / window->backbuffer_scale;
+        window->wayland_backbuffer_rect.max.y = height / window->backbuffer_scale;
 
-        window->wayland_input_rect = window->wayland_window_rect;
+        window->wayland_window_rect = window->wayland_backbuffer_rect;
+        window->wayland_input_rect = window->wayland_backbuffer_rect;
     }
 
     window->pending_window_width = cui_rect_get_width(window->window_rect);
@@ -1377,6 +1389,11 @@ _cui_wayland_update_window_with_content_size(CuiWindow *window, int32_t width, i
         window->content_rect.max.x = window->window_rect.max.x;
         window->content_rect.max.y = window->window_rect.max.y;
 
+        window->wayland_backbuffer_rect.min.x = 0;
+        window->wayland_backbuffer_rect.min.y = 0;
+        window->wayland_backbuffer_rect.max.x = window->backbuffer_rect.max.x / window->backbuffer_scale;
+        window->wayland_backbuffer_rect.max.y = window->backbuffer_rect.max.y / window->backbuffer_scale;
+
         window->wayland_window_rect.min.x = window->window_rect.min.x / window->backbuffer_scale;
         window->wayland_window_rect.min.y = window->window_rect.min.y / window->backbuffer_scale;
         window->wayland_window_rect.max.x = window->window_rect.max.x / window->backbuffer_scale;
@@ -1405,12 +1422,13 @@ _cui_wayland_update_window_with_content_size(CuiWindow *window, int32_t width, i
         window->window_rect = window->backbuffer_rect;
         window->content_rect = window->backbuffer_rect;
 
-        window->wayland_window_rect.min.x = 0;
-        window->wayland_window_rect.min.y = 0;
-        window->wayland_window_rect.max.x = width / window->backbuffer_scale;
-        window->wayland_window_rect.max.y = height / window->backbuffer_scale;
+        window->wayland_backbuffer_rect.min.x = 0;
+        window->wayland_backbuffer_rect.min.y = 0;
+        window->wayland_backbuffer_rect.max.x = width / window->backbuffer_scale;
+        window->wayland_backbuffer_rect.max.y = height / window->backbuffer_scale;
 
-        window->wayland_input_rect = window->wayland_window_rect;
+        window->wayland_window_rect = window->wayland_backbuffer_rect;
+        window->wayland_input_rect = window->wayland_backbuffer_rect;
     }
 
     window->pending_window_width = cui_rect_get_width(window->window_rect);
@@ -1554,7 +1572,18 @@ _cui_wayland_handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_su
                 window->wayland_configure_serial = 0;
             }
 
-            wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
+            if (window->wayland_viewport)
+            {
+                wp_viewport_set_source(window->wayland_viewport, wl_fixed_from_int(0), wl_fixed_from_int(0),
+                                       wl_fixed_from_int(cui_rect_get_width(window->backbuffer_rect)),
+                                       wl_fixed_from_int(cui_rect_get_height(window->backbuffer_rect)));
+                wp_viewport_set_destination(window->wayland_viewport, cui_rect_get_width(window->wayland_backbuffer_rect),
+                                            cui_rect_get_height(window->wayland_backbuffer_rect));
+            }
+            else
+            {
+                wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
+            }
 
             xdg_surface_set_window_geometry(window->wayland_xdg_surface, window->wayland_window_rect.min.x, window->wayland_window_rect.min.y,
                                             cui_rect_get_width(window->wayland_window_rect), cui_rect_get_height(window->wayland_window_rect));
@@ -3158,6 +3187,13 @@ _cui_wayland_handle_registry_add(void *data, struct wl_registry *registry, uint3
             _cui_context.wayland_data_device_manager = (struct wl_data_device_manager *) wl_registry_bind(registry, name, &wl_data_device_manager_interface, cui_min_uint32(version, 3));
         }
     }
+    else if (cui_string_equals(interface_name, CuiCString(wp_viewporter_interface.name)))
+    {
+        if (version >= 1)
+        {
+            _cui_context.wayland_viewporter = (struct wp_viewporter *) wl_registry_bind(registry, name, &wp_viewporter_interface, 1);
+        }
+    }
     else if (cui_string_equals(interface_name, CuiCString(zxdg_decoration_manager_v1_interface.name)))
     {
         if (version >= 1)
@@ -4427,6 +4463,11 @@ cui_window_create(uint32_t creation_flags)
             window->wayland_xdg_surface  = xdg_wm_base_get_xdg_surface(_cui_context.wayland_xdg_wm_base, window->wayland_surface);
             window->wayland_xdg_toplevel = xdg_surface_get_toplevel(window->wayland_xdg_surface);
 
+            if (_cui_context.wayland_viewporter)
+            {
+                window->wayland_viewport = wp_viewporter_get_viewport(_cui_context.wayland_viewporter, window->wayland_surface);
+            }
+
             if (_cui_context.wayland_xdg_decoration_manager)
             {
                 window->wayland_xdg_decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(_cui_context.wayland_xdg_decoration_manager, window->wayland_xdg_toplevel);
@@ -5009,7 +5050,18 @@ cui_step(void)
                             window->wayland_configure_serial = 0;
                         }
 
-                        wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
+                        if (window->wayland_viewport)
+                        {
+                            wp_viewport_set_source(window->wayland_viewport, wl_fixed_from_int(0), wl_fixed_from_int(0),
+                                                   wl_fixed_from_int(cui_rect_get_width(window->backbuffer_rect)),
+                                                   wl_fixed_from_int(cui_rect_get_height(window->backbuffer_rect)));
+                            wp_viewport_set_destination(window->wayland_viewport, cui_rect_get_width(window->wayland_backbuffer_rect),
+                                                        cui_rect_get_height(window->wayland_backbuffer_rect));
+                        }
+                        else
+                        {
+                            wl_surface_set_buffer_scale(window->wayland_surface, window->backbuffer_scale);
+                        }
 
                         xdg_surface_set_window_geometry(window->wayland_xdg_surface, window->wayland_window_rect.min.x, window->wayland_window_rect.min.y,
                                                         cui_rect_get_width(window->wayland_window_rect), cui_rect_get_height(window->wayland_window_rect));
