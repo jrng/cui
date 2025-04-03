@@ -1,7 +1,10 @@
 src/xdg-shell.h
 src/xdg-shell.c
+src/viewporter.h
+src/viewporter.c
 src/xdg-decoration-unstable-v1.h
 src/xdg-decoration-unstable-v1.c
 build_config_linux.sh
 build_config_macos.sh
 build_config_android.sh
+build_config_windows.sh
