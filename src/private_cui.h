@@ -662,8 +662,6 @@ static CuiFramebuffer *_cui_acquire_framebuffer(CuiWindow *window, int32_t width
 
 #endif
 
-#include <stdarg.h>
-
 #if CUI_ARCH_ARM64
 #include <arm_neon.h>
 #endif
