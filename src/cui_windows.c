@@ -1133,6 +1133,68 @@ cui_platform_deallocate(void *ptr, uint64_t size)
     VirtualFree(ptr, 0, MEM_RELEASE);
 }
 
+bool
+cui_platform_open_file_dialog(CuiArena *temporary_memory, CuiArena *arena, CuiString **filenames,
+                              bool can_select_multiple, bool can_select_files, bool can_select_directories)
+{
+    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
+
+    DWORD max_filename_length = 32 * 1024;
+    uint16_t *filename_buffer = cui_alloc_array(temporary_memory, uint16_t, max_filename_length, CuiDefaultAllocationParams());
+
+    filename_buffer[0] = 0;
+
+    OPENFILENAMEW open_file = { sizeof(open_file) };
+
+    open_file.lpstrFile = filename_buffer;
+    open_file.nMaxFile  = max_filename_length;
+    open_file.Flags     = OFN_FILEMUSTEXIST | OFN_EXPLORER;
+
+    if (can_select_multiple)
+    {
+        open_file.Flags |= OFN_ALLOWMULTISELECT;
+    }
+
+    bool result = false;
+
+    if (GetOpenFileNameW(&open_file))
+    {
+        int64_t filename_length = wcslen((wchar_t *) filename_buffer);
+
+        CuiString utf16_string = cui_make_string(filename_buffer, 2 * filename_length);
+        CuiString filename = cui_utf16le_to_utf8(temporary_memory, utf16_string);
+
+        filename_buffer += (filename_length + 1);
+
+        if (*filename_buffer)
+        {
+            CuiString directory = filename;
+
+            while (*filename_buffer)
+            {
+                filename_length = wcslen((wchar_t *) filename_buffer);
+
+                utf16_string = cui_make_string(filename_buffer, 2 * filename_length);
+                filename = cui_utf16le_to_utf8(temporary_memory, utf16_string);
+
+                filename_buffer += (filename_length + 1);
+
+                *cui_array_append(*filenames) = cui_path_concat(arena, directory, filename);
+            }
+        }
+        else
+        {
+            *cui_array_append(*filenames) = cui_copy_string(arena, filename);
+        }
+
+        result = true;
+    }
+
+    cui_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
 void
 cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
 {

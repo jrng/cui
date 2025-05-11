@@ -9,7 +9,7 @@ typedef struct InterfaceBrowser
 
     CuiWidget action_label;
     CuiWidget action_row;
-    CuiWidget actions[2];
+    CuiWidget actions[3];
     CuiWidget last_action;
 
     CuiWidget checkbox_label;
@@ -72,6 +72,33 @@ on_fullscreen_button(CuiWidget *widget)
     cui_window_set_fullscreen(window, !cui_window_is_fullscreen(window));
 }
 
+static void
+on_open_file(CuiWidget *widget)
+{
+    (void) widget;
+
+    CuiArena arena;
+    cui_arena_allocate(&arena, CuiKiB(4));
+
+    CuiArena temporary_memory;
+    cui_arena_allocate(&temporary_memory, CuiMiB(1));
+
+    CuiString *filenames = 0;
+    cui_array_init(filenames, 4, &arena);
+
+    if (cui_platform_open_file_dialog(&temporary_memory, &arena, &filenames, true, true, false))
+    {
+        for (int32_t i = 0; i < cui_array_count(filenames); i += 1)
+        {
+            CuiString filename = filenames[i];
+            printf("filename[%d] = '%" CuiStringFmt "'\n", i, CuiStringArg(filename));
+        }
+    }
+
+    cui_arena_deallocate(&temporary_memory);
+    cui_arena_deallocate(&arena);
+}
+
 CUI_PLATFORM_MAIN
 {
     if (!CUI_PLATFORM_INIT)
@@ -112,16 +139,20 @@ CUI_PLATFORM_MAIN
 
         cui_widget_init(app.actions + 0, CUI_WIDGET_TYPE_BUTTON);
         cui_widget_init(app.actions + 1, CUI_WIDGET_TYPE_BUTTON);
+        cui_widget_init(app.actions + 2, CUI_WIDGET_TYPE_BUTTON);
         cui_widget_init(&app.last_action, CUI_WIDGET_TYPE_BOX);
 
         app.actions[0].on_action = on_resize_button;
         app.actions[1].on_action = on_fullscreen_button;
+        app.actions[2].on_action = on_open_file;
 
         cui_widget_set_label(app.actions + 0, CuiStringLiteral("Resize"));
         cui_widget_set_label(app.actions + 1, CuiStringLiteral("Toggle Fullscreen"));
+        cui_widget_set_label(app.actions + 2, CuiStringLiteral("Open File"));
 
         cui_widget_append_child(&app.action_row, app.actions + 0);
         cui_widget_append_child(&app.action_row, app.actions + 1);
+        cui_widget_append_child(&app.action_row, app.actions + 2);
         cui_widget_append_child(&app.action_row, &app.last_action);
 
         cui_widget_append_child(&app.root_widget, &app.action_row);

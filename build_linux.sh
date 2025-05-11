@@ -39,7 +39,7 @@ compile_no_jobs () {
 }
 
 COMPILER_FLAGS="-std=gnu99"
-LINKER_FLAGS="-lm -pthread"
+LINKER_FLAGS="-lm -pthread -ldl"
 DEFINES=""
 
 if [ "$(uname)" != "Linux" ]; then

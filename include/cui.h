@@ -71,6 +71,9 @@
 #define CuiCString(str) cui_make_string((char *) (str), cui_string_length(str))
 #define CuiClearStruct(inst) cui_clear_memory(&(inst), sizeof(inst))
 
+#define CuiStringFmt ".*s"
+#define CuiStringArg(str) (int) (str).count, (str).data
+
 #define CuiKiB(value) (      (value) * (int64_t) 1024)
 #define CuiMiB(value) (CuiKiB(value) * (int64_t) 1024)
 #define CuiGiB(value) (CuiMiB(value) * (int64_t) 1024)
@@ -1225,6 +1228,9 @@ int32_t cui_platform_get_environment_variable_int32(CuiArena *temporary_memory, 
 
 void *cui_platform_allocate(uint64_t size);
 void cui_platform_deallocate(void *ptr, uint64_t size);
+
+bool cui_platform_open_file_dialog(CuiArena *temporary_memory, CuiArena *arena, CuiString **filenames,
+                                   bool can_select_multiple, bool can_select_files, bool can_select_directories);
 
 void cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text);
 CuiString cui_platform_get_clipboard_text(CuiArena *arena);

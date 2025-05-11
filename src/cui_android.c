@@ -394,6 +394,13 @@ cui_signal_main_thread(void)
     } while (__builtin_expect(!!((ret == -1) && (errno == EINTR)), 0));
 }
 
+bool
+cui_platform_open_file_dialog(CuiArena *temporary_memory, CuiArena *arena, CuiString **filenames,
+                              bool can_select_multiple, bool can_select_files, bool can_select_directories)
+{
+    return false;
+}
+
 void
 cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
 {

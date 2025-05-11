@@ -1,4 +1,5 @@
 #include <poll.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <locale.h>
 #include <syscall.h>
@@ -16,6 +17,53 @@ static const int32_t _CUI_WAYLAND_INPUT_MARGIN       = 8;
 static const int32_t _CUI_WAYLAND_CORNER_MARGIN      = 16;
 static const int32_t _CUI_WAYLAND_MINIMUM_WIDTH      = 200;
 static const int32_t _CUI_WAYLAND_MINIMUM_HEIGHT     = 100;
+
+PFN_g_free g_free;
+PFN_g_slist_free g_slist_free;
+PFN_g_main_context_iteration g_main_context_iteration;
+
+PFN_gtk_init gtk_init;
+PFN_gtk_widget_destroy gtk_widget_destroy;
+PFN_gtk_dialog_run gtk_dialog_run;
+PFN_gtk_file_chooser_dialog_new gtk_file_chooser_dialog_new;
+PFN_gtk_file_chooser_set_select_multiple gtk_file_chooser_set_select_multiple;
+PFN_gtk_file_chooser_get_filenames gtk_file_chooser_get_filenames;
+
+static inline void
+_cui_load_gtk(void)
+{
+    if (!_cui_context.gtk_initialized)
+    {
+        _cui_context.gtk_initialized = true;
+        _cui_context.gtk_lib = dlopen("libgtk-3.so.0", RTLD_NOW);
+
+        if (_cui_context.gtk_lib)
+        {
+#define LOAD_GTK_FUNCTION(name)                             \
+    name = (PFN_##name) dlsym(_cui_context.gtk_lib, #name); \
+    if (!name)                                              \
+    {                                                       \
+        dlclose(_cui_context.gtk_lib);                      \
+        _cui_context.gtk_lib = 0;                           \
+        return;                                             \
+    }
+
+            LOAD_GTK_FUNCTION(g_free);
+            LOAD_GTK_FUNCTION(g_slist_free);
+            LOAD_GTK_FUNCTION(g_main_context_iteration);
+            LOAD_GTK_FUNCTION(gtk_init);
+            LOAD_GTK_FUNCTION(gtk_widget_destroy);
+            LOAD_GTK_FUNCTION(gtk_dialog_run);
+            LOAD_GTK_FUNCTION(gtk_file_chooser_dialog_new);
+            LOAD_GTK_FUNCTION(gtk_file_chooser_set_select_multiple);
+            LOAD_GTK_FUNCTION(gtk_file_chooser_get_filenames);
+
+#undef LOAD_GTK_FUNCTION
+
+            gtk_init(0, 0);
+        }
+    }
+}
 
 #if CUI_RENDERER_OPENGLES2_ENABLED
 
@@ -3937,6 +3985,63 @@ cui_signal_main_thread(void)
     } while (__builtin_expect(!!((ret == -1) && (errno == EINTR)), 0));
 }
 
+bool
+cui_platform_open_file_dialog(CuiArena *temporary_memory, CuiArena *arena, CuiString **filenames,
+                              bool can_select_multiple, bool can_select_files, bool can_select_directories)
+{
+    (void) temporary_memory;
+
+    if (!_cui_context.gtk_lib)
+    {
+        return false;
+    }
+
+    GtkFileChooserAction file_chooser_action = GTK_FILE_CHOOSER_ACTION_OPEN;
+
+    if (can_select_directories && !can_select_files)
+    {
+        file_chooser_action = GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
+    }
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Select File", 0, file_chooser_action,
+                                                    "Cancel", GTK_RESPONSE_CANCEL,
+                                                    "Open", GTK_RESPONSE_ACCEPT, (void *) 0);
+
+    gtk_file_chooser_set_select_multiple((GtkFileChooser *) dialog, can_select_multiple);
+
+    bool result = false;
+
+    if (gtk_dialog_run((GtkDialog *) dialog) == GTK_RESPONSE_ACCEPT)
+    {
+        GSList *names = gtk_file_chooser_get_filenames((GtkFileChooser *) dialog);
+
+        if (names)
+        {
+            GSList *name = names;
+
+            while (name)
+            {
+                if (name->data)
+                {
+                    *cui_array_append(*filenames) = cui_copy_string(arena, CuiCString(name->data));
+                    g_free(name->data);
+                }
+
+                name = name->next;
+            }
+
+            g_slist_free(names);
+            result = true;
+        }
+    }
+
+    gtk_widget_destroy(dialog);
+
+    while (g_main_context_iteration(0, false));
+
+    return result;
+}
+
 void
 cui_platform_set_clipboard_text(CuiArena *temporary_memory, CuiString text)
 {
@@ -4160,6 +4265,8 @@ cui_init(int argument_count, char **arguments)
 
         cui_end_temporary_memory(temp_memory);
     }
+
+    _cui_load_gtk();
 
     bool backend_initialized = false;
 

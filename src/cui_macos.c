@@ -133,8 +133,6 @@
     {
         CuiString name = cui_copy_string(&_cui_context.files_to_open_arena, CuiCString(filename_c));
         *cui_array_append(_cui_context.files_to_open) = name;
-
-        // TODO: free filename_c
     }
 
     return YES;
@@ -944,6 +942,47 @@ cui_signal_main_thread(void)
 {
     [NSApp postEvent: _cui_context.signal_event
              atStart: NO];
+}
+
+bool
+cui_platform_open_file_dialog(CuiArena *temporary_memory, CuiArena *arena, CuiString **filenames,
+                              bool can_select_multiple, bool can_select_files, bool can_select_directories)
+{
+    (void) temporary_memory;
+
+    NSOpenPanel *open_panel = [NSOpenPanel openPanel];
+
+    [open_panel setAllowsMultipleSelection: can_select_multiple ? YES : NO];
+    [open_panel setCanChooseDirectories: can_select_directories ? YES : NO];
+    [open_panel setCanChooseFiles: can_select_files ? YES : NO];
+    [open_panel setFloatingPanel: YES];
+
+    bool result = false;
+
+    NSModalResponse panel_result = [open_panel runModal];
+
+    if (panel_result == NSModalResponseOK)
+    {
+        NSArray *names = [open_panel URLs];
+
+        if ([names count] > 0)
+        {
+            result = true;
+
+            for (NSUInteger i = 0; i < [names count]; i += 1)
+            {
+                NSString *name = [names[i] path];
+                const char *c_name = [name fileSystemRepresentation];
+
+                if (c_name)
+                {
+                    *cui_array_append(*filenames) = cui_copy_string(arena, CuiCString(c_name));
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 void
