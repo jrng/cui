@@ -729,71 +729,74 @@ _cui_window_destroy(CuiWindow *window)
                 _cui_context.wayland_window_under_cursor = 0;
             }
 
-            switch (window->base.renderer->type)
+            if (window->base.renderer)
             {
-                case CUI_RENDERER_TYPE_SOFTWARE:
+                switch (window->base.renderer->type)
                 {
-#  if CUI_RENDERER_SOFTWARE_ENABLED
-                    for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
+                    case CUI_RENDERER_TYPE_SOFTWARE:
                     {
-                        CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
-
-                        if (framebuffer->is_busy)
+#  if CUI_RENDERER_SOFTWARE_ENABLED
+                        for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
                         {
-                            // TODO: wait for framebuffer not busy
+                            CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
+
+                            if (framebuffer->is_busy)
+                            {
+                                // TODO: wait for framebuffer not busy
+                            }
+
+                            wl_buffer_destroy(framebuffer->backend.wayland.buffer);
+                            wl_shm_pool_destroy(framebuffer->backend.wayland.shared_memory_pool);
+                            munmap(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
+                            close(framebuffer->backend.wayland.shared_memory_fd);
                         }
 
-                        wl_buffer_destroy(framebuffer->backend.wayland.buffer);
-                        wl_shm_pool_destroy(framebuffer->backend.wayland.shared_memory_pool);
-                        munmap(framebuffer->base.bitmap.pixels, framebuffer->shared_memory_size);
-                        close(framebuffer->backend.wayland.shared_memory_fd);
-                    }
-
-                    CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
-                    _cui_renderer_software_destroy(renderer_software);
+                        CuiRendererSoftware *renderer_software = CuiContainerOf(window->base.renderer, CuiRendererSoftware, base);
+                        _cui_renderer_software_destroy(renderer_software);
 #  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
+                        CuiAssert(!"CUI_RENDERER_TYPE_SOFTWARE not enabled.");
 #  endif
-                } break;
+                    } break;
 
-                case CUI_RENDERER_TYPE_OPENGLES2:
-                {
+                    case CUI_RENDERER_TYPE_OPENGLES2:
+                    {
 #  if CUI_RENDERER_OPENGLES2_ENABLED
-                    // TODO: change only if needed
+                        // TODO: change only if needed
 #if CUI_DEBUG_BUILD
-                    CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
-                                             window->opengles2.egl_surface, window->opengles2.egl_context));
+                        CuiAssert(eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                                 window->opengles2.egl_surface, window->opengles2.egl_context));
 #else
-                    eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
-                                   window->opengles2.egl_surface, window->opengles2.egl_context);
+                        eglMakeCurrent(_cui_context.egl_display, window->opengles2.egl_surface,
+                                       window->opengles2.egl_surface, window->opengles2.egl_context);
 #endif
 
-                    CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
-                    _cui_renderer_opengles2_destroy(renderer_opengles2);
+                        CuiRendererOpengles2 *renderer_opengles2 = CuiContainerOf(window->base.renderer, CuiRendererOpengles2, base);
+                        _cui_renderer_opengles2_destroy(renderer_opengles2);
 
-                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+                        eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-                    CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
-                    eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
+                        CuiAssert(window->opengles2.egl_context != EGL_NO_CONTEXT);
+                        eglDestroyContext(_cui_context.egl_display, window->opengles2.egl_context);
 
-                    CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
-                    eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
+                        CuiAssert(window->opengles2.egl_surface != EGL_NO_SURFACE);
+                        eglDestroySurface(_cui_context.egl_display, window->opengles2.egl_surface);
 
-                    wl_egl_window_destroy(window->wayland_egl_window);
+                        wl_egl_window_destroy(window->wayland_egl_window);
 #  else
-                    CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
+                        CuiAssert(!"CUI_RENDERER_TYPE_OPENGLES2 not enabled.");
 #  endif
-                } break;
+                    } break;
 
-                case CUI_RENDERER_TYPE_METAL:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
-                } break;
+                    case CUI_RENDERER_TYPE_METAL:
+                    {
+                        CuiAssert(!"CUI_RENDERER_TYPE_METAL not supported.");
+                    } break;
 
-                case CUI_RENDERER_TYPE_DIRECT3D11:
-                {
-                    CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
-                } break;
+                    case CUI_RENDERER_TYPE_DIRECT3D11:
+                    {
+                        CuiAssert(!"CUI_RENDERER_TYPE_DIRECT3D11 not supported.");
+                    } break;
+                }
             }
 
             if (window->wayland_viewport)
@@ -1038,6 +1041,106 @@ _cui_wayland_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t heigh
         printf("all framebuffers busy\n");
         wl_display_dispatch(_cui_context.wayland_display);
     }
+}
+
+#  endif
+
+#  if CUI_RENDERER_OPENGLES2_ENABLED
+
+static bool
+_cui_initialize_opengles2_wayland(CuiWindow *window)
+{
+    if (_cui_context.egl_display == EGL_NO_DISPLAY)
+    {
+        return false;
+    }
+
+    EGLint buffer_attr[] = {
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_NONE
+    };
+
+    EGLConfig config;
+    EGLint num_config;
+
+    if (!eglChooseConfig(_cui_context.egl_display, buffer_attr, &config, 1, &num_config))
+    {
+        return false;
+    }
+
+    int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
+    int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
+
+    window->wayland_egl_window = wl_egl_window_create(window->wayland_surface, framebuffer_width, framebuffer_height);
+
+    if (!window->wayland_egl_window)
+    {
+        return false;
+    }
+
+    EGLSurface egl_surface = eglCreatePlatformWindowSurface(_cui_context.egl_display, config, window->wayland_egl_window, 0);
+
+    EGLContext egl_context = EGL_NO_CONTEXT;
+
+    if (egl_surface != EGL_NO_SURFACE)
+    {
+        EGLint context_attr[] = {
+            EGL_CONTEXT_MAJOR_VERSION, 2,
+            EGL_CONTEXT_MINOR_VERSION, 0,
+            EGL_NONE
+        };
+
+        egl_context = eglCreateContext(_cui_context.egl_display, config, EGL_NO_CONTEXT, context_attr);
+
+        if (egl_context != EGL_NO_CONTEXT)
+        {
+            EGLBoolean success = eglMakeCurrent(_cui_context.egl_display, egl_surface, egl_surface, egl_context);
+
+            if (success)
+            {
+#if 0
+                printf("OpenGL ES Version: %s\n", glGetString(GL_VERSION));
+                printf("OpenGL ES Extensions: %s\n", glGetString(GL_EXTENSIONS));
+#endif
+
+                window->opengles2.egl_surface = egl_surface;
+                window->opengles2.egl_context = egl_context;
+                window->base.renderer = _cui_renderer_opengles2_create();
+
+                if (!window->base.renderer)
+                {
+                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+                    eglDestroyContext(_cui_context.egl_display, egl_context);
+
+                    wl_egl_window_destroy(window->wayland_egl_window);
+
+                    return false;
+                }
+
+                return true;
+            }
+        }
+    }
+
+    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+    if (egl_context != EGL_NO_CONTEXT)
+    {
+        eglDestroyContext(_cui_context.egl_display, egl_context);
+    }
+
+    if (egl_surface != EGL_NO_SURFACE)
+    {
+        eglDestroySurface(_cui_context.egl_display, egl_surface);
+    }
+
+    wl_egl_window_destroy(window->wayland_egl_window);
+
+    return false;
 }
 
 #  endif
@@ -1606,6 +1709,49 @@ _cui_wayland_handle_xdg_surface_configure(void *data, struct xdg_surface *xdg_su
 
         window->base.width = cui_rect_get_width(window->backbuffer_rect);
         window->base.height = cui_rect_get_height(window->backbuffer_rect);
+
+        if (!window->base.renderer)
+        {
+            bool renderer_initialized = false;
+
+#  if CUI_RENDERER_OPENGLES2_ENABLED
+
+            if (!renderer_initialized)
+            {
+                renderer_initialized = _cui_initialize_opengles2_wayland(window);
+            }
+
+#  endif
+
+#  if CUI_RENDERER_SOFTWARE_ENABLED
+
+            if (!renderer_initialized)
+            {
+                window->base.renderer = _cui_renderer_software_create();
+
+                int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
+                int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
+
+                for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
+                {
+                    CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
+                    _cui_wayland_allocate_framebuffer(framebuffer, framebuffer_width, framebuffer_height);
+                }
+
+                window->current_framebuffer = 0;
+
+                renderer_initialized = true;
+            }
+
+#  endif
+
+            if (!renderer_initialized)
+            {
+                // There is no sane way to recover from that point.
+                // Maybe the solution here would be to destroy the window?
+                return;
+            }
+        }
 
         CuiWindowFrameResult window_frame_result = { 0 };
         CuiFramebuffer *framebuffer = _cui_window_frame_routine(window, window->base.events, &window_frame_result);
@@ -3592,106 +3738,6 @@ _cui_window_on_minimize_button(CuiWidget *widget)
     xdg_toplevel_set_minimized(window->wayland_xdg_toplevel);
 }
 
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-
-static bool
-_cui_initialize_opengles2_wayland(CuiWindow *window)
-{
-    if (_cui_context.egl_display == EGL_NO_DISPLAY)
-    {
-        return false;
-    }
-
-    EGLint buffer_attr[] = {
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-        EGL_NONE
-    };
-
-    EGLConfig config;
-    EGLint num_config;
-
-    if (!eglChooseConfig(_cui_context.egl_display, buffer_attr, &config, 1, &num_config))
-    {
-        return false;
-    }
-
-    int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
-    int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
-
-    window->wayland_egl_window = wl_egl_window_create(window->wayland_surface, framebuffer_width, framebuffer_height);
-
-    if (!window->wayland_egl_window)
-    {
-        return false;
-    }
-
-    EGLSurface egl_surface = eglCreatePlatformWindowSurface(_cui_context.egl_display, config, window->wayland_egl_window, 0);
-
-    EGLContext egl_context = EGL_NO_CONTEXT;
-
-    if (egl_surface != EGL_NO_SURFACE)
-    {
-        EGLint context_attr[] = {
-            EGL_CONTEXT_MAJOR_VERSION, 2,
-            EGL_CONTEXT_MINOR_VERSION, 0,
-            EGL_NONE
-        };
-
-        egl_context = eglCreateContext(_cui_context.egl_display, config, EGL_NO_CONTEXT, context_attr);
-
-        if (egl_context != EGL_NO_CONTEXT)
-        {
-            EGLBoolean success = eglMakeCurrent(_cui_context.egl_display, egl_surface, egl_surface, egl_context);
-
-            if (success)
-            {
-#if 0
-                printf("OpenGL ES Version: %s\n", glGetString(GL_VERSION));
-                printf("OpenGL ES Extensions: %s\n", glGetString(GL_EXTENSIONS));
-#endif
-
-                window->opengles2.egl_surface = egl_surface;
-                window->opengles2.egl_context = egl_context;
-                window->base.renderer = _cui_renderer_opengles2_create();
-
-                if (!window->base.renderer)
-                {
-                    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-                    eglDestroyContext(_cui_context.egl_display, egl_context);
-
-                    wl_egl_window_destroy(window->wayland_egl_window);
-
-                    return false;
-                }
-
-                return true;
-            }
-        }
-    }
-
-    eglMakeCurrent(_cui_context.egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-
-    if (egl_context != EGL_NO_CONTEXT)
-    {
-        eglDestroyContext(_cui_context.egl_display, egl_context);
-    }
-
-    if (egl_surface != EGL_NO_SURFACE)
-    {
-        eglDestroySurface(_cui_context.egl_display, egl_surface);
-    }
-
-    wl_egl_window_destroy(window->wayland_egl_window);
-
-    return false;
-}
-
-#  endif
-
 #endif
 
 static CuiFramebuffer *
@@ -4590,45 +4636,10 @@ cui_window_create(uint32_t creation_flags)
             // everything has to be allocated at this point
             window->title_temp_memory = cui_begin_temporary_memory(&window->arena);
 
-            bool renderer_initialized = false;
-
-#  if CUI_RENDERER_OPENGLES2_ENABLED
-
-            if (!renderer_initialized)
-            {
-                renderer_initialized = _cui_initialize_opengles2_wayland(window);
-            }
-
-#  endif
-
-#  if CUI_RENDERER_SOFTWARE_ENABLED
-
-            if (!renderer_initialized)
-            {
-                window->base.renderer = _cui_renderer_software_create();
-
-                int32_t framebuffer_width = cui_rect_get_width(window->backbuffer_rect);
-                int32_t framebuffer_height = cui_rect_get_height(window->backbuffer_rect);
-
-                for (uint32_t i = 0; i < CuiArrayCount(window->framebuffers); i += 1)
-                {
-                    CuiLinuxFramebuffer *framebuffer = window->framebuffers + i;
-                    _cui_wayland_allocate_framebuffer(framebuffer, framebuffer_width, framebuffer_height);
-                }
-
-                window->current_framebuffer = 0;
-
-                renderer_initialized = true;
-            }
-
-#  endif
-
-            if (!renderer_initialized)
-            {
-                cui_arena_deallocate(&window->arena);
-                _cui_remove_window(window);
-                return 0;
-            }
+            // We don't initialize the renderer at this point to be able to resize the window
+            // after it has been created, but before it is shown. The reason for that is that
+            // most wayland-egl implementation don't like it when wl_egl_window_resize() gets
+            // called after it was created but before the first frame was renderered.
         } break;
 
 #endif
