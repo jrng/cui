@@ -1,3 +1,9 @@
+# build tool
+/c_make
+/c_make.exe
+/c_make.obj
+/c_make.dSYM
+
 # build artifacts
 /build
 
