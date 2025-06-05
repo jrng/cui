@@ -200,13 +200,13 @@ _cui_update_configuration(CuiWindow *window)
     {
         window->orientation = orientation;
 
-        int32_t tmp = window->width;
-        window->width = window->height;
-        window->height = tmp;
+        int32_t tmp = window->base.width;
+        window->base.width = window->base.height;
+        window->base.height = tmp;
 
         if (window->base.platform_root_widget)
         {
-            CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+            CuiRect rect = cui_make_rect(0, 0, window->base.width, window->base.height);
             cui_widget_layout(window->base.platform_root_widget, rect);
         }
 
@@ -377,7 +377,7 @@ _cui_acquire_framebuffer(CuiWindow *window, int32_t width, int32_t height)
     eglQuerySurface(_cui_context.egl_display, window->opengles2.egl_surface, EGL_HEIGHT, &window->framebuffer.height);
 
 #if 0
-    android_print("redraw w = %d, h = %d, sw = %d, sh = %d\n", window->width, window->height, surface_width, surface_height);
+    android_print("redraw w = %d, h = %d, sw = %d, sh = %d\n", window->base.width, window->base.height, surface_width, surface_height);
 #endif
 
     return &window->framebuffer;
@@ -721,7 +721,7 @@ cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget)
 
     window->base.user_root_widget = widget;
 
-    CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+    CuiRect rect = cui_make_rect(0, 0, window->base.width, window->base.height);
 
     cui_widget_set_window(window->base.user_root_widget, window);
     cui_widget_set_ui_scale(window->base.user_root_widget, window->base.ui_scale);
@@ -776,8 +776,8 @@ cui_step(void)
 
                         if (_cui_context.native_window)
                         {
-                            window->width  = ANativeWindow_getWidth(_cui_context.native_window);
-                            window->height = ANativeWindow_getHeight(_cui_context.native_window);
+                            window->base.width  = ANativeWindow_getWidth(_cui_context.native_window);
+                            window->base.height = ANativeWindow_getHeight(_cui_context.native_window);
 
                             _cui_window_create_renderer(window);
                         }
@@ -792,14 +792,14 @@ cui_step(void)
                         {
                             pthread_mutex_lock(&_cui_context.platform_mutex);
 
-                            window->width  = ANativeWindow_getWidth(_cui_context.native_window);
-                            window->height = ANativeWindow_getHeight(_cui_context.native_window);
+                            window->base.width  = ANativeWindow_getWidth(_cui_context.native_window);
+                            window->base.height = ANativeWindow_getHeight(_cui_context.native_window);
 
-                            android_print("window resized (w = %d, h = %d)\n", window->width, window->height);
+                            android_print("window resized (w = %d, h = %d)\n", window->base.width, window->base.height);
 
                             if (window->base.platform_root_widget)
                             {
-                                CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+                                CuiRect rect = cui_make_rect(0, 0, window->base.width, window->base.height);
                                 cui_widget_layout(window->base.platform_root_widget, rect);
                             }
 
@@ -877,8 +877,8 @@ cui_step(void)
                                       _cui_context.content_rect.max.x, _cui_context.content_rect.max.y);
 
                         float north_height = ceilf((float) _cui_context.content_rect.min.y / window->base.ui_scale);
-                        float east_width   = ceilf((float) (window->width - _cui_context.content_rect.max.x) / window->base.ui_scale);
-                        float south_height = ceilf((float) (window->height - _cui_context.content_rect.max.y) / window->base.ui_scale);
+                        float east_width   = ceilf((float) (window->base.width - _cui_context.content_rect.max.x) / window->base.ui_scale);
+                        float south_height = ceilf((float) (window->base.height - _cui_context.content_rect.max.y) / window->base.ui_scale);
                         float west_width   = ceilf((float) _cui_context.content_rect.min.x / window->base.ui_scale);
 
                         cui_widget_set_preferred_size(window->north_box, 0.0f, north_height);
@@ -886,7 +886,7 @@ cui_step(void)
                         cui_widget_set_preferred_size(window->south_box, 0.0f, south_height);
                         cui_widget_set_preferred_size(window->west_box, west_width, 0.0f);
 
-                        CuiRect rect = cui_make_rect(0, 0, window->width, window->height);
+                        CuiRect rect = cui_make_rect(0, 0, window->base.width, window->base.height);
                         cui_widget_layout(window->base.platform_root_widget, rect);
 
                         window->base.needs_redraw = true;

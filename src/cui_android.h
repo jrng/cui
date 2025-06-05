@@ -33,9 +33,6 @@ struct CuiWindow
 
     int32_t orientation;
 
-    int32_t width;
-    int32_t height;
-
     CuiFontId font_id;
 
     CuiWidget *north_split;

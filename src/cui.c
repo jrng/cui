@@ -1004,8 +1004,8 @@ cui_main_loop(void)
 
 #include "cui_renderer.c"
 #include "cui_widget.c"
-#include "cui_window.c"
 #include "cui_draw.c"
+#include "cui_window.c"
 
 #endif
 
