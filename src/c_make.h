@@ -1188,7 +1188,7 @@ c_make_command_append_input_static_library(CMakeCommand *command, const char *in
 
         if (platform == CMakePlatformWindows)
         {
-            full_path = c_make_c_string_path_concat(path, c_make_c_string_concat("lib", name, ".lib"));
+            full_path = c_make_c_string_path_concat(path, c_make_c_string_concat(name, ".lib"));
         }
         else
         {

@@ -439,7 +439,7 @@ cui_c_make_build_static_library(const char *library_name, CMakeArchitecture targ
     if (c_make_get_target_platform() == CMakePlatformWindows)
     {
         object_filename = c_make_c_string_concat(library_name, ".obj");
-        library_filename = c_make_c_string_concat("lib", library_name, ".lib");
+        library_filename = c_make_c_string_concat(library_name, ".lib");
     }
     else
     {
