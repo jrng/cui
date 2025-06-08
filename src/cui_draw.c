@@ -1069,10 +1069,12 @@ void cui_draw_fill_codepoint(CuiGraphicsContext *ctx, CuiFontId font_id, float x
     cui_end_temporary_memory(temp_memory);
 }
 
-void
+float
 cui_draw_fill_string(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, CuiString str, CuiColor color)
 {
     CuiAssert(font_id.value > 0);
+
+    float x_start = x;
 
     CuiFont *font = _cui_font_manager_get_font_from_id(ctx->font_manager, font_id);
     // CuiFont *prev_used_font = 0;
@@ -1231,6 +1233,8 @@ cui_draw_fill_string(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float 
         // prev_used_font = used_font;
         index += utf8.byte_count;
     }
+
+    return x - x_start;
 }
 
 #include "cui_shapes.c"

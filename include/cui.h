@@ -1465,7 +1465,7 @@ void cui_draw_fill_inverted_rounded_rect_1(CuiGraphicsContext *ctx, CuiRect rect
 void cui_draw_fill_shadow(CuiGraphicsContext *ctx, int32_t x, int32_t y, int32_t max, int32_t blur_radius, CuiDirection direction, CuiColor color);
 void cui_draw_fill_shadow_corner(CuiGraphicsContext *ctx, int32_t x, int32_t y, int32_t radius, int32_t blur_radius, CuiDirection direction_x, CuiDirection direction_y, CuiColor color);
 void cui_draw_fill_codepoint(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, uint32_t codepoint, CuiColor color);
-void cui_draw_fill_string(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, CuiString str, CuiColor color);
+float cui_draw_fill_string(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, CuiString str, CuiColor color);
 void cui_draw_fill_shape(CuiGraphicsContext *ctx, float x, float y, CuiShapeType shape_type, float scale, CuiColor color);
 void cui_draw_fill_icon(CuiGraphicsContext *ctx, float x, float y, float scale, CuiIconType icon_type, CuiColor color);
 
