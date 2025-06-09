@@ -68,6 +68,7 @@
 #define CuiContainerOf(ptr, type, member) (type *) ((uint8_t *) (ptr) - CuiOffsetOf(type, member))
 #define CuiArrayCount(array) (sizeof(array)/sizeof((array)[0]))
 #define CuiStringLiteral(str) cui_make_string((char *) (str), sizeof(str) - 1)
+#define CuiStringConstant(str) { sizeof(str) - 1, (uint8_t *) (str) }
 #define CuiCString(str) cui_make_string((char *) (str), cui_string_length(str))
 #define CuiClearStruct(inst) cui_clear_memory(&(inst), sizeof(inst))
 
@@ -145,15 +146,15 @@
 
 #else
 
-#  define CuiHexColor(color) ((CuiColor) { (float) ((color >> 16) & 0xFF) / 255.0f,   \
-                                           (float) ((color >>  8) & 0xFF) / 255.0f,   \
-                                           (float) ((color >>  0) & 0xFF) / 255.0f,   \
-                                           (float) ((color >> 24) & 0xFF) / 255.0f })
+#  define CuiHexColor(color) ((CuiColor) { (float) (((color) >> 16) & 0xFF) / 255.0f,     \
+                                           (float) (((color) >>  8) & 0xFF) / 255.0f,     \
+                                           (float) (((color) >>  0) & 0xFF) / 255.0f,     \
+                                           (float) (((color) >> 24) & 0xFF) / 255.0f })
 
-#  define CuiHexColorLiteral(color) { (float) ((color >> 16) & 0xFF) / 255.0f,   \
-                                      (float) ((color >>  8) & 0xFF) / 255.0f,   \
-                                      (float) ((color >>  0) & 0xFF) / 255.0f,   \
-                                      (float) ((color >> 24) & 0xFF) / 255.0f }
+#  define CuiHexColorLiteral(color) { (float) (((color) >> 16) & 0xFF) / 255.0f,    \
+                                      (float) (((color) >>  8) & 0xFF) / 255.0f,    \
+                                      (float) (((color) >>  0) & 0xFF) / 255.0f,    \
+                                      (float) (((color) >> 24) & 0xFF) / 255.0f }
 
 #  define _cui_array_header(array) ((CuiArrayHeader *) (array) - 1)
 #  define _cui_array_ensure_space(array)                                                                                        \
