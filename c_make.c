@@ -199,18 +199,6 @@ cui_c_make_append_default_compiler_flags(CMakeCommand *command, CMakeArchitectur
 
         case CMakePlatformWeb: break;
     }
-
-    if (c_make_get_target_platform() == CMakePlatformMacOs)
-    {
-        if (target_architecture == CMakeArchitectureAmd64)
-        {
-            c_make_command_append(command, "-target", "x86_64-apple-macos10.14");
-        }
-        else if (target_architecture == CMakeArchitectureAarch64)
-        {
-            c_make_command_append(command, "-target", "arm64-apple-macos11");
-        }
-    }
 }
 
 static void
