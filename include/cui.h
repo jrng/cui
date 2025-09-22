@@ -253,16 +253,28 @@ cui_swap_int32(int32_t *a, int32_t *b)
     *b = val;
 }
 
-static inline uint16_t
-cui_max_u16(uint16_t a, uint16_t b)
+static inline int16_t
+cui_min_int16(int16_t a, int16_t b)
+{
+    return (a < b) ? a : b;
+}
+
+static inline int16_t
+cui_max_int16(int16_t a, int16_t b)
 {
     return (a > b) ? a : b;
 }
 
-static inline uint32_t
-cui_min_uint32(uint32_t a, uint32_t b)
+static inline uint16_t
+cui_min_uint16(uint16_t a, uint16_t b)
 {
     return (a < b) ? a : b;
+}
+
+static inline uint16_t
+cui_max_uint16(uint16_t a, uint16_t b)
+{
+    return (a > b) ? a : b;
 }
 
 static inline int32_t
@@ -273,6 +285,18 @@ cui_min_int32(int32_t a, int32_t b)
 
 static inline int32_t
 cui_max_int32(int32_t a, int32_t b)
+{
+    return (a > b) ? a : b;
+}
+
+static inline uint32_t
+cui_min_uint32(uint32_t a, uint32_t b)
+{
+    return (a < b) ? a : b;
+}
+
+static inline uint32_t
+cui_max_uint32(uint32_t a, uint32_t b)
 {
     return (a > b) ? a : b;
 }
