@@ -97,6 +97,7 @@
 #define CMakeCString(str) c_make_make_string((char *) (str), c_make_get_c_string_length(str))
 
 #define c_make_string_replace_all(str, pattern, replace) c_make_string_replace_all_with_memory(&_c_make_context.public_memory, str, pattern, replace)
+#define c_make_string_to_c_string(str) c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, str)
 
 #define c_make_string_concat(...) c_make_string_concat_va(CMakeNArgs(__VA_ARGS__), __VA_ARGS__)
 
@@ -467,7 +468,7 @@ C_MAKE_DEF CMakeString c_make_string_split_right_path_separator(CMakeString *str
 C_MAKE_DEF CMakeString c_make_string_trim(CMakeString str);
 C_MAKE_DEF size_t c_make_string_find(CMakeString str, CMakeString pattern);
 C_MAKE_DEF CMakeString c_make_string_replace_all_with_memory(CMakeMemory *memory, CMakeString str, CMakeString pattern, CMakeString replace);
-C_MAKE_DEF char *c_make_string_to_c_string(CMakeMemory *memory, CMakeString str);
+C_MAKE_DEF char *c_make_string_to_c_string_with_memory(CMakeMemory *memory, CMakeString str);
 
 C_MAKE_DEF bool c_make_parse_integer(CMakeString *str, int *value);
 
@@ -1181,8 +1182,8 @@ c_make_command_append_input_static_library(CMakeCommand *command, const char *in
 
         CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
 
-        const char *path = c_make_string_to_c_string(temp_memory.memory, path_str);
-        const char *name = c_make_string_to_c_string(temp_memory.memory, name_str);
+        const char *path = c_make_string_to_c_string_with_memory(temp_memory.memory, path_str);
+        const char *name = c_make_string_to_c_string_with_memory(temp_memory.memory, name_str);
 
         const char *full_path;
 
@@ -1595,7 +1596,7 @@ c_make_string_replace_all_with_memory(CMakeMemory *memory, CMakeString str, CMak
 }
 
 C_MAKE_DEF char *
-c_make_string_to_c_string(CMakeMemory *memory, CMakeString str)
+c_make_string_to_c_string_with_memory(CMakeMemory *memory, CMakeString str)
 {
     char *result = (char *) c_make_memory_allocate(memory, str.count + 1);
 
@@ -2002,7 +2003,7 @@ c_make_find_best_software_package(const char *directory, CMakeString prefix, CMa
                         best_v1 = v1;
                         best_v2 = v2;
                         best_v3 = v3;
-                        best_version = c_make_string_to_c_string(temp_memory.memory, entry->name);
+                        best_version = c_make_string_to_c_string_with_memory(temp_memory.memory, entry->name);
                     }
                 }
             }
@@ -2017,7 +2018,7 @@ c_make_find_best_software_package(const char *directory, CMakeString prefix, CMa
         return false;
     }
 
-    software_package->version = c_make_string_to_c_string(&_c_make_context.public_memory, CMakeCString(best_version));
+    software_package->version = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, CMakeCString(best_version));
     software_package->root_path = c_make_c_string_path_concat_with_memory(&_c_make_context.public_memory, directory, best_version);
 
     c_make_end_temporary_memory(temp_memory);
@@ -2100,7 +2101,7 @@ c_make_find_visual_studio(CMakeSoftwarePackage *visual_studio_install)
         c_make_read_entire_file(version_file_path, &version_file_content);
 
         CMakeString version_str = c_make_string_split_left(&version_file_content, '\n');
-        char *version = c_make_string_to_c_string(&_c_make_context.public_memory, c_make_string_trim(version_str));
+        char *version = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, c_make_string_trim(version_str));
 
         visual_studio_install->version = version;
         visual_studio_install->root_path = installation_path;
@@ -2425,7 +2426,7 @@ c_make_find_android_ndk(CMakeSoftwarePackage *android_ndk, bool logging)
 
         if (sdk_root_path.count)
         {
-            const char *sdk_root_path_c = c_make_string_to_c_string(temp_memory.memory, sdk_root_path);
+            const char *sdk_root_path_c = c_make_string_to_c_string_with_memory(temp_memory.memory, sdk_root_path);
 
             if (c_make_find_best_software_package(c_make_c_string_path_concat(sdk_root_path_c, "ndk"), CMakeStringLiteral(""), android_ndk))
             {
@@ -2447,12 +2448,12 @@ c_make_find_android_ndk(CMakeSoftwarePackage *android_ndk, bool logging)
         return false;
     }
 
-    android_ndk->root_path = c_make_string_to_c_string(&_c_make_context.public_memory, ndk_root_path);
+    android_ndk->root_path = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, ndk_root_path);
 
     // TODO: check if that matches a version string
     CMakeString ndk_version = c_make_string_split_right_path_separator(&ndk_root_path);
 
-    android_ndk->version = c_make_string_to_c_string(&_c_make_context.public_memory, ndk_version);
+    android_ndk->version = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, ndk_version);
 
     c_make_end_temporary_memory(temp_memory);
 
@@ -2483,7 +2484,7 @@ c_make_find_android_sdk(CMakeAndroidSdk *android_sdk, bool logging)
         return false;
     }
 
-    const char *sdk_root_path_c = c_make_string_to_c_string(temp_memory.memory, sdk_root_path);
+    const char *sdk_root_path_c = c_make_string_to_c_string_with_memory(temp_memory.memory, sdk_root_path);
 
     if (!c_make_find_best_software_package(c_make_c_string_path_concat(sdk_root_path_c, "platforms"), CMakeStringLiteral("android-"), &android_sdk->platforms))
     {
@@ -2649,7 +2650,7 @@ c_make_setup_java(bool logging)
 
     if (JAVA_HOME.count)
     {
-        const char *java_home = c_make_string_to_c_string(&_c_make_context.public_memory, JAVA_HOME);
+        const char *java_home = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, JAVA_HOME);
 
         if (java_home)
         {
@@ -2663,7 +2664,7 @@ c_make_setup_java(bool logging)
 
         if (JAVA_HOME_21_X64.count)
         {
-            const char *java_home_21_x64 = c_make_string_to_c_string(&_c_make_context.public_memory, JAVA_HOME_21_X64);
+            const char *java_home_21_x64 = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, JAVA_HOME_21_X64);
 
             if (java_home_21_x64)
             {
@@ -2678,7 +2679,7 @@ c_make_setup_java(bool logging)
 
         if (JAVA_HOME_17_X64.count)
         {
-            const char *java_home_17_x64 = c_make_string_to_c_string(&_c_make_context.public_memory, JAVA_HOME_17_X64);
+            const char *java_home_17_x64 = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, JAVA_HOME_17_X64);
 
             if (java_home_17_x64)
             {
@@ -2693,7 +2694,7 @@ c_make_setup_java(bool logging)
 
         if (JAVA_HOME_11_X64.count)
         {
-            const char *java_home_11_x64 = c_make_string_to_c_string(&_c_make_context.public_memory, JAVA_HOME_11_X64);
+            const char *java_home_11_x64 = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, JAVA_HOME_11_X64);
 
             if (java_home_11_x64)
             {
@@ -2708,7 +2709,7 @@ c_make_setup_java(bool logging)
 
         if (JAVA_HOME_8_X64.count)
         {
-            const char *java_home_8_x64 = c_make_string_to_c_string(&_c_make_context.public_memory, JAVA_HOME_8_X64);
+            const char *java_home_8_x64 = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, JAVA_HOME_8_X64);
 
             if (java_home_8_x64)
             {
@@ -2975,8 +2976,8 @@ c_make_load_config(const char *file_name)
 
                 c_make_memory_set_used(temp_memory.memory, memory_used);
 
-                c_make_config_set(c_make_string_to_c_string(temp_memory.memory, key),
-                                  c_make_string_to_c_string(temp_memory.memory, value));
+                c_make_config_set(c_make_string_to_c_string_with_memory(temp_memory.memory, key),
+                                  c_make_string_to_c_string_with_memory(temp_memory.memory, value));
             }
             else
             {
@@ -3277,7 +3278,7 @@ c_make_create_directory_recursively(const char *directory_name)
 
         if (parent_string.count > 0)
         {
-            const char *parent_directory = c_make_string_to_c_string(temp_memory.memory, parent_string);
+            const char *parent_directory = c_make_string_to_c_string_with_memory(temp_memory.memory, parent_string);
 
             if (!c_make_create_directory_recursively(parent_directory))
             {
@@ -3306,7 +3307,7 @@ c_make_create_directory_recursively(const char *directory_name)
         {
             CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
 
-            const char *parent_directory = c_make_string_to_c_string(temp_memory.memory, parent_string);
+            const char *parent_directory = c_make_string_to_c_string_with_memory(temp_memory.memory, parent_string);
             bool result = c_make_create_directory_recursively(parent_directory);
 
             c_make_end_temporary_memory(temp_memory);
@@ -3555,7 +3556,16 @@ c_make_copy_file(const char *src_file_name, const char *dst_file_name)
             return false;
         }
 
-        write(dst_fd, copy_buffer, size_to_read);
+        ssize_t written_bytes = write(dst_fd, copy_buffer, size_to_read);
+
+        if ((written_bytes < 0) || ((size_t) written_bytes != size_to_read))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            close(src_fd);
+            close(dst_fd);
+            return false;
+        }
+
         index += size_to_read;
     }
 
@@ -3697,9 +3707,9 @@ c_make_find_program(const char *program_name)
     while (paths.count)
     {
 #if C_MAKE_PLATFORM_WINDOWS
-        char *path = c_make_string_to_c_string(temp_memory.memory, c_make_string_split_left(&paths, ';'));
+        char *path = c_make_string_to_c_string_with_memory(temp_memory.memory, c_make_string_split_left(&paths, ';'));
 #elif C_MAKE_PLATFORM_ANDROID || C_MAKE_PLATFORM_FREEBSD || C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
-        char *path = c_make_string_to_c_string(temp_memory.memory, c_make_string_split_left(&paths, ':'));
+        char *path = c_make_string_to_c_string_with_memory(temp_memory.memory, c_make_string_split_left(&paths, ':'));
 #endif
 
         char *full_path = c_make_c_string_path_concat(path, program_name);
@@ -4198,6 +4208,7 @@ print_help(const char *program_name)
     fprintf(stderr, "    visual_studio_root_path      Path to the visual studio install. This should be the directory\n");
     fprintf(stderr, "                                 in which you find 'VC\\Tools\\MSVC\\<version>'.\n");
     fprintf(stderr, "    visual_studio_version        The version of the visual studio install.\n");
+    fprintf(stderr, "    windows_rc_executable        Path to the windows resource compiler executable.\n");
     fprintf(stderr, "    windows_sdk_root_path        Path to the windows sdk. This should be the directory\n");
     fprintf(stderr, "                                 in which you find 'bin', 'Include' and 'Lib'.\n");
     fprintf(stderr, "    windows_sdk_version          The version of the windows sdk.\n");
@@ -4281,7 +4292,7 @@ int main(int argument_count, char **arguments)
     }
 #endif
 
-    const char *source_directory = c_make_string_to_c_string(&_c_make_context.permanent_memory, executable_path);
+    const char *source_directory = c_make_string_to_c_string_with_memory(&_c_make_context.permanent_memory, executable_path);
 
     c_make_end_temporary_memory(temp_memory);
 
@@ -4421,8 +4432,8 @@ int main(int argument_count, char **arguments)
                     }
                 }
 
-                c_make_config_set("visual_studio_version", c_make_string_to_c_string(&_c_make_context.public_memory, VCToolsVersion));
-                c_make_config_set("visual_studio_root_path", c_make_string_to_c_string(&_c_make_context.public_memory, VCToolsInstallDir));
+                c_make_config_set("visual_studio_version", c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, VCToolsVersion));
+                c_make_config_set("visual_studio_root_path", c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, VCToolsInstallDir));
             }
 
             c_make_memory_set_used(&_c_make_context.public_memory, public_used);
@@ -4449,8 +4460,8 @@ int main(int argument_count, char **arguments)
                     }
                 }
 
-                c_make_config_set("windows_sdk_version", c_make_string_to_c_string(&_c_make_context.public_memory, WindowsSDKVersion));
-                c_make_config_set("windows_sdk_root_path", c_make_string_to_c_string(&_c_make_context.public_memory, WindowsSdkBinPath));
+                c_make_config_set("windows_sdk_version", c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, WindowsSDKVersion));
+                c_make_config_set("windows_sdk_root_path", c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, WindowsSdkBinPath));
             }
 
             c_make_memory_set_used(&_c_make_context.public_memory, public_used);
@@ -4473,7 +4484,7 @@ int main(int argument_count, char **arguments)
 
             if (AR.count)
             {
-                const char *target_ar = c_make_string_to_c_string(&_c_make_context.public_memory, AR);
+                const char *target_ar = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, AR);
 
                 if (!c_make_has_slash_or_backslash(target_ar))
                 {
@@ -4494,7 +4505,7 @@ int main(int argument_count, char **arguments)
 
             if (CC.count)
             {
-                const char *target_c_compiler = c_make_string_to_c_string(&_c_make_context.public_memory, c_make_string_split_left(&CC, ' '));
+                const char *target_c_compiler = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, c_make_string_split_left(&CC, ' '));
 
                 if (!c_make_has_slash_or_backslash(target_c_compiler))
                 {
@@ -4510,7 +4521,7 @@ int main(int argument_count, char **arguments)
 
                 if (CC.count)
                 {
-                    c_make_config_set("target_c_flags", c_make_string_to_c_string(&_c_make_context.public_memory, CC));
+                    c_make_config_set("target_c_flags", c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, CC));
                 }
             }
 
@@ -4522,7 +4533,7 @@ int main(int argument_count, char **arguments)
 
             if (CXX.count)
             {
-                const char *target_cpp_compiler = c_make_string_to_c_string(&_c_make_context.public_memory, c_make_string_split_left(&CXX, ' '));
+                const char *target_cpp_compiler = c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, c_make_string_split_left(&CXX, ' '));
 
                 if (!c_make_has_slash_or_backslash(target_cpp_compiler))
                 {
@@ -4538,7 +4549,7 @@ int main(int argument_count, char **arguments)
 
                 if (CXX.count)
                 {
-                    c_make_config_set("target_cpp_flags", c_make_string_to_c_string(&_c_make_context.public_memory, CXX));
+                    c_make_config_set("target_cpp_flags", c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, CXX));
                 }
             }
 
@@ -4570,8 +4581,8 @@ int main(int argument_count, char **arguments)
 
                 c_make_memory_set_used(temp_memory.memory, memory_used);
 
-                c_make_config_set(c_make_string_to_c_string(temp_memory.memory, key),
-                                  c_make_string_to_c_string(temp_memory.memory, value));
+                c_make_config_set(c_make_string_to_c_string_with_memory(temp_memory.memory, key),
+                                  c_make_string_to_c_string_with_memory(temp_memory.memory, value));
             }
         }
 
@@ -4676,6 +4687,21 @@ int main(int argument_count, char **arguments)
                 c_make_memory_set_used(&_c_make_context.public_memory, public_used);
             }
         }
+
+#if C_MAKE_PLATFORM_WINDOWS
+        CMakeSoftwarePackage windows_sdk;
+
+        if (c_make_get_windows_sdk(&windows_sdk))
+        {
+#  if C_MAKE_ARCHITECTURE_AMD64
+            c_make_config_set("windows_rc_executable",
+                              c_make_c_string_path_concat(windows_sdk.root_path, "bin", windows_sdk.version, "x64", "rc.exe"));
+#  elif C_MAKE_ARCHITECTURE_AARCH64
+            c_make_config_set("windows_rc_executable",
+                              c_make_c_string_path_concat(windows_sdk.root_path, "bin", windows_sdk.version, "arm64", "rc.exe"));
+#  endif
+        }
+#endif
 
         _c_make_entry_(CMakeTargetSetup);
 
