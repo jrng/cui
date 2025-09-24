@@ -398,6 +398,13 @@ bool
 cui_platform_open_file_dialog(CuiArena *temporary_memory, CuiArena *arena, CuiString **filenames,
                               bool can_select_multiple, bool can_select_files, bool can_select_directories)
 {
+    (void) temporary_memory;
+    (void) arena;
+    (void) filenames;
+    (void) can_select_multiple;
+    (void) can_select_files;
+    (void) can_select_directories;
+
     return false;
 }
 
