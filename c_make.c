@@ -470,7 +470,7 @@ cui_c_make_build_static_library(const char *library_name, CMakeArchitecture targ
 }
 
 static void
-cui_c_make_build(const char *output_name, const char *input_name, CMakeArchitecture target_architecture)
+cui_c_make_build(const char *output_folder, const char *output_name, const char *input_name, CMakeArchitecture target_architecture)
 {
     CMakeCommand command = { 0 };
 
@@ -482,11 +482,11 @@ cui_c_make_build(const char *output_name, const char *input_name, CMakeArchitect
     {
         c_make_command_append(&command, "-shared");
         const char *library_filename = c_make_c_string_concat("lib", output_name, ".so");
-        c_make_command_append(&command, "-o", c_make_c_string_path_concat(c_make_get_build_path(), library_filename));
+        c_make_command_append(&command, "-o", c_make_c_string_path_concat(output_folder, library_filename));
     }
     else
     {
-        c_make_command_append_output_executable(&command, c_make_c_string_path_concat(c_make_get_build_path(), output_name), c_make_get_target_platform());
+        c_make_command_append_output_executable(&command, c_make_c_string_path_concat(output_folder, output_name), c_make_get_target_platform());
     }
 
     c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_source_path(), "examples", input_name));
@@ -503,8 +503,8 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
 {
     if ((c_make_get_target_platform() == CMakePlatformMacOs) && (c_make_get_target_architecture() == CMakeArchitectureAarch64))
     {
-        cui_c_make_build(c_make_c_string_concat(executable_name, "-arm64") , c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAarch64);
-        cui_c_make_build(c_make_c_string_concat(executable_name, "-x86_64"), c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAmd64);
+        cui_c_make_build(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-arm64") , c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAarch64);
+        cui_c_make_build(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-x86_64"), c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAmd64);
 
         c_make_process_wait_for_all();
 
@@ -537,22 +537,19 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
         c_make_create_directory_recursively(library_path);
         c_make_create_directory_recursively(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values"));
 
-        cui_c_make_build(executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+        cui_c_make_build(library_path, executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
 
         c_make_process_wait_for_all();
 
         const char *library_filename = c_make_c_string_concat("lib", executable_name, ".so");
         const char *manifest_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "AndroidManifest.xml");
         const char *key_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "debug.keystore");
-        // TODO: use example_name, but without whitespaces
-        const char *apk_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(executable_name, ".apk"));
-        const char *apk_signed_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(executable_name, ".signed.apk"));
-        const char *apk_unaligned_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(executable_name, ".unaligned.apk"));
+        const char *apk_name = c_make_string_to_c_string(c_make_string_replace_all(CMakeCString(example_name), CMakeStringLiteral(" "), CMakeStringLiteral("")));
+        const char *apk_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".apk"));
+        const char *apk_signed_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".signed.apk"));
+        const char *apk_unaligned_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".unaligned.apk"));
 
-        c_make_log(CMakeLogLevelInfo, "package '%s.apk'\n", executable_name);
-
-        // TODO: build this file directly in the right location
-        c_make_copy_file(c_make_c_string_path_concat(c_make_get_build_path(), library_filename), c_make_c_string_path_concat(library_path, library_filename));
+        c_make_log(CMakeLogLevelInfo, "package '%s.apk'\n", apk_name);
 
         c_make_write_entire_file(manifest_filename,
                                  c_make_string_replace_all(CMakeStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -627,7 +624,7 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
     }
     else
     {
-        cui_c_make_build(executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+        cui_c_make_build(c_make_get_build_path(), executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
     }
 }
 
