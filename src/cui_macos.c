@@ -113,7 +113,9 @@
          window_index < _cui_context.common.window_count; window_index += 1)
     {
         CuiWindow *window = _cui_context.common.windows[window_index];
-        cui_window_close(window);
+
+        CuiEvent *event = cui_array_append(window->base.events);
+        event->type = CUI_EVENT_TYPE_QUIT;
     }
 
     return NSTerminateCancel;

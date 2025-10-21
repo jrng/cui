@@ -1061,13 +1061,6 @@ _cui_window_callback(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_
 }
 
 static void
-_cui_window_on_close_button(CuiWidget *widget)
-{
-    // OutputDebugString(L"on_close_button\n");
-    cui_window_close(widget->window);
-}
-
-static void
 _cui_window_on_maximize_button(CuiWidget *widget)
 {
     // OutputDebugString(L"on_maximize_button\n");

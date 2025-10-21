@@ -1913,7 +1913,8 @@ _cui_wayland_xdg_toplevel_close(void *data, struct xdg_toplevel *toplevel)
     CuiWindow *window = (CuiWindow *) data;
     CuiAssert(window->wayland_xdg_toplevel == toplevel);
 
-    cui_window_close(window);
+    CuiEvent *event = cui_array_append(window->base.events);
+    event->type = CUI_EVENT_TYPE_QUIT;
 }
 
 static const struct xdg_toplevel_listener _cui_wayland_xdg_toplevel_listener = {
@@ -3702,15 +3703,6 @@ _cui_initialize_wayland(void)
 #  endif
 
     return true;
-}
-
-static void
-_cui_window_on_close_button(CuiWidget *widget)
-{
-    CuiWindow *window = widget->window;
-    CuiAssert(window);
-
-    cui_window_close(window);
 }
 
 static void

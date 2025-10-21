@@ -1502,6 +1502,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
         {
             switch (event_type)
             {
+                case CUI_EVENT_TYPE_QUIT:
+                {
+                } break;
+
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 case CUI_EVENT_TYPE_MOUSE_MOVE:
                 {
@@ -1668,6 +1672,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
         {
             switch (event_type)
             {
+                case CUI_EVENT_TYPE_QUIT:
+                {
+                } break;
+
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 case CUI_EVENT_TYPE_MOUSE_MOVE:
                 {
@@ -1799,6 +1807,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
         {
             switch (event_type)
             {
+                case CUI_EVENT_TYPE_QUIT:
+                {
+                } break;
+
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 {
                     widget->state |= CUI_WIDGET_STATE_HOVERED;
@@ -1879,6 +1891,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
         {
             switch (event_type)
             {
+                case CUI_EVENT_TYPE_QUIT:
+                {
+                } break;
+
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 {
                     widget->state |= CUI_WIDGET_STATE_HOVERED;
@@ -2000,6 +2016,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
         {
             switch (event_type)
             {
+                case CUI_EVENT_TYPE_QUIT:
+                {
+                } break;
+
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 {
                     widget->state |= CUI_WIDGET_STATE_HOVERED;
@@ -2128,6 +2148,10 @@ cui_widget_handle_event(CuiWidget *widget, CuiEventType event_type)
         {
             switch (event_type)
             {
+                case CUI_EVENT_TYPE_QUIT:
+                {
+                } break;
+
                 case CUI_EVENT_TYPE_MOUSE_ENTER:
                 {
                     // TODO: generalize this

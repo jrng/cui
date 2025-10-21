@@ -216,9 +216,12 @@ _cui_window_frame_routine(CuiWindow *window, CuiEvent *events, CuiWindowFrameRes
     return framebuffer;
 }
 
-void
-cui_window_close(CuiWindow *window)
+static void
+_cui_window_on_close_button(CuiWidget *widget)
 {
+    CuiWindow *window = widget->window;
+    CuiAssert(window);
+
     window->base.window_frame_result.window_frame_actions |= CUI_WINDOW_FRAME_ACTION_CLOSE;
 }
 
@@ -417,6 +420,11 @@ cui_window_handle_event(CuiWindow *window, CuiEventType event_type)
 
     switch (event_type)
     {
+        case CUI_EVENT_TYPE_QUIT:
+        {
+            window_base->window_frame_result.window_frame_actions |= CUI_WINDOW_FRAME_ACTION_CLOSE;
+        } break;
+
         case CUI_EVENT_TYPE_MOUSE_LEAVE:
         {
             cui_window_set_hovered(window, 0);

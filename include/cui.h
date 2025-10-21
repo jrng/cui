@@ -927,23 +927,24 @@ typedef struct CuiBackgroundTask { uint32_t state; } CuiBackgroundTask;
 
 typedef enum CuiEventType
 {
-    CUI_EVENT_TYPE_MOUSE_ENTER  = 0,
-    CUI_EVENT_TYPE_MOUSE_LEAVE  = 1,
-    CUI_EVENT_TYPE_MOUSE_MOVE   = 2,
-    CUI_EVENT_TYPE_MOUSE_DRAG   = 3,
-    CUI_EVENT_TYPE_MOUSE_WHEEL  = 4,
-    CUI_EVENT_TYPE_LEFT_DOWN    = 5,
-    CUI_EVENT_TYPE_LEFT_UP      = 6,
-    CUI_EVENT_TYPE_DOUBLE_CLICK = 7,
-    CUI_EVENT_TYPE_RIGHT_DOWN   = 8,
-    CUI_EVENT_TYPE_RIGHT_UP     = 9,
-    CUI_EVENT_TYPE_KEY_DOWN     = 10,
-    CUI_EVENT_TYPE_KEY_UP       = 11,
-    CUI_EVENT_TYPE_FOCUS        = 12,
-    CUI_EVENT_TYPE_UNFOCUS      = 13,
-    CUI_EVENT_TYPE_POINTER_DOWN = 14,
-    CUI_EVENT_TYPE_POINTER_UP   = 15,
-    CUI_EVENT_TYPE_POINTER_MOVE = 16,
+    CUI_EVENT_TYPE_QUIT         = 0,
+    CUI_EVENT_TYPE_MOUSE_ENTER  = 1,
+    CUI_EVENT_TYPE_MOUSE_LEAVE  = 2,
+    CUI_EVENT_TYPE_MOUSE_MOVE   = 3,
+    CUI_EVENT_TYPE_MOUSE_DRAG   = 4,
+    CUI_EVENT_TYPE_MOUSE_WHEEL  = 5,
+    CUI_EVENT_TYPE_LEFT_DOWN    = 6,
+    CUI_EVENT_TYPE_LEFT_UP      = 7,
+    CUI_EVENT_TYPE_DOUBLE_CLICK = 8,
+    CUI_EVENT_TYPE_RIGHT_DOWN   = 9,
+    CUI_EVENT_TYPE_RIGHT_UP     = 10,
+    CUI_EVENT_TYPE_KEY_DOWN     = 11,
+    CUI_EVENT_TYPE_KEY_UP       = 12,
+    CUI_EVENT_TYPE_FOCUS        = 13,
+    CUI_EVENT_TYPE_UNFOCUS      = 14,
+    CUI_EVENT_TYPE_POINTER_DOWN = 15,
+    CUI_EVENT_TYPE_POINTER_UP   = 16,
+    CUI_EVENT_TYPE_POINTER_MOVE = 17,
 } CuiEventType;
 
 typedef enum CuiKeyId
@@ -1382,7 +1383,6 @@ bool cui_window_is_fullscreen(CuiWindow *window);
 bool cui_window_is_tiled(CuiWindow *window);
 float cui_window_get_ui_scale(CuiWindow *window);
 float cui_window_get_titlebar_height(CuiWindow *window);
-void cui_window_close(CuiWindow *window); // TODO: remove
 void cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget);
 bool cui_window_handle_event(CuiWindow *window, CuiEventType event_type);
 void cui_window_set_hovered(CuiWindow *window, CuiWidget *widget);
