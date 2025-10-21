@@ -104,8 +104,7 @@ ANDROID_PLATFORM_JAR="${ANDROID_ROOT}/platforms/android-24/android.jar"
 
 COMPILER="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
 
-COMMON_COMPILER_FLAGS="-std=c99 --gcc-toolchain=${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64"
-COMMON_COMPILER_FLAGS="${COMMON_COMPILER_FLAGS} --sysroot=${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+COMMON_COMPILER_FLAGS="-std=c99"
 
 ARM64_COMPILER_FLAGS="-target aarch64-linux-android24"
 
