@@ -541,7 +541,6 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
 
         c_make_process_wait_for_all();
 
-        const char *library_filename = c_make_c_string_concat("lib", executable_name, ".so");
         const char *manifest_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "AndroidManifest.xml");
         const char *key_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "debug.keystore");
         const char *apk_name = c_make_string_to_c_string(c_make_string_replace_all(CMakeCString(example_name), CMakeStringLiteral(" "), CMakeStringLiteral("")));
