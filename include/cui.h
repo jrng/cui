@@ -1505,6 +1505,7 @@ CuiString cui_get_executable_directory(void);
 CuiString cui_get_bundle_directory(void);
 
 bool cui_init(int argument_count, char **arguments);
+uint64_t cui_get_current_ms(void);
 int cui_main_loop(void);
 void cui_step(void);
 void cui_signal_main_thread(void);

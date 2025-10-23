@@ -461,6 +461,8 @@ typedef struct CuiContextCommon
 
     int32_t scale_factor;
 
+    uint64_t perf_frequency;
+
     void (*signal_callback)(void);
 
     CuiArena arena;

@@ -831,6 +831,8 @@ _cui_common_init(int argument_count, char **arguments)
     (void) argument_count;
     (void) arguments;
 
+    _cui_context.common.perf_frequency = cui_platform_get_performance_frequency();
+
     _cui_context.common.window_count = 0;
     _cui_context.common.main_loop_is_running = false;
 
@@ -971,6 +973,12 @@ void
 cui_set_signal_callback(void (*signal_callback)(void))
 {
     _cui_context.common.signal_callback = signal_callback;
+}
+
+uint64_t
+cui_get_current_ms(void)
+{
+    return (1000 * cui_platform_get_performance_counter()) / _cui_context.common.perf_frequency;
 }
 
 int
