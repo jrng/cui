@@ -1383,6 +1383,7 @@ bool cui_window_is_fullscreen(CuiWindow *window);
 bool cui_window_is_tiled(CuiWindow *window);
 float cui_window_get_ui_scale(CuiWindow *window);
 float cui_window_get_titlebar_height(CuiWindow *window);
+void cui_window_close(CuiWindow *window); // TODO: remove
 void cui_window_set_root_widget(CuiWindow *window, CuiWidget *widget);
 bool cui_window_handle_event(CuiWindow *window, CuiEventType event_type);
 void cui_window_set_hovered(CuiWindow *window, CuiWidget *widget);

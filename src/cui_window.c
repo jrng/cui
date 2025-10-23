@@ -226,6 +226,12 @@ _cui_window_on_close_button(CuiWidget *widget)
 }
 
 void
+cui_window_close(CuiWindow *window)
+{
+    window->base.window_frame_result.window_frame_actions |= CUI_WINDOW_FRAME_ACTION_CLOSE;
+}
+
+void
 cui_window_set_fullscreen(CuiWindow *window, bool fullscreen)
 {
     window->base.window_frame_result.window_frame_actions |= CUI_WINDOW_FRAME_ACTION_SET_FULLSCREEN;
