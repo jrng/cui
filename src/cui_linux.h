@@ -268,6 +268,10 @@ struct CuiWindow
     bool do_client_side_decoration;
     bool pending_do_client_side_decoration;
 
+    uint32_t held_key;
+    int64_t hold_start_time;
+    int64_t last_repeat_time;
+
     uint32_t pointer_button_mask;
 
     CuiRect wayland_backbuffer_rect;
@@ -399,8 +403,8 @@ typedef struct CuiContext
 
     CuiWaylandPointerEvent wayland_pointer_event;
 
-    int32_t wayland_keyboard_repeat_period;
-    int32_t wayland_keyboard_repeat_delay;
+    int32_t wayland_keyboard_repeat_period_ms;
+    int32_t wayland_keyboard_repeat_delay_ms;
 
     uint32_t wayland_pointer_serial;
     CuiCursorType wayland_platform_cursor;

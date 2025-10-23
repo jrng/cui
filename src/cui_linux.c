@@ -8,6 +8,8 @@
 #ifndef CUI_NO_BACKEND
 
 static const int32_t _CUI_DEFAULT_DOUBLE_CLICK_TIME  = 400; // ms
+static const int32_t _CUI_DEFAULT_KEY_REPEAT_PERIOD  = 25;  // ms
+static const int32_t _CUI_DEFAULT_KEY_REPEAT_DELAY   = 400; // ms
 static const int32_t _CUI_DROP_SHADOW_PADDING_TOP    = 12;
 static const int32_t _CUI_DROP_SHADOW_PADDING_RIGHT  = 16;
 static const int32_t _CUI_DROP_SHADOW_PADDING_BOTTOM = 20;
@@ -3053,7 +3055,6 @@ _cui_wayland_handle_key_down(CuiWindow *window, uint32_t keycode)
     if ((xkb_compose_state_feed(_cui_context.xkb_compose_state, sym) == XKB_COMPOSE_FEED_IGNORED) ||
         (xkb_compose_state_get_status(_cui_context.xkb_compose_state) == XKB_COMPOSE_NOTHING))
     {
-
         switch (sym)
         {
             case XKB_KEY_BackSpace: { _CUI_KEY_DOWN_EVENT(CUI_KEY_BACKSPACE); } break;
@@ -3219,12 +3220,21 @@ _cui_wayland_handle_keyboard_key(void *data, struct wl_keyboard *keyboard, uint3
 
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED)
     {
+        window->held_key = key_code;
         _cui_wayland_handle_key_down(window, key_code);
     }
     else
     {
         CuiAssert(state == WL_KEYBOARD_KEY_STATE_RELEASED);
+
+        if (window->held_key == key_code)
+        {
+            window->held_key = 0;
+        }
     }
+
+    window->hold_start_time = cui_get_current_ms();
+    window->last_repeat_time = window->hold_start_time;
 }
 
 static void
@@ -3244,8 +3254,8 @@ _cui_wayland_handle_keyboard_repeat_info(void *data, struct wl_keyboard *keyboar
     (void) data;
     (void) keyboard;
 
-    _cui_context.wayland_keyboard_repeat_period = 1000 / rate;
-    _cui_context.wayland_keyboard_repeat_delay = delay;
+    _cui_context.wayland_keyboard_repeat_period_ms = 1000 / rate;
+    _cui_context.wayland_keyboard_repeat_delay_ms = delay;
 }
 
 static const struct wl_keyboard_listener _cui_wayland_keyboard_listener = {
@@ -3633,8 +3643,8 @@ _cui_initialize_wayland(void)
 
     _cui_context.double_click_time = _CUI_DEFAULT_DOUBLE_CLICK_TIME;
 
-    _cui_context.wayland_keyboard_repeat_period = 25;
-    _cui_context.wayland_keyboard_repeat_delay = 400;
+    _cui_context.wayland_keyboard_repeat_period_ms = _CUI_DEFAULT_KEY_REPEAT_PERIOD;
+    _cui_context.wayland_keyboard_repeat_delay_ms = _CUI_DEFAULT_KEY_REPEAT_DELAY;
 
     cui_array_init(_cui_context.wayland_monitors, 4, &_cui_context.common.arena);
     cui_array_init(_cui_context.wayland_touch_points, 8, &_cui_context.common.arena);
@@ -5081,6 +5091,41 @@ cui_step(void)
 
             bool has_wayland_events = false;
 
+            int timeout = -1;
+
+            int64_t current_ms = cui_get_current_ms();
+
+            for (uint32_t window_index = 0;
+                 window_index < _cui_context.common.window_count; window_index += 1)
+            {
+                CuiWindow *window = _cui_context.common.windows[window_index];
+
+                if (window->is_mapped && window->held_key)
+                {
+                    int64_t time = current_ms;
+                    int window_timeout;
+
+                    if ((time - window->hold_start_time) > _cui_context.wayland_keyboard_repeat_delay_ms)
+                    {
+                        time -= _cui_context.wayland_keyboard_repeat_delay_ms;
+                        window_timeout = cui_max_int32(_cui_context.wayland_keyboard_repeat_period_ms - (int32_t) (time - window->last_repeat_time), 0);
+                    }
+                    else
+                    {
+                        window_timeout = cui_max_int32(_cui_context.wayland_keyboard_repeat_delay_ms - (int32_t) (time - window->hold_start_time), 0);
+                    }
+
+                    if (timeout < 0)
+                    {
+                        timeout = window_timeout;
+                    }
+                    else
+                    {
+                        timeout = cui_min_int32(timeout, window_timeout);
+                    }
+                }
+            }
+
             for (;;)
             {
                 struct pollfd polling[2];
@@ -5093,9 +5138,9 @@ cui_step(void)
                 polling[1].events  = POLLIN;
                 polling[1].revents = 0;
 
-                int ret = poll(polling, CuiArrayCount(polling), -1);
+                int ret = poll(polling, CuiArrayCount(polling), timeout);
 
-                if (ret > 0)
+                if (ret >= 0)
                 {
                     if (polling[0].revents & POLLIN)
                     {
@@ -5135,6 +5180,25 @@ cui_step(void)
 
                 if (window->is_mapped)
                 {
+                    if (window->held_key)
+                    {
+                        int64_t time = cui_get_current_ms();
+
+                        if ((time - window->hold_start_time) > _cui_context.wayland_keyboard_repeat_delay_ms)
+                        {
+                            time -= _cui_context.wayland_keyboard_repeat_delay_ms;
+
+                            int32_t repeat_count = (int32_t) (time - window->last_repeat_time) / _cui_context.wayland_keyboard_repeat_period_ms;
+
+                            for (int32_t i = 0; i < repeat_count; i += 1)
+                            {
+                                _cui_wayland_handle_key_down(window, window->held_key);
+                            }
+
+                            window->last_repeat_time += repeat_count * _cui_context.wayland_keyboard_repeat_period_ms;
+                        }
+                    }
+
                     window->base.width = cui_rect_get_width(window->backbuffer_rect);
                     window->base.height = cui_rect_get_height(window->backbuffer_rect);
 
