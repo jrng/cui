@@ -561,7 +561,7 @@ c_make_is_msvc_library_manager(const char *cmd)
     if (cmd)
     {
         CMakeString cmd_path = CMakeCString(cmd);
-        CMakeString cmd_name = c_make_string_split_right(&cmd_path, '\\');
+        CMakeString cmd_name = c_make_string_split_right_path_separator(&cmd_path);
 
         return c_make_strings_are_equal(cmd_name, CMakeStringLiteral("lib.exe"));
     }
@@ -575,7 +575,7 @@ c_make_compiler_is_msvc(const char *compiler)
     if (compiler)
     {
         CMakeString compiler_path = CMakeCString(compiler);
-        CMakeString compiler_name = c_make_string_split_right(&compiler_path, '\\');
+        CMakeString compiler_name = c_make_string_split_right_path_separator(&compiler_path);
 
         return c_make_strings_are_equal(compiler_name, CMakeStringLiteral("cl.exe"));
     }
@@ -769,6 +769,68 @@ c_make_string_utf16_to_utf8(CMakeMemory *memory, const wchar_t *utf16_string_dat
 }
 
 #endif
+
+static inline CMakeString
+c_make_path_concat(CMakeMemory *memory, size_t count, CMakeString *items)
+{
+    CMakeString result = { 0, 0 };
+
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(1, &memory);
+
+    CMakeString *strings = (CMakeString *) c_make_memory_allocate(temp_memory.memory, count * sizeof(*strings));
+
+    for (size_t i = 0; i < count; i += 1)
+    {
+        CMakeString str = items[i];
+
+        if ((str.count > 0) && ((str.data[str.count - 1] == '\\') || (str.data[str.count - 1] == '/')))
+        {
+            str.count -= 1;
+        }
+
+        if (i > 0)
+        {
+            if ((str.count > 0) && ((str.data[0] == '\\') || (str.data[0] == '/')))
+            {
+                str.data += 1;
+                str.count -= 1;
+            }
+
+            result.count += str.count + 1;
+        }
+        else
+        {
+            result.count += str.count;
+        }
+
+        strings[i] = str;
+    }
+
+    result.data = (char *) c_make_memory_allocate(memory, result.count + 1);
+    char *dst = result.data;
+
+    for (size_t i = 0; i < count; i += 1)
+    {
+        CMakeString str = strings[i];
+
+        for (size_t j = 0; j < str.count; j += 1)
+        {
+            *dst++ = str.data[j];
+        }
+
+#if C_MAKE_PLATFORM_WINDOWS
+        *dst++ = '\\';
+#else
+        *dst++ = '/';
+#endif
+    }
+
+    result.data[result.count] = 0;
+
+    c_make_end_temporary_memory(temp_memory);
+
+    return result;
+}
 
 C_MAKE_DEF void
 c_make_set_failed(bool failed)
@@ -2837,6 +2899,10 @@ c_make_config_set(const char *_key, const char *value)
         {
             _c_make_context.target_platform = CMakePlatformWeb;
         }
+        else
+        {
+            c_make_log(CMakeLogLevelWarning, "unknown target_platform '%" CMakeStringFmt "'\n", CMakeStringArg(entry->value));
+        }
     }
     else if (c_make_strings_are_equal(entry->key, CMakeStringLiteral("target_architecture")))
     {
@@ -2862,6 +2928,7 @@ c_make_config_set(const char *_key, const char *value)
         }
         else
         {
+            c_make_log(CMakeLogLevelWarning, "unknown target_architecture '%" CMakeStringFmt "'\n", CMakeStringArg(entry->value));
             _c_make_context.target_architecture = CMakeArchitectureUnknown;
         }
     }
@@ -2878,6 +2945,10 @@ c_make_config_set(const char *_key, const char *value)
         else if (c_make_strings_are_equal(entry->value, CMakeStringLiteral("release")))
         {
             _c_make_context.build_type = CMakeBuildTypeRelease;
+        }
+        else
+        {
+            c_make_log(CMakeLogLevelWarning, "unknown build_type '%" CMakeStringFmt "'; valid values are 'debug', 'reldebug' or 'release'\n", CMakeStringArg(entry->value));
         }
     }
 }
@@ -3827,7 +3898,9 @@ c_make_c_string_concat_va(CMakeMemory *memory, size_t count, ...)
 C_MAKE_DEF char *
 c_make_c_string_path_concat_va(CMakeMemory *memory, size_t count, ...)
 {
-    size_t length = 0;
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(1, &memory);
+
+    CMakeString *strings = (CMakeString *) c_make_memory_allocate(temp_memory.memory, count * sizeof(*strings));
 
     va_list args;
     va_start(args, count);
@@ -3835,33 +3908,16 @@ c_make_c_string_path_concat_va(CMakeMemory *memory, size_t count, ...)
     for (size_t i = 0; i < count; i += 1)
     {
         const char *str = va_arg(args, const char *);
-        length += c_make_get_c_string_length(str) + 1;
+        strings[i] = CMakeCString(str);
     }
 
     va_end(args);
 
-    char *result = (char *) c_make_memory_allocate(memory, length);
-    char *dst = result;
+    CMakeString result = c_make_path_concat(memory, count, strings);
 
-    va_start(args, count);
+    c_make_end_temporary_memory(temp_memory);
 
-    for (size_t i = 0; i < count; i += 1)
-    {
-        const char *str = va_arg(args, const char *);
-        while (*str) *dst++ = *str++;
-
-#if C_MAKE_PLATFORM_WINDOWS
-        *dst++ = '\\';
-#else
-        *dst++ = '/';
-#endif
-    }
-
-    va_end(args);
-
-    *--dst = 0;
-
-    return result;
+    return result.data;
 }
 
 static size_t
@@ -4766,6 +4822,177 @@ int main(int argument_count, char **arguments)
 #endif // !defined(C_MAKE_NO_ENTRY_POINT)
 
 #endif // defined(C_MAKE_IMPLEMENTATION)
+
+#ifndef __C_MAKE_STRIP_PREFIX__
+#define __C_MAKE_STRIP_PREFIX__
+
+#  if !defined(C_MAKE_NO_STRIP_PREFIX)
+
+#    define PLATFORM_ANDROID C_MAKE_PLATFORM_ANDROID
+#    define PLATFORM_FREEBSD C_MAKE_PLATFORM_FREEBSD
+#    define PLATFORM_WINDOWS C_MAKE_PLATFORM_WINDOWS
+#    define PLATFORM_LINUX C_MAKE_PLATFORM_LINUX
+#    define PLATFORM_MACOS C_MAKE_PLATFORM_MACOS
+#    define PLATFORM_WEB C_MAKE_PLATFORM_WEB
+#    define ARCHITECTURE_AMD64 C_MAKE_ARCHITECTURE_AMD64
+#    define ARCHITECTURE_AARCH64 C_MAKE_ARCHITECTURE_AARCH64
+#    define ARCHITECTURE_RISCV64 C_MAKE_ARCHITECTURE_RISCV64
+#    define ARCHITECTURE_WASM32 C_MAKE_ARCHITECTURE_WASM32
+#    define ARCHITECTURE_WASM64 C_MAKE_ARCHITECTURE_WASM64
+#    define Str CMakeStr
+#    define ArrayCount CMakeArrayCount
+#    define String CMakeString
+#    define StringFmt CMakeStringFmt
+#    define StringArg CMakeStringArg
+#    define Command CMakeCommand
+#    define ConfigValue CMakeConfigValue
+#    define SoftwarePackage CMakeSoftwarePackage
+#    define AndroidSdk CMakeAndroidSdk
+#    define StringLiteral CMakeStringLiteral
+#    define CString CMakeCString
+#    define string_replace_all c_make_string_replace_all
+#    define string_to_c_string c_make_string_to_c_string
+#    define string_concat c_make_string_concat
+#    define c_string_concat c_make_c_string_concat
+#    define c_string_path_concat c_make_c_string_path_concat
+#    define c_string_concat_with_memory c_make_c_string_concat_with_memory
+#    define c_string_path_concat_with_memory c_make_c_string_path_concat_with_memory
+#    define command_append c_make_command_append
+#    define ProcessId CMakeProcessId
+#    define InvalidProcessId CMakeInvalidProcessId
+#    define Target CMakeTarget
+#    define TargetSetup CMakeTargetSetup
+#    define TargetBuild CMakeTargetBuild
+#    define TargetInstall CMakeTargetInstall
+#    define LogLevel CMakeLogLevel
+#    define LogLevelRaw CMakeLogLevelRaw
+#    define LogLevelInfo CMakeLogLevelInfo
+#    define LogLevelWarning CMakeLogLevelWarning
+#    define LogLevelError CMakeLogLevelError
+#    define Platform CMakePlatform
+#    define PlatformAndroid CMakePlatformAndroid
+#    define PlatformFreeBsd CMakePlatformFreeBsd
+#    define PlatformWindows CMakePlatformWindows
+#    define PlatformLinux CMakePlatformLinux
+#    define PlatformMacOs CMakePlatformMacOs
+#    define PlatformWeb CMakePlatformWeb
+#    define Architecture CMakeArchitecture
+#    define ArchitectureUnknown CMakeArchitectureUnknown
+#    define ArchitectureAmd64 CMakeArchitectureAmd64
+#    define ArchitectureAarch64 CMakeArchitectureAarch64
+#    define ArchitectureRiscv64 CMakeArchitectureRiscv64
+#    define ArchitectureWasm32 CMakeArchitectureWasm32
+#    define ArchitectureWasm64 CMakeArchitectureWasm64
+#    define BuildType CMakeBuildType
+#    define BuildTypeDebug CMakeBuildTypeDebug
+#    define BuildTypeRelDebug CMakeBuildTypeRelDebug
+#    define BuildTypeRelease CMakeBuildTypeRelease
+#    define set_failed c_make_set_failed
+#    define get_failed c_make_get_failed
+#    define memory_allocate c_make_memory_allocate
+#    define memory_reallocate c_make_memory_reallocate
+#    define memory_get_used c_make_memory_get_used
+#    define memory_set_used c_make_memory_set_used
+#    define allocate c_make_allocate
+#    define memory_save c_make_memory_save
+#    define memory_restore c_make_memory_restore
+#    define begin_temporary_memory c_make_begin_temporary_memory
+#    define end_temporary_memory c_make_end_temporary_memory
+#    define command_append_va c_make_command_append_va
+#    define command_append_slice c_make_command_append_slice
+#    define command_append_command_line c_make_command_append_command_line
+#    define command_append_output_object c_make_command_append_output_object
+#    define command_append_output_executable c_make_command_append_output_executable
+#    define command_append_input_static_library c_make_command_append_input_static_library
+#    define command_append_default_compiler_flags c_make_command_append_default_compiler_flags
+#    define command_append_default_linker_flags c_make_command_append_default_linker_flags
+#    define command_to_string c_make_command_to_string
+#    define strings_are_equal c_make_strings_are_equal
+#    define string_starts_with c_make_string_starts_with
+#    define copy_string c_make_copy_string
+#    define string_split_left c_make_string_split_left
+#    define string_split_right c_make_string_split_right
+#    define string_split_right_path_separator c_make_string_split_right_path_separator
+#    define string_trim c_make_string_trim
+#    define string_find c_make_string_find
+#    define string_replace_all_with_memory c_make_string_replace_all_with_memory
+#    define string_to_c_string_with_memory c_make_string_to_c_string_with_memory
+#    define parse_integer c_make_parse_integer
+#    define get_c_string_length c_make_get_c_string_length
+#    define get_host_platform c_make_get_host_platform
+#    define get_host_architecture c_make_get_host_architecture
+#    define get_platform_name c_make_get_platform_name
+#    define get_architecture_name c_make_get_architecture_name
+#    define get_target_platform c_make_get_target_platform
+#    define get_target_architecture c_make_get_target_architecture
+#    define get_build_type c_make_get_build_type
+#    define get_build_path c_make_get_build_path
+#    define get_source_path c_make_get_source_path
+#    define get_install_prefix c_make_get_install_prefix
+#    define get_host_ar c_make_get_host_ar
+#    define get_target_ar c_make_get_target_ar
+#    define get_host_c_compiler c_make_get_host_c_compiler
+#    define get_target_c_compiler c_make_get_target_c_compiler
+#    define get_target_c_flags c_make_get_target_c_flags
+#    define get_host_cpp_compiler c_make_get_host_cpp_compiler
+#    define get_target_cpp_compiler c_make_get_target_cpp_compiler
+#    define get_target_cpp_flags c_make_get_target_cpp_flags
+#    define find_best_software_package c_make_find_best_software_package
+#    define find_visual_studio c_make_find_visual_studio
+#    define find_windows_sdk c_make_find_windows_sdk
+#    define get_visual_studio c_make_get_visual_studio
+#    define get_windows_sdk c_make_get_windows_sdk
+#    define get_msvc_library_manager c_make_get_msvc_library_manager
+#    define get_msvc_compiler c_make_get_msvc_compiler
+#    define command_append_msvc_compiler_flags c_make_command_append_msvc_compiler_flags
+#    define command_append_msvc_linker_flags c_make_command_append_msvc_linker_flags
+#    define find_android_ndk c_make_find_android_ndk
+#    define find_android_sdk c_make_find_android_sdk
+#    define get_android_aapt c_make_get_android_aapt
+#    define get_android_platform_jar c_make_get_android_platform_jar
+#    define get_android_zipalign c_make_get_android_zipalign
+#    define setup_android c_make_setup_android
+#    define get_java_jar c_make_get_java_jar
+#    define get_java_jarsigner c_make_get_java_jarsigner
+#    define get_java_javac c_make_get_java_javac
+#    define get_java_keytool c_make_get_java_keytool
+#    define setup_java c_make_setup_java
+#    define config_set c_make_config_set
+#    define config_get c_make_config_get
+#    define store_config c_make_store_config
+#    define load_config c_make_load_config
+#    define needs_rebuild c_make_needs_rebuild
+#    define needs_rebuild_single_source c_make_needs_rebuild_single_source
+#    define directory_open c_make_directory_open
+#    define directory_get_next_entry c_make_directory_get_next_entry
+#    define directory_close c_make_directory_close
+#    define file_exists c_make_file_exists
+#    define directory_exists c_make_directory_exists
+#    define create_directory c_make_create_directory
+#    define create_directory_recursively c_make_create_directory_recursively
+#    define read_entire_file c_make_read_entire_file
+#    define write_entire_file c_make_write_entire_file
+#    define copy_file c_make_copy_file
+#    define rename_file c_make_rename_file
+#    define delete_file c_make_delete_file
+#    define has_slash_or_backslash c_make_has_slash_or_backslash
+#    define get_environment_variable c_make_get_environment_variable
+#    define find_program c_make_find_program
+#    define get_executable c_make_get_executable
+#    define command_run c_make_command_run
+#    define command_run_and_reset c_make_command_run_and_reset
+#    define process_wait c_make_process_wait
+#    define command_run_and_reset_and_wait c_make_command_run_and_reset_and_wait
+#    define command_run_and_wait c_make_command_run_and_wait
+#    define process_wait_for_all c_make_process_wait_for_all
+#    define is_msvc_library_manager c_make_is_msvc_library_manager
+#    define compiler_is_msvc c_make_compiler_is_msvc
+#    define config_set_if_not_exists c_make_config_set_if_not_exists
+#    define config_is_enabled c_make_config_is_enabled
+
+#  endif
+
+#endif // __C_MAKE_STRIP_PREFIX__
 
 /*
 MIT License
