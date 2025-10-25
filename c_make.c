@@ -501,129 +501,174 @@ cui_c_make_build(const char *output_folder, const char *output_name, const char 
 static void
 cui_c_make_build_example(const char *example_name, const char *executable_name)
 {
-    if ((c_make_get_target_platform() == CMakePlatformMacOs) && (c_make_get_target_architecture() == CMakeArchitectureAarch64))
+    switch (c_make_get_target_platform())
     {
-        cui_c_make_build(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-arm64") , c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAarch64);
-        cui_c_make_build(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-x86_64"), c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAmd64);
-
-        c_make_process_wait_for_all();
-
-        CMakeCommand command = { 0 };
-
-        c_make_command_append(&command, "lipo", "-create", "-output", 
-                              c_make_c_string_path_concat(c_make_get_build_path(), executable_name),
-                              c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-arm64")),
-                              c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-x86_64")));
-
-        c_make_log(CMakeLogLevelInfo, "generate '%s'\n", executable_name);
-        c_make_command_run(command);
-    }
-    else if (c_make_get_target_platform() == CMakePlatformAndroid)
-    {
-        const char *arch_folder = "";
-
-        switch (c_make_get_target_architecture())
+        case CMakePlatformAndroid:
         {
-            case CMakeArchitectureUnknown: break;
-            case CMakeArchitectureAmd64:   arch_folder = "x86_64";    break;
-            case CMakeArchitectureAarch64: arch_folder = "arm64-v8a"; break;
-            case CMakeArchitectureRiscv64: break;
-            case CMakeArchitectureWasm32:  break;
-            case CMakeArchitectureWasm64:  break;
-        }
+            const char *arch_folder = "";
 
-        const char *library_path = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "apk_build", "lib", arch_folder);
+            switch (c_make_get_target_architecture())
+            {
+                case CMakeArchitectureUnknown: break;
+                case CMakeArchitectureAmd64:   arch_folder = "x86_64";    break;
+                case CMakeArchitectureAarch64: arch_folder = "arm64-v8a"; break;
+                case CMakeArchitectureRiscv64: break;
+                case CMakeArchitectureWasm32:  break;
+                case CMakeArchitectureWasm64:  break;
+            }
 
-        c_make_create_directory_recursively(library_path);
-        c_make_create_directory_recursively(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values"));
+            const char *library_path = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "apk_build", "lib", arch_folder);
 
-        cui_c_make_build(library_path, executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+            c_make_create_directory_recursively(library_path);
+            c_make_create_directory_recursively(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values"));
 
-        c_make_process_wait_for_all();
+            cui_c_make_build(library_path, executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
 
-        const char *manifest_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "AndroidManifest.xml");
-        const char *key_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "debug.keystore");
-        const char *apk_name = c_make_string_to_c_string(c_make_string_replace_all(CMakeCString(example_name), CMakeStringLiteral(" "), CMakeStringLiteral("")));
-        const char *apk_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".apk"));
-        const char *apk_signed_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".signed.apk"));
-        const char *apk_unaligned_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".unaligned.apk"));
+            c_make_process_wait_for_all();
 
-        c_make_log(CMakeLogLevelInfo, "package '%s.apk'\n", apk_name);
+            const char *manifest_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "AndroidManifest.xml");
+            const char *key_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "debug.keystore");
+            const char *apk_name = c_make_string_to_c_string(c_make_string_replace_all(CMakeCString(example_name), CMakeStringLiteral(" "), CMakeStringLiteral("")));
+            const char *apk_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".apk"));
+            const char *apk_signed_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".signed.apk"));
+            const char *apk_unaligned_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".unaligned.apk"));
 
-        c_make_write_entire_file(manifest_filename,
-                                 c_make_string_replace_all(CMakeStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-                                                                              "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n"
-                                                                              "          package=\"com.{{executable_name}}\"\n"
-                                                                              "          android:versionCode=\"1\"\n"
-                                                                              "          android:versionName=\"1.0\"\n"
-                                                                              "          android:debuggable=\"true\">\n"
-                                                                              "  <uses-sdk android:minSdkVersion=\"24\" />\n"
-                                                                              "  <application android:label=\"@string/app_name\"\n"
-                                                                              "               android:theme=\"@style/CustomStyle\"\n"
-                                                                              "               android:hasCode=\"false\">\n"
-                                                                              "    <activity android:name=\"android.app.NativeActivity\"\n"
-                                                                              "              android:label=\"@string/app_name\"\n"
-                                                                              "              android:configChanges=\"orientation|screenSize|screenLayout|keyboardHidden|density\">\n"
-                                                                              "      <meta-data android:name=\"android.app.lib_name\"\n"
-                                                                              "                 android:value=\"{{executable_name}}\" />\n"
-                                                                              "      <intent-filter>\n"
-                                                                              "        <action android:name=\"android.intent.action.MAIN\" />\n"
-                                                                              "        <category android:name=\"android.intent.category.LAUNCHER\" />\n"
-                                                                              "      </intent-filter>\n"
-                                                                              "    </activity>\n"
-                                                                              "  </application>\n"
-                                                                              "</manifest>\n"),
-                                                           CMakeStringLiteral("{{executable_name}}"),
-                                                           CMakeCString(executable_name)));
+            c_make_log(CMakeLogLevelInfo, "package '%s.apk'\n", apk_name);
 
-        c_make_write_entire_file(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values", "strings.xml"),
-                                 c_make_string_replace_all(CMakeStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-                                                                              "<resources>\n"
-                                                                              "  <string name=\"app_name\">{{app_name}}</string>\n"
-                                                                              "</resources>\n"),
-                                                           CMakeStringLiteral("{{app_name}}"),
-                                                           CMakeCString(example_name)));
+            c_make_write_entire_file(manifest_filename,
+                                     c_make_string_replace_all(CMakeStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                                                                                  "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n"
+                                                                                  "          package=\"com.{{executable_name}}\"\n"
+                                                                                  "          android:versionCode=\"1\"\n"
+                                                                                  "          android:versionName=\"1.0\"\n"
+                                                                                  "          android:debuggable=\"true\">\n"
+                                                                                  "  <uses-sdk android:minSdkVersion=\"24\" />\n"
+                                                                                  "  <application android:label=\"@string/app_name\"\n"
+                                                                                  "               android:theme=\"@style/CustomStyle\"\n"
+                                                                                  "               android:hasCode=\"false\">\n"
+                                                                                  "    <activity android:name=\"android.app.NativeActivity\"\n"
+                                                                                  "              android:label=\"@string/app_name\"\n"
+                                                                                  "              android:configChanges=\"orientation|screenSize|screenLayout|keyboardHidden|density\">\n"
+                                                                                  "      <meta-data android:name=\"android.app.lib_name\"\n"
+                                                                                  "                 android:value=\"{{executable_name}}\" />\n"
+                                                                                  "      <intent-filter>\n"
+                                                                                  "        <action android:name=\"android.intent.action.MAIN\" />\n"
+                                                                                  "        <category android:name=\"android.intent.category.LAUNCHER\" />\n"
+                                                                                  "      </intent-filter>\n"
+                                                                                  "    </activity>\n"
+                                                                                  "  </application>\n"
+                                                                                  "</manifest>\n"),
+                                                               CMakeStringLiteral("{{executable_name}}"),
+                                                               CMakeCString(executable_name)));
 
-        c_make_write_entire_file(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values", "styles.xml"),
-                                 CMakeStringLiteral("<resources>\n"
-                                                    "  <style name=\"CustomStyle\">\n"
-                                                    "    <item name=\"android:windowActionBar\">false</item>\n"
-                                                    "    <item name=\"android:windowNoTitle\">true</item>\n"
-                                                    "  </style>\n"
-                                                    "</resources>\n"));
+            c_make_write_entire_file(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values", "strings.xml"),
+                                     c_make_string_replace_all(CMakeStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                                                                                  "<resources>\n"
+                                                                                  "  <string name=\"app_name\">{{app_name}}</string>\n"
+                                                                                  "</resources>\n"),
+                                                               CMakeStringLiteral("{{app_name}}"),
+                                                               CMakeCString(example_name)));
 
-        CMakeCommand command = { 0 };
+            c_make_write_entire_file(c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res", "values", "styles.xml"),
+                                     CMakeStringLiteral("<resources>\n"
+                                                        "  <style name=\"CustomStyle\">\n"
+                                                        "    <item name=\"android:windowActionBar\">false</item>\n"
+                                                        "    <item name=\"android:windowNoTitle\">true</item>\n"
+                                                        "  </style>\n"
+                                                        "</resources>\n"));
 
-        if (!c_make_file_exists(key_filename))
-        {
-            c_make_command_append(&command, c_make_get_java_keytool(), "-genkey", "-keystore", key_filename);
-            c_make_command_append(&command, "-storepass", "android", "-alias", "androiddebugkey", "-dname", "CN=company name, OU=0, O=Dream, L=City, S=StateProvince, C=Country");
-            c_make_command_append(&command, "-keyalg", "RSA", "-keysize", "2048", "-validity", "20000");
+            CMakeCommand command = { 0 };
+
+            if (!c_make_file_exists(key_filename))
+            {
+                c_make_command_append(&command, c_make_get_java_keytool(), "-genkey", "-keystore", key_filename);
+                c_make_command_append(&command, "-storepass", "android", "-alias", "androiddebugkey", "-dname", "CN=company name, OU=0, O=Dream, L=City, S=StateProvince, C=Country");
+                c_make_command_append(&command, "-keyalg", "RSA", "-keysize", "2048", "-validity", "20000");
+
+                c_make_command_run_and_reset_and_wait(&command);
+            }
+
+            c_make_command_append(&command, c_make_get_android_aapt(), "package", "--debug-mode", "-f", "-M", manifest_filename);
+            c_make_command_append(&command, "-S", c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res"));
+            c_make_command_append(&command, "-I", c_make_get_android_platform_jar());
+            c_make_command_append(&command, "-F", apk_unaligned_filename);
+            c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_build_path(), example_name, "apk_build"));
 
             c_make_command_run_and_reset_and_wait(&command);
-        }
 
-        c_make_command_append(&command, c_make_get_android_aapt(), "package", "--debug-mode", "-f", "-M", manifest_filename);
-        c_make_command_append(&command, "-S", c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res"));
-        c_make_command_append(&command, "-I", c_make_get_android_platform_jar());
-        c_make_command_append(&command, "-F", apk_unaligned_filename);
-        c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_build_path(), example_name, "apk_build"));
+            c_make_command_append(&command, c_make_get_java_jarsigner(), "-sigalg", "SHA1withRSA", "-digestalg", "SHA1");
+            c_make_command_append(&command, "-storepass", "android", "-keypass", "android", "-keystore", key_filename);
+            c_make_command_append(&command, "-signedjar", apk_signed_filename, apk_unaligned_filename, "androiddebugkey");
 
-        c_make_command_run_and_reset_and_wait(&command);
+            c_make_command_run_and_reset_and_wait(&command);
 
-        c_make_command_append(&command, c_make_get_java_jarsigner(), "-sigalg", "SHA1withRSA", "-digestalg", "SHA1");
-        c_make_command_append(&command, "-storepass", "android", "-keypass", "android", "-keystore", key_filename);
-        c_make_command_append(&command, "-signedjar", apk_signed_filename, apk_unaligned_filename, "androiddebugkey");
+            c_make_command_append(&command, c_make_get_android_zipalign(), "-f", "4", apk_signed_filename, apk_filename);
 
-        c_make_command_run_and_reset_and_wait(&command);
+            c_make_command_run_and_reset_and_wait(&command);
+        } break;
 
-        c_make_command_append(&command, c_make_get_android_zipalign(), "-f", "4", apk_signed_filename, apk_filename);
+        case CMakePlatformFreeBsd:
+        {
+        } break;
 
-        c_make_command_run_and_reset_and_wait(&command);
-    }
-    else
-    {
-        cui_c_make_build(c_make_get_build_path(), executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+        case CMakePlatformWindows:
+        {
+            cui_c_make_build(c_make_get_build_path(), executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+        } break;
+
+        case CMakePlatformLinux:
+        {
+            cui_c_make_build(c_make_get_build_path(), executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+        } break;
+
+        case CMakePlatformMacOs:
+        {
+            c_make_create_directory_recursively(c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(example_name, ".app"), "Contents", "MacOS"));
+            c_make_copy_file(c_make_c_string_path_concat(c_make_get_source_path(), "examples", c_make_c_string_concat(executable_name, ".Info.plist")),
+                             c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(example_name, ".app"), "Contents", "Info.plist"));
+
+            if (c_make_get_host_architecture() == CMakeArchitectureAarch64)
+            {
+                cui_c_make_build(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-arm64") , c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAarch64);
+                cui_c_make_build(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-x86_64"), c_make_c_string_concat(executable_name, ".c"), CMakeArchitectureAmd64);
+
+                c_make_process_wait_for_all();
+
+                CMakeCommand command = { 0 };
+
+                c_make_command_append(&command, "lipo", "-create", "-output",
+                                      c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(example_name, ".app"), "Contents", "MacOS", executable_name),
+                                      c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-arm64")),
+                                      c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(executable_name, "-x86_64")));
+
+                c_make_log(CMakeLogLevelInfo, "generate '%s'\n", executable_name);
+                c_make_command_run(command);
+            }
+            else
+            {
+                cui_c_make_build(c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(example_name, ".app"), "Contents", "MacOS"),
+                                 executable_name, c_make_c_string_concat(executable_name, ".c"), c_make_get_target_architecture());
+            }
+
+            // code signing is needed for some debugging functionalities in macos
+            // so if you run into issues with debugging enable these commands:
+#if 0
+            c_make_process_wait_for_all();
+
+            CMakeCommand command = { 0 };
+
+            c_make_command_append(&command, "codesign", "-s", "-", "-v", "-f", "--entitlements",
+                                  c_make_c_string_path_concat(c_make_get_source_path(), "src", "macos_signing.plist"),
+                                  c_make_c_string_path_concat(c_make_get_build_path(), c_make_c_string_concat(example_name, ".app"), "Contents", "MacOS", executable_name));
+
+            c_make_log(CMakeLogLevelInfo, "sign '%s'\n", executable_name);
+            c_make_command_run(command);
+#endif
+        } break;
+
+        case CMakePlatformWeb:
+        {
+        } break;
     }
 }
 
@@ -756,6 +801,7 @@ C_MAKE_ENTRY()
                     }
                     else
                     {
+                        c_make_log(CMakeLogLevelWarning, "This machine can't compile for aarch64\n");
                         cui_c_make_build_shared_library("cui", c_make_get_target_architecture());
                         cui_c_make_build_static_library("cui", c_make_get_target_architecture());
                     }
