@@ -27,24 +27,12 @@ one of the generated libraries (static or dynamic) to link against.
 
 ## Compile
 
-### Linux
+### Linux and macOS
 
-```
-./build_linux.sh [debug|reldebug|release]
-```
-
-This creates a Debug (`debug`), Release Debug (`reldebug`) or Release
-(`release`) build. The result can be found under `build/`. You can use the
-dynamic (`libcui.so`) or the static (`libcui.a`) library.
-
-Per default the build will use background jobs to parallelize the compilation.
-This will lead to error messages getting printed out of order. To get them in
-order use `./build_linux.sh -no_jobs [debug|reldebug|release]`.
-
-### macOS
-
-```
-./build_macos.sh [debug|reldebug|release]
+```shell
+$ cc -o c_make c_make.c  # only needs to happen once
+$ ./c_make setup build build_type=[debug|reldebug|release]
+$ ./c_make build build
 ```
 
 This creates a Debug (`debug`), Release Debug (`reldebug`) or Release
@@ -53,50 +41,45 @@ dynamic (`libcui.so`) or the static (`libcui.a`) library.
 
 Per default the build will use background jobs to parallelize the compilation.
 This will lead to error messages getting printed out of order. To get them in
-order use `./build_macos.sh -no_jobs [debug|reldebug|release]`.
+order use `./c_make build build --sequential`.
 
 ### Windows
 
-```
-./build_windows.bat [debug|reldebug|release]
+```shell
+$ cl -Fec_make.exe c_make.c  # only needs to happen once
+$ c_make setup build build_type=[debug|reldebug|release]
+$ c_make build build
 ```
 
 This creates a Debug (`debug`), Release Debug (`reldebug`) or Release
 (`release`) build. The result can be found under `build/`. You can use the
 static library `cui.lib`.
 
+Per default the build will use background jobs to parallelize the compilation.
+This will lead to error messages getting printed out of order. To get them in
+order use `c_make build build --sequential`.
+
 ### Android
 
-```
-./build_android.sh [debug|reldebug|release]
+```shell
+$ cc -o c_make c_make.c  # only needs to happen once
+$ ./c_make setup build target_platform=android target_architecture=[amd64|aarch64] build_type=[debug|reldebug|release]
+$ ./c_make build build
 ```
 
 This creates a Debug (`debug`), Release Debug (`reldebug`) or Release
-(`release`) build. The result can be found under `build/android/`. You can use the
+(`release`) build. The result can be found under `build/`. You can use the
 dynamic (`libcui.so`) or the static (`libcui.a`) library.
 
 Per default the build will use background jobs to parallelize the compilation.
 This will lead to error messages getting printed out of order. To get them in
-order use `./build_android.sh -no_jobs [debug|reldebug|release]`.
+order use `./c_make build build --sequential`.
 
 ## Configuration
 
-If you want to configure your CUI build to your liking you can create a `build_config_<platform>.sh`
-file for Linux, macOS and Android to set the different build settings mentioned at the start of
-each `build_<platform>.sh` file. This for example is a configuration for Linux in which only
-Wayland with the OpenGL ES 2.0 renderer will be build:
-
-```
-# Filename: build_config_linux.sh
-
-CUI_BACKEND_X11="off"
-CUI_BACKEND_WAYLAND="on"
-
-CUI_RENDERER_SOFTWARE="off"
-CUI_RENDERER_OPENGLES2="on"
-```
-
-These configuration files are currently **not** supported on Windows.
+If you want to configure your CUI build to your liking you can edit the `c_make.txt` file
+in the build folder. You can enable and disable different rendering backends and for linux
+the display protocol backends that are compiled in.
 
 ## Examples
 

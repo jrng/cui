@@ -4,14 +4,5 @@
 /c_make.obj
 /c_make.dSYM
 
-# build artifacts
-/build
-
 # macos attribute files
 .DS_Store
-
-# build configs
-/build_config_linux.sh
-/build_config_macos.sh
-/build_config_android.sh
-/build_config_windows.sh
