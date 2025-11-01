@@ -231,6 +231,14 @@ _cui_get_file_attributes(struct stat stats)
 
     result.size = stats.st_size;
 
+#if CUI_PLATFORM_ANDROID || CUI_PLATFORM_LINUX
+    struct timespec mod_time = stats.st_mtim;
+#elif CUI_PLATFORM_MACOS
+    struct timespec mod_time = stats.st_mtimespec;
+#endif
+
+    result.modification_time = ((uint64_t) mod_time.tv_sec * 1000) + ((uint64_t) mod_time.tv_nsec / 1000000);
+
     return result;
 }
 

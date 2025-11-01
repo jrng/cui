@@ -461,6 +461,7 @@ typedef struct CuiFileAttributes
 {
     uint32_t flags;
     uint64_t size;
+    uint64_t modification_time;
 } CuiFileAttributes;
 
 typedef struct CuiFileInfo
