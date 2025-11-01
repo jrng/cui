@@ -310,8 +310,6 @@ cui_platform_get_canonical_filename(CuiArena *temporary_memory, CuiArena *arena,
 {
     CuiString result = { 0 };
 
-    CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
-
     if (cui_string_starts_with(filename, CuiStringLiteral("~")))
     {
         CuiString home_dir = cui_platform_get_environment_variable(temporary_memory, temporary_memory, CuiStringLiteral("HOME"));
@@ -322,16 +320,20 @@ cui_platform_get_canonical_filename(CuiArena *temporary_memory, CuiArena *arena,
             filename = cui_path_concat(temporary_memory, home_dir, filename);
         }
     }
-
-    char *canonical_filename = realpath(cui_to_c_string(temporary_memory, filename), 0);
-
-    cui_end_temporary_memory(temp_memory);
-
-    if (canonical_filename)
+    else if (!cui_string_starts_with(filename, CuiStringLiteral("/")))
     {
-        result = cui_copy_string(arena, CuiCString(canonical_filename));
-        free(canonical_filename);
+        CuiString working_directory = cui_platform_get_current_working_directory(temporary_memory, temporary_memory);
+
+        filename = cui_path_concat(temporary_memory, working_directory, filename);
     }
+
+    // TODO: normalize filename
+    // - resolve ..
+    // - remove .
+    // - remove redundant /
+    // - remove trailing /
+
+    result = cui_copy_string(arena, filename);
 
     return result;
 }
