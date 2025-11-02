@@ -76,6 +76,24 @@ cui_string_skip_whitespace(CuiString *str)
     }
 }
 
+bool
+cui_string_contains(CuiString str, CuiString sub_string)
+{
+    if (str.count < sub_string.count) return false;
+
+    int64_t end = str.count - sub_string.count;
+
+    for (int64_t i = 0; i <= end; i += 1)
+    {
+        if (cui_string_equals(cui_make_string(str.data + i, sub_string.count), sub_string))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 CuiString
 cui_string_trim(CuiString str)
 {

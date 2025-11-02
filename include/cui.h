@@ -1202,6 +1202,7 @@ int32_t cui_string_parse_int32(CuiString str);
 int32_t cui_string_parse_int32_advance(CuiString *str);
 
 void cui_string_skip_whitespace(CuiString *str);
+bool cui_string_contains(CuiString str, CuiString sub_string);
 CuiString cui_string_trim(CuiString str);
 CuiString cui_string_get_next_line(CuiString *str);
 CuiString cui_copy_string(CuiArena *arena, CuiString str);
