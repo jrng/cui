@@ -92,9 +92,9 @@ _cui_font_file_manager_scan_fonts(CuiArena *temporary_memory, CuiFontFileManager
         CuiFontRef *ref = font_file_manager->font_refs + i;
 
 #if CUI_PLATFORM_ANDROID
-        android_print("'%.*s' -> '%.*s'\n", (int32_t) ref->name.count, ref->name.data, (int32_t) ref->path.count, ref->path.data);
+        android_print("'%" CuiStringFmt "' -> '%" CuiStringFmt "'\n", CuiStringArg(ref->name), CuiStringArg(ref->path));
 #else
-        printf("'%.*s' -> '%.*s'\n", (int32_t) ref->name.count, ref->name.data, (int32_t) ref->path.count, ref->path.data);
+        printf("'%" CuiStringFmt "' -> '%" CuiStringFmt "'\n", CuiStringArg(ref->name), CuiStringArg(ref->path));
 #endif
     }
 #endif

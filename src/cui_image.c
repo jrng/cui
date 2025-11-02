@@ -1082,7 +1082,7 @@ cui_image_decode_jpeg(CuiArena *temporary_memory, CuiBitmap *bitmap, CuiString d
                                             char *software_str = (char *) tiff.data + offset;
                                             CuiString software = CuiCString(software_str);
 
-                                            printf("software = '%.*s'\n", (int) software.count, software.data);
+                                            printf("software = '%" CuiStringFmt "'\n", CuiStringArg(software));
 #endif
                                         } break;
 

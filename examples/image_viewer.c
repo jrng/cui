@@ -600,7 +600,7 @@ CUI_PLATFORM_MAIN
     {
         CuiString canonical_filename = cui_platform_get_canonical_filename(&app.temporary_memory, &app.temporary_memory, filename);
 
-        printf("canonical filename = '%.*s'\n", (int) canonical_filename.count, canonical_filename.data);
+        printf("canonical filename = '%" CuiStringFmt "'\n", CuiStringArg(canonical_filename));
 
         int64_t index = canonical_filename.count;
 
@@ -623,8 +623,8 @@ CUI_PLATFORM_MAIN
             index -= 1;
         }
 
-        printf("directory = '%.*s'\n", (int) app.directory.count, app.directory.data);
-        printf("filename  = '%.*s'\n", (int) filename.count, filename.data);
+        printf("directory = '%" CuiStringFmt "'\n", CuiStringArg(app.directory));
+        printf("filename  = '%" CuiStringFmt "'\n", CuiStringArg(filename));
 
         CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(&app.temporary_memory);
 

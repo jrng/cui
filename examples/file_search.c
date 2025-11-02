@@ -39,7 +39,7 @@ static void
 scan_directory(CuiString directory)
 {
 #if 0
-    printf("directory = '%.*s'\n", (int) directory.count, directory.data);
+    printf("directory = '%" CuiStringFmt "'\n", CuiStringArg(directory));
 #endif
 
     cui_arena_clear(&app.files_arena);
@@ -80,7 +80,7 @@ scan_directory(CuiString directory)
             path = cui_path_concat(&app.temporary_memory, directory, path);
 
 #if 0
-            printf("--- read dir '%.*s'\n", (int) path.count, path.data);
+            printf("--- read dir '%" CuiStringFmt "'\n", CuiStringArg(path));
 #endif
 
             cui_platform_get_files(&app.temporary_memory, &app.temporary_memory, path, &file_infos);
@@ -92,7 +92,7 @@ scan_directory(CuiString directory)
                 if (!cui_string_starts_with(info.name, CuiStringLiteral(".")))
                 {
 #if 0
-                    printf("%d entry '%.*s'\n", i, (int) info.name.count, info.name.data);
+                    printf("%d entry '%" CuiStringFmt "'\n", i, CuiStringArg(info.name));
 #endif
 
                     FileEntry *file_entry = cui_array_append(app.files);
@@ -554,7 +554,7 @@ CUI_PLATFORM_MAIN
     for (int32_t i = 0; i < file_count; i += 1)
     {
         FileEntry file_entry = app.files[i];
-        printf(" %04d %s '%.*s'\n", file_entry.parent_index, file_entry.is_directory ? " dir" : "file", (int) file_entry.name.count, file_entry.name.data);
+        printf(" %04d %s '%" CuiStringFmt "'\n", file_entry.parent_index, file_entry.is_directory ? " dir" : "file", CuiStringArg(file_entry.name));
     }
 #endif
 
