@@ -928,7 +928,141 @@ cui_draw_fill_shadow_corner(CuiGraphicsContext *ctx, int32_t x, int32_t y, int32
     }
 }
 
-void cui_draw_fill_codepoint(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, uint32_t codepoint, CuiColor color)
+void
+cui_draw_stroke_dashed_line(CuiGraphicsContext *ctx, int32_t x, int32_t y, int32_t max, int32_t scale, int32_t solid_count, int32_t empty_count, CuiDirection direction, CuiColor color)
+{
+    const int32_t min_count = 32;
+    const int32_t count = solid_count + empty_count;
+    const int32_t repeats = (min_count + count - 1) / count;
+    const int32_t span = repeats * scale * count;
+
+    if ((direction == CUI_DIRECTION_EAST) || (direction == CUI_DIRECTION_WEST))
+    {
+        CuiRect uv;
+
+        if (!_cui_glyph_cache_find(ctx->glyph_cache, 0, CUI_SHAPE_DASHED_LINE_HORIZONTAL, (float) scale, (float) solid_count, (float) empty_count, &uv))
+        {
+            uv = _cui_glyph_cache_allocate_texture(ctx->glyph_cache, span, scale, ctx->command_buffer);
+
+            CuiBitmap bitmap;
+            bitmap.width  = cui_rect_get_width(uv);
+            bitmap.height = cui_rect_get_height(uv);
+            bitmap.stride = ctx->glyph_cache->texture.stride;
+            bitmap.pixels = (uint8_t *) ctx->glyph_cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
+
+            uint8_t *row = (uint8_t *) bitmap.pixels;
+
+            for (int32_t y = 0; y < scale; y += 1)
+            {
+                uint32_t *pixel = (uint32_t *) row;
+
+                for (int32_t r = 0; r < repeats; r += 1)
+                {
+                    for (int32_t x = 0; x < (scale * solid_count); x += 1)
+                    {
+                        *pixel = 0xFFFFFFFF;
+                        pixel += 1;
+                    }
+
+                    for (int32_t x = 0; x < (scale * empty_count); x += 1)
+                    {
+                        *pixel = 0x00000000;
+                        pixel += 1;
+                    }
+                }
+
+                row += bitmap.stride;
+            }
+
+            _cui_glyph_cache_put(ctx->glyph_cache, 0, CUI_SHAPE_DASHED_LINE_HORIZONTAL, (float) scale, (float) solid_count, (float) empty_count, uv);
+        }
+
+        CuiRect draw_rect = cui_make_rect(x, y, x + span, y + scale);
+
+        while (draw_rect.max.x <= ctx->clip_rect.min.x)
+        {
+            draw_rect.min.x += span;
+            draw_rect.max.x += span;
+        }
+
+        while ((draw_rect.min.x < max) && (draw_rect.min.x < ctx->clip_rect.max.x))
+        {
+            _cui_push_textured_rect(ctx->command_buffer, draw_rect, uv, color, ctx->glyph_cache->texture_id, ctx->clip_rect_offset);
+
+            draw_rect.min.x += span;
+            draw_rect.max.x += span;
+        }
+    }
+    else
+    {
+        CuiAssert((direction == CUI_DIRECTION_NORTH) || (direction == CUI_DIRECTION_SOUTH));
+
+        CuiRect uv;
+
+        if (!_cui_glyph_cache_find(ctx->glyph_cache, 0, CUI_SHAPE_DASHED_LINE_VERTICAL, (float) scale, (float) solid_count, (float) empty_count, &uv))
+        {
+            uv = _cui_glyph_cache_allocate_texture(ctx->glyph_cache, scale, span, ctx->command_buffer);
+
+            CuiBitmap bitmap;
+            bitmap.width  = cui_rect_get_width(uv);
+            bitmap.height = cui_rect_get_height(uv);
+            bitmap.stride = ctx->glyph_cache->texture.stride;
+            bitmap.pixels = (uint8_t *) ctx->glyph_cache->texture.pixels + (uv.min.y * bitmap.stride) + (uv.min.x * 4);
+
+            uint8_t *row = (uint8_t *) bitmap.pixels;
+
+            for (int32_t r = 0; r < repeats; r += 1)
+            {
+                for (int32_t y = 0; y < (scale * solid_count); y += 1)
+                {
+                    uint32_t *pixel = (uint32_t *) row;
+
+                    for (int32_t x = 0; x < scale; x += 1)
+                    {
+                        *pixel = 0xFFFFFFFF;
+                        pixel += 1;
+                    }
+
+                    row += bitmap.stride;
+                }
+
+                for (int32_t y = 0; y < (scale * empty_count); y += 1)
+                {
+                    uint32_t *pixel = (uint32_t *) row;
+
+                    for (int32_t x = 0; x < scale; x += 1)
+                    {
+                        *pixel = 0x00000000;
+                        pixel += 1;
+                    }
+
+                    row += bitmap.stride;
+                }
+            }
+
+            _cui_glyph_cache_put(ctx->glyph_cache, 0, CUI_SHAPE_DASHED_LINE_VERTICAL, (float) scale, (float) solid_count, (float) empty_count, uv);
+        }
+
+        CuiRect draw_rect = cui_make_rect(x, y, x + scale, y + span);
+
+        while (draw_rect.max.y <= ctx->clip_rect.min.y)
+        {
+            draw_rect.min.y += span;
+            draw_rect.max.y += span;
+        }
+
+        while ((draw_rect.min.y < max) && (draw_rect.min.y < ctx->clip_rect.max.y))
+        {
+            _cui_push_textured_rect(ctx->command_buffer, draw_rect, uv, color, ctx->glyph_cache->texture_id, ctx->clip_rect_offset);
+
+            draw_rect.min.y += span;
+            draw_rect.max.y += span;
+        }
+    }
+}
+
+void
+cui_draw_fill_codepoint(CuiGraphicsContext *ctx, CuiFontId font_id, float x, float y, uint32_t codepoint, CuiColor color)
 {
     CuiAssert(font_id.value > 0);
 
@@ -1563,7 +1697,8 @@ cui_draw_fill_icon(CuiGraphicsContext *ctx, float x, float y, float scale, CuiIc
     }
 }
 
-void cui_bitmap_clear(CuiBitmap *bitmap, CuiColor clear_color)
+void
+cui_bitmap_clear(CuiBitmap *bitmap, CuiColor clear_color)
 {
     CuiAssert(((intptr_t) bitmap->pixels & 15) == 0);
 
