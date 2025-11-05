@@ -28,6 +28,8 @@ cui_draw_fill_shape(CuiGraphicsContext *ctx, float x, float y, CuiShapeType shap
             case CUI_SHAPE_SHADOW_CORNER:            { CuiAssert(!"unsupported"); } break;
             case CUI_SHAPE_SHADOW_HORIZONTAL:        { CuiAssert(!"unsupported"); } break;
             case CUI_SHAPE_SHADOW_VERTICAL:          { CuiAssert(!"unsupported"); } break;
+            case CUI_SHAPE_DASHED_LINE_HORIZONTAL:   { CuiAssert(!"unsupported"); } break;
+            case CUI_SHAPE_DASHED_LINE_VERTICAL:     { CuiAssert(!"unsupported"); } break;
             case CUI_SHAPE_WINDOWS_MINIMIZE:         { CuiAssert(!"unsupported"); } break;
             case CUI_SHAPE_WINDOWS_MAXIMIZE:         { CuiAssert(!"unsupported"); } break;
             case CUI_SHAPE_WINDOWS_CLOSE:            { CuiAssert(!"unsupported"); } break;

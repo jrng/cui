@@ -134,6 +134,8 @@ int main(void)
                       "            case CUI_SHAPE_SHADOW_CORNER:            { CuiAssert(!\"unsupported\"); } break;\n"
                       "            case CUI_SHAPE_SHADOW_HORIZONTAL:        { CuiAssert(!\"unsupported\"); } break;\n"
                       "            case CUI_SHAPE_SHADOW_VERTICAL:          { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_DASHED_LINE_HORIZONTAL:   { CuiAssert(!\"unsupported\"); } break;\n"
+                      "            case CUI_SHAPE_DASHED_LINE_VERTICAL:     { CuiAssert(!\"unsupported\"); } break;\n"
                       "            case CUI_SHAPE_WINDOWS_MINIMIZE:         { CuiAssert(!\"unsupported\"); } break;\n"
                       "            case CUI_SHAPE_WINDOWS_MAXIMIZE:         { CuiAssert(!\"unsupported\"); } break;\n"
                       "            case CUI_SHAPE_WINDOWS_CLOSE:            { CuiAssert(!\"unsupported\"); } break;\n");
