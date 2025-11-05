@@ -542,7 +542,7 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
                                                                                   "          android:versionCode=\"1\"\n"
                                                                                   "          android:versionName=\"1.0\"\n"
                                                                                   "          android:debuggable=\"true\">\n"
-                                                                                  "  <uses-sdk android:minSdkVersion=\"24\" />\n"
+                                                                                  "  <uses-sdk android:minSdkVersion=\"24\" android:targetSdkVersion=\"35\" />\n"
                                                                                   "  <application android:label=\"@string/app_name\"\n"
                                                                                   "               android:theme=\"@style/CustomStyle\"\n"
                                                                                   "               android:hasCode=\"false\">\n"
@@ -716,9 +716,9 @@ C_MAKE_ENTRY()
 #  endif
                     c_make_log(CMakeLogLevelRaw, "      $ mv ~/opt/android_sdk/cmdline-tools/cmdline-tools ~/opt/android_sdk/cmdline-tools/latest\n");
                     c_make_log(CMakeLogLevelRaw, "      $ export PATH=\"$HOME/opt/android_sdk/cmdline-tools/latest/bin:$PATH\"\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"build-tools;24.0.3\"\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"platforms;android-24\"\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"ndk;21.4.7075529\"\n");
+                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"build-tools;35.0.1\"\n");
+                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"platforms;android-35\"\n");
+                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"ndk;28.2.13676358\"\n");
                     c_make_log(CMakeLogLevelRaw, "\n");
 #endif
                     return;

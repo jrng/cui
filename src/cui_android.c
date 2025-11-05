@@ -12,7 +12,7 @@ _cui_send_message(uint8_t message_type)
 }
 
 static inline uint8_t
-_cui_receive_message()
+_cui_receive_message(void)
 {
     uint8_t message_type = 0;
     read(_cui_context.read_fd, &message_type, sizeof(message_type));
@@ -755,11 +755,23 @@ cui_step(void)
 
     CuiWindow *window = _cui_context.window;
 
-    int event_type, events;
     int next_timeout = -1;
 
-    while ((event_type = ALooper_pollAll(next_timeout, 0, &events, 0)) >= 0)
+    for (;;)
     {
+        int events;
+        int event_type = ALooper_pollOnce(next_timeout, 0, &events, 0);
+
+        if (event_type == ALOOPER_POLL_CALLBACK)
+        {
+            continue;
+        }
+
+        if (event_type < 0)
+        {
+            break;
+        }
+
         next_timeout = 0;
 
         switch (event_type)
