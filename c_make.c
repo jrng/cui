@@ -395,8 +395,16 @@ cui_c_make_append_linker_flags(CMakeCommand *command, CMakeArchitecture target_a
 static void
 cui_c_make_build_shared_library(const char *library_name, CMakeArchitecture target_architecture)
 {
-    // TODO: abstract from platform
-    const char *library_filename = c_make_c_string_concat("lib", library_name, ".so");
+    const char *library_filename;
+
+    if (c_make_get_target_platform() == CMakePlatformWindows)
+    {
+        library_filename = c_make_c_string_concat(library_name, ".dll");
+    }
+    else
+    {
+        library_filename = c_make_c_string_concat("lib", library_name, ".so");
+    }
 
     CMakeCommand command = { 0 };
 
@@ -408,8 +416,7 @@ cui_c_make_build_shared_library(const char *library_name, CMakeArchitecture targ
 
     c_make_command_append(&command, c_make_c_string_concat("-I", c_make_c_string_path_concat(c_make_get_source_path(), "include")));
 
-    // TODO: abstract from platform
-    c_make_command_append(&command, "-o", c_make_c_string_path_concat(c_make_get_build_path(), library_filename));
+    c_make_command_append_output_shared_library(&command, c_make_c_string_path_concat(c_make_get_build_path(), library_name), c_make_get_target_platform());
     c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_source_path(), "src", "cui.c"));
 
     cui_c_make_append_linker_flags(&command, target_architecture);
@@ -672,9 +679,9 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
     }
 }
 
-C_MAKE_ENTRY()
+C_MAKE_ENTRY(target)
 {
-    switch (c_make_target)
+    switch (target)
     {
         case CMakeTargetSetup:
         {
