@@ -537,7 +537,7 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
             const char *key_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, "debug.keystore");
             const char *apk_name = c_make_string_to_c_string(c_make_string_replace_all(CMakeCString(example_name), CMakeStringLiteral(" "), CMakeStringLiteral("")));
             const char *apk_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".apk"));
-            const char *apk_signed_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".signed.apk"));
+            const char *apk_unsigned_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".unsigned.apk"));
             const char *apk_unaligned_filename = c_make_c_string_path_concat(c_make_get_build_path(), example_name, c_make_c_string_concat(apk_name, ".unaligned.apk"));
 
             c_make_log(CMakeLogLevelInfo, "package '%s.apk'\n", apk_name);
@@ -554,6 +554,7 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
                                                                                   "               android:theme=\"@style/CustomStyle\"\n"
                                                                                   "               android:hasCode=\"false\">\n"
                                                                                   "    <activity android:name=\"android.app.NativeActivity\"\n"
+                                                                                  "              android:exported=\"true\"\n"
                                                                                   "              android:label=\"@string/app_name\"\n"
                                                                                   "              android:configChanges=\"orientation|screenSize|screenLayout|keyboardHidden|density\">\n"
                                                                                   "      <meta-data android:name=\"android.app.lib_name\"\n"
@@ -586,6 +587,18 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
 
             CMakeCommand command = { 0 };
 
+            c_make_command_append(&command, c_make_get_android_aapt(), "package", "--debug-mode", "-f", "-M", manifest_filename);
+            c_make_command_append(&command, "-S", c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res"));
+            c_make_command_append(&command, "-I", c_make_get_android_platform_jar());
+            c_make_command_append(&command, "-F", apk_unaligned_filename);
+            c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_build_path(), example_name, "apk_build"));
+
+            c_make_command_run_and_reset_and_wait(&command);
+
+            c_make_command_append(&command, c_make_get_android_zipalign(), "-f", "-p", "4", apk_unaligned_filename, apk_unsigned_filename);
+
+            c_make_command_run_and_reset_and_wait(&command);
+
             if (!c_make_file_exists(key_filename))
             {
                 c_make_command_append(&command, c_make_get_java_keytool(), "-genkey", "-keystore", key_filename);
@@ -595,21 +608,9 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
                 c_make_command_run_and_reset_and_wait(&command);
             }
 
-            c_make_command_append(&command, c_make_get_android_aapt(), "package", "--debug-mode", "-f", "-M", manifest_filename);
-            c_make_command_append(&command, "-S", c_make_c_string_path_concat(c_make_get_build_path(), example_name, "res"));
-            c_make_command_append(&command, "-I", c_make_get_android_platform_jar());
-            c_make_command_append(&command, "-F", apk_unaligned_filename);
-            c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_build_path(), example_name, "apk_build"));
-
-            c_make_command_run_and_reset_and_wait(&command);
-
-            c_make_command_append(&command, c_make_get_java_jarsigner(), "-sigalg", "SHA1withRSA", "-digestalg", "SHA1");
-            c_make_command_append(&command, "-storepass", "android", "-keypass", "android", "-keystore", key_filename);
-            c_make_command_append(&command, "-signedjar", apk_signed_filename, apk_unaligned_filename, "androiddebugkey");
-
-            c_make_command_run_and_reset_and_wait(&command);
-
-            c_make_command_append(&command, c_make_get_android_zipalign(), "-f", "4", apk_signed_filename, apk_filename);
+            c_make_command_append(&command, c_make_get_android_apksigner(), "sign", "--ks", key_filename);
+            c_make_command_append(&command, "--ks-key-alias", "androiddebugkey", "--ks-pass", "pass:android", "--key-pass", "pass:android");
+            c_make_command_append(&command, "--out", apk_filename, apk_unsigned_filename);
 
             c_make_command_run_and_reset_and_wait(&command);
         } break;

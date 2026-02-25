@@ -110,6 +110,7 @@
 #define c_make_c_string_path_concat_with_memory(memory, ...) c_make_c_string_path_concat_va(memory, CMakeNArgs(__VA_ARGS__), __VA_ARGS__)
 
 #define c_make_command_append(command, ...) c_make_command_append_va(command, CMakeNArgs(__VA_ARGS__), __VA_ARGS__ )
+#define c_make_command_run_output(command, stdout_str, stderr_str) c_make_command_run_output_with_memory(&_c_make_context.public_memory, command, stdout_str, stderr_str)
 
 #if defined(C_MAKE_STATIC)
 #  define C_MAKE_DEF static
@@ -265,14 +266,23 @@ typedef struct CMakeProcess
     bool succeeded;
 } CMakeProcess;
 
+typedef enum CMakeFileType
+{
+    CMakeFileTypeDirectory = 0,
+    CMakeFileTypeRegular   = 1,
+    CMakeFileTypeOther     = 2,
+} CMakeFileType;
+
 typedef struct CMakeDirectoryEntry
 {
+    CMakeFileType type;
     CMakeString name;
 } CMakeDirectoryEntry;
 
 typedef struct CMakeDirectory
 {
     CMakeDirectoryEntry entry;
+    const char *path;
 
 #if C_MAKE_PLATFORM_WINDOWS
     bool first_read;
@@ -464,6 +474,7 @@ C_MAKE_DEF void c_make_command_append_default_linker_flags(CMakeCommand *command
 C_MAKE_DEF CMakeString c_make_command_to_string(CMakeMemory *memory, CMakeCommand command);
 
 C_MAKE_DEF bool c_make_strings_are_equal(CMakeString a, CMakeString b);
+C_MAKE_DEF bool c_make_string_ends_with(CMakeString str, CMakeString suffix);
 C_MAKE_DEF bool c_make_string_starts_with(CMakeString str, CMakeString prefix);
 C_MAKE_DEF CMakeString c_make_copy_string(CMakeMemory *memory, CMakeString str);
 C_MAKE_DEF CMakeString c_make_string_split_left(CMakeString *str, char c);
@@ -492,6 +503,9 @@ C_MAKE_DEF const char *c_make_get_host_cpp_compiler(void);
 C_MAKE_DEF const char *c_make_get_target_cpp_compiler(void);
 C_MAKE_DEF const char *c_make_get_target_cpp_flags(void);
 
+C_MAKE_DEF const char *c_make_get_pkg_config(void);
+C_MAKE_DEF bool c_make_pkg_config_find_package(const char *name);
+
 C_MAKE_DEF bool c_make_find_best_software_package(const char *directory, CMakeString prefix, CMakeSoftwarePackage *software_package);
 
 C_MAKE_DEF bool c_make_find_visual_studio(CMakeSoftwarePackage *visual_studio_install);
@@ -507,6 +521,8 @@ C_MAKE_DEF bool c_make_find_android_ndk(CMakeSoftwarePackage *android_ndk, bool 
 C_MAKE_DEF bool c_make_find_android_sdk(CMakeAndroidSdk *android_sdk, bool logging);
 
 C_MAKE_DEF const char *c_make_get_android_aapt(void);
+C_MAKE_DEF const char *c_make_get_android_apksigner(void);
+C_MAKE_DEF const char *c_make_get_android_d8(void);
 C_MAKE_DEF const char *c_make_get_android_platform_jar(void);
 C_MAKE_DEF const char *c_make_get_android_zipalign(void);
 
@@ -532,6 +548,7 @@ C_MAKE_DEF CMakeDirectory *c_make_directory_open(CMakeMemory *memory, const char
 C_MAKE_DEF CMakeDirectoryEntry *c_make_directory_get_next_entry(CMakeMemory *memory, CMakeDirectory *directory);
 C_MAKE_DEF void c_make_directory_close(CMakeDirectory *directory);
 
+C_MAKE_DEF CMakeFileType c_make_get_file_type(const char *file_name);
 C_MAKE_DEF bool c_make_file_exists(const char *file_name);
 C_MAKE_DEF bool c_make_directory_exists(const char *directory_name);
 C_MAKE_DEF bool c_make_create_directory(const char *directory_name);
@@ -558,6 +575,7 @@ C_MAKE_DEF CMakeProcessId c_make_command_run_and_reset(CMakeCommand *command);
 C_MAKE_DEF bool c_make_process_wait(CMakeProcessId process_id);
 C_MAKE_DEF bool c_make_command_run_and_reset_and_wait(CMakeCommand *command);
 C_MAKE_DEF bool c_make_command_run_and_wait(CMakeCommand command);
+C_MAKE_DEF bool c_make_command_run_output_with_memory(CMakeMemory *memory, CMakeCommand command, CMakeString *stdout_str, CMakeString *stderr_str);
 C_MAKE_DEF bool c_make_process_wait_for_all(void);
 
 static inline bool
@@ -1480,6 +1498,17 @@ c_make_strings_are_equal(CMakeString a, CMakeString b)
 }
 
 C_MAKE_DEF bool
+c_make_string_ends_with(CMakeString str, CMakeString suffix)
+{
+    if (str.count < suffix.count)
+    {
+        return false;
+    }
+
+    return c_make_strings_are_equal(c_make_make_string(str.data + (str.count - suffix.count), suffix.count), suffix);
+}
+
+C_MAKE_DEF bool
 c_make_string_starts_with(CMakeString str, CMakeString prefix)
 {
     if (str.count < prefix.count)
@@ -2029,6 +2058,78 @@ c_make_get_target_cpp_flags(void)
     {
         result = value.val;
     }
+
+    return result;
+}
+
+C_MAKE_DEF const char *
+c_make_get_pkg_config(void)
+{
+#if C_MAKE_PLATFORM_LINUX
+    return c_make_get_executable("pkg_config_executable", "pkg-config");
+#else
+    c_make_log(CMakeLogLevelWarning, "[get_pkg_config] pkg-config is not a thing on this platform\n");
+    return 0;
+#endif
+}
+
+C_MAKE_DEF bool
+c_make_pkg_config_find_package(const char *name)
+{
+    if (!name)
+    {
+        return false;
+    }
+
+    const char *pkg_config = c_make_get_pkg_config();
+
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+    const char *key_found = c_make_c_string_concat_with_memory(temp_memory.memory, name, "_found");
+    const char *key_compiler_flags = c_make_c_string_concat_with_memory(temp_memory.memory, name, "_compiler_flags");
+    const char *key_linker_flags = c_make_c_string_concat_with_memory(temp_memory.memory, name, "_linker_flags");
+
+    bool result = false;
+
+    if (pkg_config && !c_make_config_is_enabled(key_found, false))
+    {
+        CMakeString pkg_config_stdout;
+
+        bool did_fail = _c_make_context.did_fail;
+
+        CMakeCommand command = { 0 };
+        c_make_command_append(&command, pkg_config, "--cflags", name);
+
+        if (c_make_command_run_output_with_memory(temp_memory.memory, command, &pkg_config_stdout, 0))
+        {
+            CMakeString compiler_flags = c_make_string_trim(c_make_string_split_left(&pkg_config_stdout, '\n'));
+            c_make_config_set(key_compiler_flags, c_make_string_to_c_string_with_memory(temp_memory.memory, compiler_flags));
+            result = true;
+        }
+
+        command.count = 0;
+        c_make_command_append(&command, pkg_config, "--libs", name);
+
+        if (c_make_command_run_output_with_memory(temp_memory.memory, command, &pkg_config_stdout, 0))
+        {
+            CMakeString linker_flags = c_make_string_trim(c_make_string_split_left(&pkg_config_stdout, '\n'));
+            c_make_config_set(key_linker_flags, c_make_string_to_c_string_with_memory(temp_memory.memory, linker_flags));
+            result = true;
+        }
+
+        _c_make_context.did_fail = did_fail;
+
+        if (result)
+        {
+            c_make_config_set(key_found, "on");
+        }
+    }
+
+    c_make_config_set_if_not_exists(key_found, "off");
+    c_make_config_set_if_not_exists(key_compiler_flags, "");
+    c_make_config_set_if_not_exists(key_linker_flags, "");
+
+    c_make_end_temporary_memory(temp_memory);
 
     return result;
 }
@@ -2633,6 +2734,26 @@ c_make_get_android_aapt(void)
 }
 
 C_MAKE_DEF const char *
+c_make_get_android_apksigner(void)
+{
+#if C_MAKE_PLATFORM_WINDOWS && !defined(__MINGW32__)
+    return c_make_get_executable("android_apksigner_executable", "apksigner.exe");
+#else
+    return c_make_get_executable("android_apksigner_executable", "apksigner");
+#endif
+}
+
+C_MAKE_DEF const char *
+c_make_get_android_d8(void)
+{
+#if C_MAKE_PLATFORM_WINDOWS && !defined(__MINGW32__)
+    return c_make_get_executable("android_d8_executable", "d8.exe");
+#else
+    return c_make_get_executable("android_d8_executable", "d8");
+#endif
+}
+
+C_MAKE_DEF const char *
 c_make_get_android_platform_jar(void)
 {
     const char *result = 0;
@@ -2675,18 +2796,28 @@ c_make_setup_android(bool logging)
     CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
 
 #if C_MAKE_PLATFORM_WINDOWS && !defined(__MINGW32__)
-    const char *android_aapt_executable_name     = "aapt.exe";
-    const char *android_zipalign_executable_name = "zipalign.exe";
+    const char *android_aapt_executable_name      = "aapt.exe";
+    const char *android_apksigner_executable_name = "apksigner.exe";
+    const char *android_d8_executable_name        = "d8.exe";
+    const char *android_zipalign_executable_name  = "zipalign.exe";
 #else
-    const char *android_aapt_executable_name     = "aapt";
-    const char *android_zipalign_executable_name = "zipalign";
+    const char *android_aapt_executable_name      = "aapt";
+    const char *android_apksigner_executable_name = "apksigner";
+    const char *android_d8_executable_name        = "d8";
+    const char *android_zipalign_executable_name  = "zipalign";
 #endif
 
-    const char *android_aapt_executable     = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.build_tools.root_path, android_aapt_executable_name);
-    const char *android_platform_jar        = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.platforms.root_path, "android.jar");
-    const char *android_zipalign_executable = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.build_tools.root_path, android_zipalign_executable_name);
+    const char *android_aapt_executable      = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.build_tools.root_path, android_aapt_executable_name);
+    // 'apksigner' got introduced with build-tools >= 24.0.3
+    const char *android_apksigner_executable = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.build_tools.root_path, android_apksigner_executable_name);
+    // 'd8' got introduced with build-tools >= 28.0.1
+    const char *android_d8_executable        = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.build_tools.root_path, android_d8_executable_name);
+    const char *android_platform_jar         = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.platforms.root_path, "android.jar");
+    const char *android_zipalign_executable  = c_make_c_string_path_concat_with_memory(temp_memory.memory, android_sdk.build_tools.root_path, android_zipalign_executable_name);
 
     c_make_config_set("android_aapt_executable", android_aapt_executable);
+    c_make_config_set("android_apksigner_executable", android_apksigner_executable);
+    c_make_config_set("android_d8_executable", android_d8_executable);
     c_make_config_set("android_platform_jar", android_platform_jar);
     c_make_config_set("android_zipalign_executable", android_zipalign_executable);
 
@@ -3222,6 +3353,7 @@ c_make_directory_open(CMakeMemory *memory, const char *directory_name)
     if (handle != INVALID_HANDLE_VALUE)
     {
         directory = (CMakeDirectory *) c_make_memory_allocate(memory, sizeof(*directory));
+        directory->path = directory_name;
         directory->first_read = true;
         directory->handle = handle;
         directory->find_data = find_data;
@@ -3232,6 +3364,7 @@ c_make_directory_open(CMakeMemory *memory, const char *directory_name)
     if (dir)
     {
         directory = (CMakeDirectory *) c_make_memory_allocate(memory, sizeof(*directory));
+        directory->path = directory_name;
         directory->handle = dir;
     }
 #endif
@@ -3261,6 +3394,10 @@ c_make_directory_get_next_entry(CMakeMemory *memory, CMakeDirectory *directory)
 
     result = &directory->entry;
     result->name = CMakeCString(entry_name);
+
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+    result->type = c_make_get_file_type(c_make_c_string_path_concat_with_memory(temp_memory.memory, directory->path, entry_name));
+    c_make_end_temporary_memory(temp_memory);
 #elif C_MAKE_PLATFORM_ANDROID || C_MAKE_PLATFORM_FREEBSD || C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
     struct dirent *entry = readdir(directory->handle);
 
@@ -3268,6 +3405,10 @@ c_make_directory_get_next_entry(CMakeMemory *memory, CMakeDirectory *directory)
     {
         result = &directory->entry;
         result->name = c_make_copy_string(memory, CMakeCString(entry->d_name));
+
+        CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+        result->type = c_make_get_file_type(c_make_c_string_path_concat_with_memory(temp_memory.memory, directory->path, entry->d_name));
+        c_make_end_temporary_memory(temp_memory);
     }
 #endif
 
@@ -3282,6 +3423,49 @@ c_make_directory_close(CMakeDirectory *directory)
 #elif C_MAKE_PLATFORM_ANDROID || C_MAKE_PLATFORM_FREEBSD || C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
     closedir(directory->handle);
 #endif
+}
+
+C_MAKE_DEF CMakeFileType
+c_make_get_file_type(const char *file_name)
+{
+    CMakeFileType result = CMakeFileTypeOther;
+
+#if C_MAKE_PLATFORM_WINDOWS
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+    LPWSTR utf16_file_name = c_make_c_string_utf8_to_utf16(temp_memory.memory, file_name);
+    DWORD file_attributes = GetFileAttributes(utf16_file_name);
+
+    c_make_end_temporary_memory(temp_memory);
+
+    if (file_attributes != INVALID_FILE_ATTRIBUTES)
+    {
+        if (file_attributes & FILE_ATTRIBUTE_DIRECTORY)
+        {
+            result = CMakeFileTypeDirectory;
+        }
+        else
+        {
+            result = CMakeFileTypeRegular;
+        }
+    }
+#elif C_MAKE_PLATFORM_ANDROID || C_MAKE_PLATFORM_FREEBSD || C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
+    struct stat stats;
+
+    if (!stat(file_name, &stats))
+    {
+        if (S_ISREG(stats.st_mode))
+        {
+            result = CMakeFileTypeRegular;
+        }
+        else if (S_ISDIR(stats.st_mode))
+        {
+            result = CMakeFileTypeDirectory;
+        }
+    }
+#endif
+
+    return result;
 }
 
 C_MAKE_DEF bool
@@ -3616,7 +3800,7 @@ c_make_copy_file(const char *src_file_name, const char *dst_file_name)
 
     if (src_fd < 0)
     {
-        c_make_log(CMakeLogLevelError, "could not open file '%s': %s\n", src_file_name, strerror(errno));
+        c_make_log(CMakeLogLevelError, "[copy_file] could not open file '%s': %s\n", src_file_name, strerror(errno));
         return false;
     }
 
@@ -3624,7 +3808,7 @@ c_make_copy_file(const char *src_file_name, const char *dst_file_name)
 
     if (fstat(src_fd, &stats) < 0)
     {
-        c_make_log(CMakeLogLevelError, "could not get file stats on '%s': %s\n", src_file_name, strerror(errno));
+        c_make_log(CMakeLogLevelError, "[copy_file] could not get file stats on '%s': %s\n", src_file_name, strerror(errno));
         close(src_fd);
         return false;
     }
@@ -3635,7 +3819,7 @@ c_make_copy_file(const char *src_file_name, const char *dst_file_name)
 
     if (dst_fd < 0)
     {
-        c_make_log(CMakeLogLevelError, "could not create file '%s': %s\n", dst_file_name, strerror(errno));
+        c_make_log(CMakeLogLevelError, "[copy_file] could not create file '%s': %s\n", dst_file_name, strerror(errno));
         close(src_fd);
         return false;
     }
@@ -3861,6 +4045,11 @@ c_make_get_executable(const char *config_name, const char *fallback_executable)
         result = c_make_find_program(fallback_executable);
     }
 
+    if (!result)
+    {
+        c_make_log(CMakeLogLevelWarning, "[get_executable] could not find executable '%s'\n", fallback_executable);
+    }
+
     return result;
 }
 
@@ -3990,7 +4179,6 @@ __c_make_process_wait(CMakeProcessId process_id)
 {
     if (process_id == CMakeInvalidProcessId)
     {
-        _c_make_context.did_fail = true;
         return -1;
     }
 
@@ -4018,7 +4206,6 @@ __c_make_process_wait(CMakeProcessId process_id)
 
             if (wait_result == WAIT_FAILED)
             {
-                _c_make_context.did_fail = true;
                 process->succeeded = false;
                 // TODO: log error
             }
@@ -4028,14 +4215,12 @@ __c_make_process_wait(CMakeProcessId process_id)
 
                 if (!GetExitCodeProcess(process_id, &exit_code))
                 {
-                    _c_make_context.did_fail = true;
                     process->succeeded = false;
                     // TODO: log error
                 }
 
                 if (exit_code != 0)
                 {
-                    _c_make_context.did_fail = true;
                     process->succeeded = false;
                     // TODO: log that the process has exited with an error code
                     // TODO: What to return here? false or true?
@@ -4050,7 +4235,6 @@ __c_make_process_wait(CMakeProcessId process_id)
 
                 if (waitpid(process_id, &status, 0) < 0)
                 {
-                    _c_make_context.did_fail = true;
                     process->succeeded = false;
                     // TODO: log error
                     break;
@@ -4062,7 +4246,6 @@ __c_make_process_wait(CMakeProcessId process_id)
 
                     if (exit_code != 0)
                     {
-                        _c_make_context.did_fail = true;
                         process->succeeded = false;
                         // TODO: log that the process has exited with an error code
                         // TODO: What to return here? false or true?
@@ -4073,7 +4256,6 @@ __c_make_process_wait(CMakeProcessId process_id)
 
                 if (WIFSIGNALED(status))
                 {
-                    _c_make_context.did_fail = true;
                     process->succeeded = false;
                     // TODO: log the signal that terminated the child
                     break;
@@ -4086,11 +4268,12 @@ __c_make_process_wait(CMakeProcessId process_id)
     return index;
 }
 
-C_MAKE_DEF CMakeProcessId
-c_make_command_run(CMakeCommand command)
+static CMakeProcessId
+__c_make_command_run(CMakeMemory *memory, CMakeCommand command, CMakeString *stdout_str, CMakeString *stderr_str)
 {
     if (command.count == 0)
     {
+        c_make_log(CMakeLogLevelError, "[command_run] command is empty\n");
         return CMakeInvalidProcessId;
     }
 
@@ -4108,6 +4291,7 @@ c_make_command_run(CMakeCommand command)
     {
         if (!command.items[i])
         {
+            c_make_log(CMakeLogLevelError, "[command_run] command has a NULL argument at index %zu\n", i);
             return CMakeInvalidProcessId;
         }
     }
@@ -4122,7 +4306,10 @@ c_make_command_run(CMakeCommand command)
     start_info.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
     start_info.dwFlags    = STARTF_USESTDHANDLES;
 
-    PROCESS_INFORMATION process_info = { 0 };
+    SECURITY_ATTRIBUTES security_attributes = { 0 };
+    security_attributes.nLength              = sizeof(security_attributes);
+    security_attributes.lpSecurityDescriptor = 0;
+    security_attributes.bInheritHandle       = TRUE;
 
     CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
 
@@ -4134,9 +4321,92 @@ c_make_command_run(CMakeCommand command)
     int wide_count = MultiByteToWideChar(CP_UTF8, 0, command_line.data, command_line.count, wide_command_line, wide_command_line_size);
     wide_command_line[wide_count] = 0;
 
+    HANDLE stdout_read, stdout_write, stderr_read, stderr_write;
+    bool read_stdout = false, read_stderr = false;
+    size_t stdout_allocated = 0, stderr_allocated = 0;
+
+    if (stdout_str)
+    {
+        if (!CreatePipe(&stdout_read, &stdout_write, &security_attributes, 0))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            c_make_log(CMakeLogLevelError, "[command_run] could not create pipe for stdout\n");
+            return CMakeInvalidProcessId;
+        }
+
+        if (!SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            c_make_log(CMakeLogLevelError, "[command_run] could not create pipe for stdout\n");
+
+            CloseHandle(stdout_read);
+            CloseHandle(stdout_write);
+
+            return CMakeInvalidProcessId;
+        }
+
+        start_info.hStdOutput = stdout_write;
+
+        read_stdout = true;
+        stdout_str->count = 0;
+        stdout_str->data  = 0;
+    }
+
+    if (stderr_str)
+    {
+        if (!CreatePipe(&stderr_read, &stderr_write, &security_attributes, 0))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            c_make_log(CMakeLogLevelError, "[command_run] could not create pipe for stderr\n");
+
+            if (stdout_str)
+            {
+                CloseHandle(stdout_read);
+                CloseHandle(stdout_write);
+            }
+
+            return CMakeInvalidProcessId;
+        }
+
+        if (!SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            c_make_log(CMakeLogLevelError, "[command_run] could not create pipe for stderr\n");
+
+            if (stdout_str)
+            {
+                CloseHandle(stdout_read);
+                CloseHandle(stdout_write);
+            }
+
+            CloseHandle(stderr_read);
+            CloseHandle(stderr_write);
+
+            return CMakeInvalidProcessId;
+        }
+
+        start_info.hStdError = stderr_write;
+
+        read_stderr = true;
+        stderr_str->count = 0;
+        stderr_str->data  = 0;
+    }
+
+    PROCESS_INFORMATION process_info = { 0 };
+
     BOOL result = CreateProcess(0, wide_command_line, 0, 0, TRUE, 0, 0, 0, &start_info, &process_info);
 
     c_make_end_temporary_memory(temp_memory);
+
+    if (stdout_str)
+    {
+        CloseHandle(stdout_write);
+    }
+
+    if (stderr_str)
+    {
+        CloseHandle(stderr_write);
+    }
 
     if (!result)
     {
@@ -4146,12 +4416,84 @@ c_make_command_run(CMakeCommand command)
         c_make_log(CMakeLogLevelError, "could not run command (GetLastError = %lu): %" CMakeStringFmt "\n", GetLastError(), CMakeStringArg(command_string));
 
         c_make_end_temporary_memory(temp_memory);
+
+        if (stdout_str)
+        {
+            CloseHandle(stdout_read);
+        }
+
+        if (stderr_str)
+        {
+            CloseHandle(stderr_read);
+        }
+
         return CMakeInvalidProcessId;
     }
 
     CloseHandle(process_info.hThread);
 
     process_id = process_info.hProcess;
+
+    while (read_stdout || read_stderr)
+    {
+        if (read_stdout)
+        {
+            if ((stdout_allocated - stdout_str->count) < 256)
+            {
+                stdout_str->data = (char *) c_make_memory_reallocate(memory, stdout_str->data, stdout_allocated, stdout_allocated + 256);
+                stdout_allocated += 256;
+                read_stdout = (stdout_str->data != 0);
+            }
+
+            if (read_stdout)
+            {
+                DWORD bytes_read = 0;
+
+                if (ReadFile(stdout_read, stdout_str->data + stdout_str->count, stdout_allocated - stdout_str->count, &bytes_read, 0))
+                {
+                    stdout_str->count += bytes_read;
+                }
+                else
+                {
+                    read_stdout = false;
+                }
+            }
+        }
+
+        if (read_stderr)
+        {
+            if ((stderr_allocated - stderr_str->count) < 256)
+            {
+                stderr_str->data = (char *) c_make_memory_reallocate(memory, stderr_str->data, stderr_allocated, stderr_allocated + 256);
+                stderr_allocated += 256;
+                read_stderr = (stderr_str->data != 0);
+            }
+
+            if (read_stderr)
+            {
+                DWORD bytes_read = 0;
+
+                if (ReadFile(stderr_read, stderr_str->data + stderr_str->count, stderr_allocated - stderr_str->count, &bytes_read, 0))
+                {
+                    stderr_str->count += bytes_read;
+                }
+                else
+                {
+                    read_stderr = false;
+                }
+            }
+        }
+    }
+
+    if (stdout_str)
+    {
+        CloseHandle(stdout_read);
+    }
+
+    if (stderr_str)
+    {
+        CloseHandle(stderr_read);
+    }
 #else
     CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
     char **command_line = (char **) c_make_memory_allocate(temp_memory.memory, (command.count + 1) * sizeof(char *));
@@ -4163,6 +4505,45 @@ c_make_command_run(CMakeCommand command)
 
     command_line[command.count] = 0;
 
+    int stdout_pipe[2], stderr_pipe[2];
+    bool read_stdout = false, read_stderr = false;
+    size_t stdout_allocated = 0, stderr_allocated = 0;
+
+    if (stdout_str)
+    {
+        if (pipe(stdout_pipe))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            c_make_log(CMakeLogLevelError, "[command_run] could not create pipe for stdout: %s\n", strerror(errno));
+            return CMakeInvalidProcessId;
+        }
+
+        read_stdout = true;
+        stdout_str->count = 0;
+        stdout_str->data  = 0;
+    }
+
+    if (stderr_str)
+    {
+        if (pipe(stderr_pipe))
+        {
+            c_make_end_temporary_memory(temp_memory);
+            c_make_log(CMakeLogLevelError, "[command_run] could not create pipe for stderr: %s\n", strerror(errno));
+
+            if (stdout_str)
+            {
+                close(stdout_pipe[0]);
+                close(stdout_pipe[1]);
+            }
+
+            return CMakeInvalidProcessId;
+        }
+
+        read_stderr = true;
+        stderr_str->count = 0;
+        stderr_str->data  = 0;
+    }
+
     pid_t pid = fork();
 
     if (pid < 0)
@@ -4170,11 +4551,36 @@ c_make_command_run(CMakeCommand command)
         c_make_end_temporary_memory(temp_memory);
         // TODO: log error
         fprintf(stderr, "Could not fork\n");
+
+        if (stdout_str)
+        {
+            close(stdout_pipe[0]);
+            close(stdout_pipe[1]);
+        }
+
+        if (stderr_str)
+        {
+            close(stderr_pipe[0]);
+            close(stderr_pipe[1]);
+        }
+
         return CMakeInvalidProcessId;
     }
 
     if (pid == 0)
     {
+        if (read_stdout)
+        {
+            close(stdout_pipe[0]);
+            dup2(stdout_pipe[1], STDOUT_FILENO);
+        }
+
+        if (read_stderr)
+        {
+            close(stderr_pipe[0]);
+            dup2(stderr_pipe[1], STDERR_FILENO);
+        }
+
         int ret = execvp(command_line[0], command_line);
 
         if (ret < 0)
@@ -4191,6 +4597,79 @@ c_make_command_run(CMakeCommand command)
     c_make_end_temporary_memory(temp_memory);
 
     process_id = pid;
+
+    if (stdout_str)
+    {
+        close(stdout_pipe[1]);
+    }
+
+    if (stderr_str)
+    {
+        close(stderr_pipe[1]);
+    }
+
+    while (read_stdout || read_stderr)
+    {
+        if (read_stdout)
+        {
+            if ((stdout_allocated - stdout_str->count) < 256)
+            {
+                stdout_str->data = (char *) c_make_memory_reallocate(memory, stdout_str->data, stdout_allocated, stdout_allocated + 256);
+                stdout_allocated += 256;
+                read_stdout = (stdout_str->data != 0);
+            }
+
+            if (read_stdout)
+            {
+                size_t ret = read(stdout_pipe[0], stdout_str->data + stdout_str->count,
+                                  stdout_allocated - stdout_str->count);
+
+                if (ret > 0)
+                {
+                    stdout_str->count += ret;
+                }
+                else
+                {
+                    read_stdout = false;
+                }
+            }
+        }
+
+        if (read_stderr)
+        {
+            if ((stderr_allocated - stderr_str->count) < 256)
+            {
+                stderr_str->data = (char *) c_make_memory_reallocate(memory, stderr_str->data, stderr_allocated, stderr_allocated + 256);
+                stderr_allocated += 256;
+                read_stderr = (stderr_str->data != 0);
+            }
+
+            if (read_stderr)
+            {
+                size_t ret = read(stderr_pipe[0], stderr_str->data + stderr_str->count,
+                                  stderr_allocated - stderr_str->count);
+
+                if (ret > 0)
+                {
+                    stderr_str->count += ret;
+                }
+                else
+                {
+                    read_stderr = false;
+                }
+            }
+        }
+    }
+
+    if (stdout_str)
+    {
+        close(stdout_pipe[0]);
+    }
+
+    if (stderr_str)
+    {
+        close(stderr_pipe[0]);
+    }
 #endif
 
     if (_c_make_context.process_group.count == _c_make_context.process_group.allocated)
@@ -4211,7 +4690,7 @@ c_make_command_run(CMakeCommand command)
     process->exited = false;
     process->succeeded = true;
 
-    if (_c_make_context.sequential)
+    if (_c_make_context.sequential || stdout_str || stderr_str)
     {
         __c_make_process_wait(process_id);
     }
@@ -4220,9 +4699,15 @@ c_make_command_run(CMakeCommand command)
 }
 
 C_MAKE_DEF CMakeProcessId
+c_make_command_run(CMakeCommand command)
+{
+    return __c_make_command_run(0, command, 0, 0);
+}
+
+C_MAKE_DEF CMakeProcessId
 c_make_command_run_and_reset(CMakeCommand *command)
 {
-    CMakeProcessId process_id = c_make_command_run(*command);
+    CMakeProcessId process_id = __c_make_command_run(0, *command, 0, 0);
     command->count = 0;
     return process_id;
 }
@@ -4238,11 +4723,16 @@ c_make_process_wait(CMakeProcessId process_id)
 
         assert(process->exited);
         bool succeeded = process->succeeded;
+        _c_make_context.did_fail = !succeeded;
 
         _c_make_context.process_group.count -= 1;
         _c_make_context.process_group.items[index] = _c_make_context.process_group.items[_c_make_context.process_group.count];
 
         return succeeded;
+    }
+    else if (index == (size_t) -1)
+    {
+        _c_make_context.did_fail = true;
     }
 
     return false;
@@ -4251,7 +4741,7 @@ c_make_process_wait(CMakeProcessId process_id)
 C_MAKE_DEF bool
 c_make_command_run_and_reset_and_wait(CMakeCommand *command)
 {
-    CMakeProcessId process_id = c_make_command_run(*command);
+    CMakeProcessId process_id = __c_make_command_run(0, *command, 0, 0);
     command->count = 0;
     return c_make_process_wait(process_id);
 }
@@ -4259,7 +4749,14 @@ c_make_command_run_and_reset_and_wait(CMakeCommand *command)
 C_MAKE_DEF bool
 c_make_command_run_and_wait(CMakeCommand command)
 {
-    CMakeProcessId process_id = c_make_command_run(command);
+    CMakeProcessId process_id = __c_make_command_run(0, command, 0, 0);
+    return c_make_process_wait(process_id);
+}
+
+C_MAKE_DEF bool
+c_make_command_run_output_with_memory(CMakeMemory *memory, CMakeCommand command, CMakeString *stdout_str, CMakeString *stderr_str)
+{
+    CMakeProcessId process_id = __c_make_command_run(memory, command, stdout_str, stderr_str);
     return c_make_process_wait(process_id);
 }
 
@@ -4302,37 +4799,40 @@ print_help(const char *program_name)
     fprintf(stderr, "want can be stored in there, but there are some options that have special\n");
     fprintf(stderr, "meaning to c_make:\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "    android_aapt_executable      Path to the android aapt executable.\n");
-    fprintf(stderr, "    android_platform_jar         Path to the android platforms 'android.jar'.\n");
-    fprintf(stderr, "    android_zipalign_executable  Path to the android zipalign executable.\n");
-    fprintf(stderr, "    build_type                   Build type. Either 'debug', 'reldebug' or 'release'.\n");
-    fprintf(stderr, "                                 Default: 'debug'\n");
-    fprintf(stderr, "    host_ar                      Path to or name of the host archive/library program.\n");
-    fprintf(stderr, "    host_c_compiler              Path to or name of the host c compiler.\n");
-    fprintf(stderr, "    host_cpp_compiler            Path to or name of the host c++ compiler.\n");
-    fprintf(stderr, "    install_prefix               Install prefix. Defaults to '/usr/local'.\n");
-    fprintf(stderr, "    java_jar_executable          Path to the java jar executable.\n");
-    fprintf(stderr, "    java_jarsigner_executable    Path to the java jarsigner executable.\n");
-    fprintf(stderr, "    java_javac_executable        Path to the java compiler (javac).\n");
-    fprintf(stderr, "    java_keytool_executable      Path to the java keytool executable.\n");
-    fprintf(stderr, "    target_architecture          Architecture of the target. Either 'amd64', 'aarch64',\n");
-    fprintf(stderr, "                                 'riscv64', 'wasm32' or 'wasm64'. The default is the\n");
-    fprintf(stderr, "                                 host architecture.\n");
-    fprintf(stderr, "    target_ar                    Path to or name of the target archive/library program.\n");
-    fprintf(stderr, "    target_c_compiler            Path to or name of the target c compiler.\n");
-    fprintf(stderr, "    target_c_flags               Flags for the target c build.\n");
-    fprintf(stderr, "    target_cpp_compiler          Path to or name of the target c++ compiler.\n");
-    fprintf(stderr, "    target_cpp_flags             Flags for the target c++ build.\n");
-    fprintf(stderr, "    target_platform              Platform of the target. Either 'android', 'freebsd',\n");
-    fprintf(stderr, "                                 'windows', 'linux', 'macos' or 'web'. The default is\n");
-    fprintf(stderr, "                                 the host platform.\n");
-    fprintf(stderr, "    visual_studio_root_path      Path to the visual studio install. This should be the directory\n");
-    fprintf(stderr, "                                 in which you find 'VC\\Tools\\MSVC\\<version>'.\n");
-    fprintf(stderr, "    visual_studio_version        The version of the visual studio install.\n");
-    fprintf(stderr, "    windows_rc_executable        Path to the windows resource compiler executable.\n");
-    fprintf(stderr, "    windows_sdk_root_path        Path to the windows sdk. This should be the directory\n");
-    fprintf(stderr, "                                 in which you find 'bin', 'Include' and 'Lib'.\n");
-    fprintf(stderr, "    windows_sdk_version          The version of the windows sdk.\n");
+    fprintf(stderr, "    android_aapt_executable       Path to the android aapt executable.\n");
+    fprintf(stderr, "    android_apksigner_executable  Path to the android apksigner executable.\n");
+    fprintf(stderr, "    android_d8_executable         Path to the android d8 executable.\n");
+    fprintf(stderr, "    android_platform_jar          Path to the android platforms 'android.jar'.\n");
+    fprintf(stderr, "    android_zipalign_executable   Path to the android zipalign executable.\n");
+    fprintf(stderr, "    build_type                    Build type. Either 'debug', 'reldebug' or 'release'.\n");
+    fprintf(stderr, "                                  Default: 'debug'\n");
+    fprintf(stderr, "    host_ar                       Path to or name of the host archive/library program.\n");
+    fprintf(stderr, "    host_c_compiler               Path to or name of the host c compiler.\n");
+    fprintf(stderr, "    host_cpp_compiler             Path to or name of the host c++ compiler.\n");
+    fprintf(stderr, "    install_prefix                Install prefix. Defaults to '/usr/local'.\n");
+    fprintf(stderr, "    java_jar_executable           Path to the java jar executable.\n");
+    fprintf(stderr, "    java_jarsigner_executable     Path to the java jarsigner executable.\n");
+    fprintf(stderr, "    java_javac_executable         Path to the java compiler (javac).\n");
+    fprintf(stderr, "    java_keytool_executable       Path to the java keytool executable.\n");
+    fprintf(stderr, "    pkg_config_executable         Path to the pkg-config executable.\n");
+    fprintf(stderr, "    target_architecture           Architecture of the target. Either 'amd64', 'aarch64',\n");
+    fprintf(stderr, "                                  'riscv64', 'wasm32' or 'wasm64'. The default is the\n");
+    fprintf(stderr, "                                  host architecture.\n");
+    fprintf(stderr, "    target_ar                     Path to or name of the target archive/library program.\n");
+    fprintf(stderr, "    target_c_compiler             Path to or name of the target c compiler.\n");
+    fprintf(stderr, "    target_c_flags                Flags for the target c build.\n");
+    fprintf(stderr, "    target_cpp_compiler           Path to or name of the target c++ compiler.\n");
+    fprintf(stderr, "    target_cpp_flags              Flags for the target c++ build.\n");
+    fprintf(stderr, "    target_platform               Platform of the target. Either 'android', 'freebsd',\n");
+    fprintf(stderr, "                                  'windows', 'linux', 'macos' or 'web'. The default is\n");
+    fprintf(stderr, "                                  the host platform.\n");
+    fprintf(stderr, "    visual_studio_root_path       Path to the visual studio install. This should be the directory\n");
+    fprintf(stderr, "                                  in which you find 'VC\\Tools\\MSVC\\<version>'.\n");
+    fprintf(stderr, "    visual_studio_version         The version of the visual studio install.\n");
+    fprintf(stderr, "    windows_rc_executable         Path to the windows resource compiler executable.\n");
+    fprintf(stderr, "    windows_sdk_root_path         Path to the windows sdk. This should be the directory\n");
+    fprintf(stderr, "                                  in which you find 'bin', 'Include' and 'Lib'.\n");
+    fprintf(stderr, "    windows_sdk_version           The version of the windows sdk.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "host platform: %s\n", c_make_get_platform_name(c_make_get_host_platform()));
     fprintf(stderr, "host architecture: %s\n", c_make_get_architecture_name(c_make_get_host_architecture()));
@@ -4677,6 +5177,15 @@ int main(int argument_count, char **arguments)
             c_make_memory_set_used(&_c_make_context.public_memory, public_used);
         }
 
+#if C_MAKE_PLATFORM_LINUX
+        const char *pkg_config_executable = c_make_find_program("pkg-config");
+
+        if (pkg_config_executable)
+        {
+            c_make_config_set("pkg_config_executable", pkg_config_executable);
+        }
+#endif
+
         CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
         size_t memory_used = c_make_memory_get_used(temp_memory.memory);
 
@@ -4911,6 +5420,12 @@ int main(int argument_count, char **arguments)
 #    define StringArg CMakeStringArg
 #    define Command CMakeCommand
 #    define ConfigValue CMakeConfigValue
+#    define FileType CMakeFileType
+#    define FileTypeDirectory CMakeFileTypeDirectory
+#    define FileTypeRegular CMakeFileTypeRegular
+#    define FileTypeOther CMakeFileTypeOther
+#    define DirectoryEntry CMakeDirectoryEntry
+#    define Directory CMakeDirectory
 #    define SoftwarePackage CMakeSoftwarePackage
 #    define AndroidSdk CMakeAndroidSdk
 #    define StringLiteral CMakeStringLiteral
@@ -4926,6 +5441,7 @@ int main(int argument_count, char **arguments)
 #    define c_string_concat_with_memory c_make_c_string_concat_with_memory
 #    define c_string_path_concat_with_memory c_make_c_string_path_concat_with_memory
 #    define command_append c_make_command_append
+#    define command_run_output c_make_command_run_output
 #    define ProcessId CMakeProcessId
 #    define InvalidProcessId CMakeInvalidProcessId
 #    define Target CMakeTarget
@@ -4955,6 +5471,8 @@ int main(int argument_count, char **arguments)
 #    define BuildTypeDebug CMakeBuildTypeDebug
 #    define BuildTypeRelDebug CMakeBuildTypeRelDebug
 #    define BuildTypeRelease CMakeBuildTypeRelease
+#    define Memory CMakeMemory
+#    define TemporaryMemory CMakeTemporaryMemory
 #    define set_failed c_make_set_failed
 #    define get_failed c_make_get_failed
 #    define memory_allocate c_make_memory_allocate
@@ -4977,6 +5495,7 @@ int main(int argument_count, char **arguments)
 #    define command_append_default_linker_flags c_make_command_append_default_linker_flags
 #    define command_to_string c_make_command_to_string
 #    define strings_are_equal c_make_strings_are_equal
+#    define string_ends_with c_make_string_ends_with
 #    define string_starts_with c_make_string_starts_with
 #    define copy_string c_make_copy_string
 #    define string_split_left c_make_string_split_left
@@ -5006,6 +5525,8 @@ int main(int argument_count, char **arguments)
 #    define get_host_cpp_compiler c_make_get_host_cpp_compiler
 #    define get_target_cpp_compiler c_make_get_target_cpp_compiler
 #    define get_target_cpp_flags c_make_get_target_cpp_flags
+#    define get_pkg_config c_make_get_pkg_config
+#    define pkg_config_find_package c_make_pkg_config_find_package
 #    define find_best_software_package c_make_find_best_software_package
 #    define find_visual_studio c_make_find_visual_studio
 #    define find_windows_sdk c_make_find_windows_sdk
@@ -5018,6 +5539,8 @@ int main(int argument_count, char **arguments)
 #    define find_android_ndk c_make_find_android_ndk
 #    define find_android_sdk c_make_find_android_sdk
 #    define get_android_aapt c_make_get_android_aapt
+#    define get_android_apksigner c_make_get_android_apksigner
+#    define get_android_d8 c_make_get_android_d8
 #    define get_android_platform_jar c_make_get_android_platform_jar
 #    define get_android_zipalign c_make_get_android_zipalign
 #    define setup_android c_make_setup_android
@@ -5035,6 +5558,7 @@ int main(int argument_count, char **arguments)
 #    define directory_open c_make_directory_open
 #    define directory_get_next_entry c_make_directory_get_next_entry
 #    define directory_close c_make_directory_close
+#    define get_file_type c_make_get_file_type
 #    define file_exists c_make_file_exists
 #    define directory_exists c_make_directory_exists
 #    define create_directory c_make_create_directory
@@ -5053,6 +5577,7 @@ int main(int argument_count, char **arguments)
 #    define process_wait c_make_process_wait
 #    define command_run_and_reset_and_wait c_make_command_run_and_reset_and_wait
 #    define command_run_and_wait c_make_command_run_and_wait
+#    define command_run_output_with_memory c_make_command_run_output_with_memory
 #    define process_wait_for_all c_make_process_wait_for_all
 #    define is_msvc_library_manager c_make_is_msvc_library_manager
 #    define compiler_is_msvc c_make_compiler_is_msvc
