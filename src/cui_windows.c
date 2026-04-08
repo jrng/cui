@@ -1408,13 +1408,7 @@ cui_platform_file_get_attributes(CuiFile *file)
         }
 
         result.size = ((uint64_t) file_info.nFileSizeHigh << 32) | (uint64_t) file_info.nFileSizeLow;
-    }
-
-    FILETIME last_write_time;
-
-    if (GetFileTime((HANDLE) file, 0, 0, &last_write_time))
-    {
-        result.modification_time = ((uint64_t) last_write_time.dwHighDateTime << 32) | (uint64_t) last_write_time.dwLowDateTime;
+        result.modification_time = ((uint64_t) file_info.ftLastWriteTime.dwHighDateTime << 32) | (uint64_t) file_info.ftLastWriteTime.dwLowDateTime;
     }
 
     return result;
