@@ -1306,15 +1306,23 @@ cui_platform_directory_exists(CuiArena *temporary_memory, CuiString directory)
     return result;
 }
 
-void
+bool
 cui_platform_directory_create(CuiArena *temporary_memory, CuiString directory)
 {
+    bool result = true;
+
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
 
     CuiString utf16_string = cui_utf8_to_utf16le(temporary_memory, directory);
-    CreateDirectory((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string), 0);
+
+    if (!CreateDirectory((LPCWSTR) cui_to_c_string(temporary_memory, utf16_string), 0) && (GetLastError() != ERROR_ALREADY_EXISTS))
+    {
+        result = false;
+    }
 
     cui_end_temporary_memory(temp_memory);
+
+    return result;
 }
 
 bool

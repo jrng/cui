@@ -139,14 +139,21 @@ cui_platform_directory_exists(CuiArena *temporary_memory, CuiString directory)
     return result;
 }
 
-void
+bool
 cui_platform_directory_create(CuiArena *temporary_memory, CuiString directory)
 {
+    bool result = true;
+
     CuiTemporaryMemory temp_memory = cui_begin_temporary_memory(temporary_memory);
 
-    mkdir(cui_to_c_string(temporary_memory, directory), 0775);
+    if (mkdir(cui_to_c_string(temporary_memory, directory), 0775) && (errno != EEXIST))
+    {
+        result = false;
+    }
 
     cui_end_temporary_memory(temp_memory);
+
+    return result;
 }
 
 bool

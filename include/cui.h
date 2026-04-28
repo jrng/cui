@@ -1273,7 +1273,7 @@ uint32_t cui_platform_get_performance_core_count(void);
 uint32_t cui_platform_get_efficiency_core_count(void);
 
 bool cui_platform_directory_exists(CuiArena *temporary_memory, CuiString directory);
-void cui_platform_directory_create(CuiArena *temporary_memory, CuiString directory);
+bool cui_platform_directory_create(CuiArena *temporary_memory, CuiString directory);
 
 bool cui_platform_file_exists(CuiArena *temporary_memory, CuiString filename);
 CuiFile *cui_platform_file_open(CuiArena *temporary_memory, CuiString filename, uint32_t mode);
