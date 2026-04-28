@@ -24,7 +24,10 @@
 #define CUI_ARCH_X86_64 0
 
 #if CUI_PLATFORM_WINDOWS
-#  if defined(_M_AMD64)
+#  if defined(_M_ARM64)
+#    undef CUI_ARCH_ARM64
+#    define CUI_ARCH_ARM64 1
+#  elif defined(_M_AMD64)
 #    undef CUI_ARCH_X86_64
 #    define CUI_ARCH_X86_64 1
 #  endif
