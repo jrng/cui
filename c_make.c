@@ -680,156 +680,157 @@ cui_c_make_build_example(const char *example_name, const char *executable_name)
     }
 }
 
-C_MAKE_ENTRY(target)
+C_MAKE_INFO(commands_info, configs_info)
 {
-    switch (target)
+    c_make_add_default_info(commands_info, configs_info);
+}
+
+C_MAKE_ENTRY(command, argument_count, arguments)
+{
+    if (c_make_strings_are_equal(command, COMMAND_SETUP))
     {
-        case CMakeTargetSetup:
+        c_make_config_set_if_not_exists("cui_backend_x11"    , "on");
+        c_make_config_set_if_not_exists("cui_backend_wayland", "on");
+
+        c_make_config_set_if_not_exists("cui_renderer_software"  , "on");
+        c_make_config_set_if_not_exists("cui_renderer_opengles2" , "on");
+        c_make_config_set_if_not_exists("cui_renderer_metal"     , "on");
+        c_make_config_set_if_not_exists("cui_renderer_direct3d11", "on");
+
+        c_make_config_set_if_not_exists("cui_framebuffer_screenshot", "off");
+        c_make_config_set_if_not_exists("cui_renderer_opengles2_render_times", "off");
+
+        if (!cui_c_make_configuration_is_valid(CMakeLogLevelWarning))
         {
-            c_make_config_set_if_not_exists("cui_backend_x11"    , "on");
-            c_make_config_set_if_not_exists("cui_backend_wayland", "on");
+            return;
+        }
 
-            c_make_config_set_if_not_exists("cui_renderer_software"  , "on");
-            c_make_config_set_if_not_exists("cui_renderer_opengles2" , "on");
-            c_make_config_set_if_not_exists("cui_renderer_metal"     , "on");
-            c_make_config_set_if_not_exists("cui_renderer_direct3d11", "on");
-
-            c_make_config_set_if_not_exists("cui_framebuffer_screenshot", "off");
-            c_make_config_set_if_not_exists("cui_renderer_opengles2_render_times", "off");
-
-            if (!cui_c_make_configuration_is_valid(CMakeLogLevelWarning))
+        if (c_make_get_target_platform() == CMakePlatformAndroid)
+        {
+            if (!c_make_setup_java(true))
             {
                 return;
             }
 
-            if (c_make_get_target_platform() == CMakePlatformAndroid)
+            if (!c_make_setup_android(true))
             {
-                if (!c_make_setup_java(true))
-                {
-                    return;
-                }
-
-                if (!c_make_setup_android(true))
-                {
 #if C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
-                    c_make_log(CMakeLogLevelRaw, "\n");
-                    c_make_log(CMakeLogLevelRaw, "  To install the Android SDK you can follow these steps:\n\n");
-                    c_make_log(CMakeLogLevelRaw, "    1. Download the Command Line Tools from https://developer.android.com/studio.\n");
-                    c_make_log(CMakeLogLevelRaw, "    2. Extract the Command Line Tools and install the Android SDK:\n\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ mkdir -p ~/opt/android_sdk/cmdline-tools\n");
+                c_make_log(CMakeLogLevelRaw, "\n");
+                c_make_log(CMakeLogLevelRaw, "  To install the Android SDK you can follow these steps:\n\n");
+                c_make_log(CMakeLogLevelRaw, "    1. Download the Command Line Tools from https://developer.android.com/studio.\n");
+                c_make_log(CMakeLogLevelRaw, "    2. Extract the Command Line Tools and install the Android SDK:\n\n");
+                c_make_log(CMakeLogLevelRaw, "      $ mkdir -p ~/opt/android_sdk/cmdline-tools\n");
 #  if C_MAKE_PLATFORM_LINUX
-                    c_make_log(CMakeLogLevelRaw, "      $ unzip commandlinetools-linux-<version>_latest.zip -d ~/opt/android_sdk/cmdline-tools/\n");
+                c_make_log(CMakeLogLevelRaw, "      $ unzip commandlinetools-linux-<version>_latest.zip -d ~/opt/android_sdk/cmdline-tools/\n");
 #  elif C_MAKE_PLATFORM_MACOS
-                    c_make_log(CMakeLogLevelRaw, "      $ unzip commandlinetools-mac-<version>_latest.zip -d ~/opt/android_sdk/cmdline-tools/\n");
+                c_make_log(CMakeLogLevelRaw, "      $ unzip commandlinetools-mac-<version>_latest.zip -d ~/opt/android_sdk/cmdline-tools/\n");
 #  endif
-                    c_make_log(CMakeLogLevelRaw, "      $ mv ~/opt/android_sdk/cmdline-tools/cmdline-tools ~/opt/android_sdk/cmdline-tools/latest\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ export PATH=\"$HOME/opt/android_sdk/cmdline-tools/latest/bin:$PATH\"\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"build-tools;35.0.1\"\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"platforms;android-35\"\n");
-                    c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"ndk;28.2.13676358\"\n");
-                    c_make_log(CMakeLogLevelRaw, "\n");
+                c_make_log(CMakeLogLevelRaw, "      $ mv ~/opt/android_sdk/cmdline-tools/cmdline-tools ~/opt/android_sdk/cmdline-tools/latest\n");
+                c_make_log(CMakeLogLevelRaw, "      $ export PATH=\"$HOME/opt/android_sdk/cmdline-tools/latest/bin:$PATH\"\n");
+                c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"build-tools;35.0.1\"\n");
+                c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"platforms;android-35\"\n");
+                c_make_log(CMakeLogLevelRaw, "      $ sdkmanager --install \"ndk;28.2.13676358\"\n");
+                c_make_log(CMakeLogLevelRaw, "\n");
 #endif
-                    return;
-                }
-            }
-        } break;
-
-        case CMakeTargetBuild:
-        {
-            if (!cui_c_make_configuration_is_valid(CMakeLogLevelError))
-            {
-                c_make_set_failed(true);
                 return;
             }
+        }
+    }
+    else if (c_make_strings_are_equal(command, COMMAND_BUILD))
+    {
+        if (!cui_c_make_configuration_is_valid(CMakeLogLevelError))
+        {
+            c_make_set_failed(true);
+            return;
+        }
 
-            CMakeCommand command = { 0 };
+        CMakeCommand command = { 0 };
 
-            const char *host_c_compiler = c_make_get_host_c_compiler();
+        const char *host_c_compiler = c_make_get_host_c_compiler();
 
-            c_make_command_append(&command, host_c_compiler);
-            c_make_command_append_default_compiler_flags(&command, c_make_get_build_type());
-            c_make_command_append_output_executable(&command, c_make_c_string_path_concat(c_make_get_build_path(), "shape_compile"), c_make_get_host_platform());
-            c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_source_path(), "src", "shape_compile.c"));
-            c_make_command_append_default_linker_flags(&command, c_make_get_host_architecture());
+        c_make_command_append(&command, host_c_compiler);
+        c_make_command_append_default_compiler_flags(&command, c_make_get_build_type());
+        c_make_command_append_output_executable(&command, c_make_c_string_path_concat(c_make_get_build_path(), "shape_compile"), c_make_get_host_platform());
+        c_make_command_append(&command, c_make_c_string_path_concat(c_make_get_source_path(), "src", "shape_compile.c"));
+        c_make_command_append_default_linker_flags(&command, c_make_get_host_architecture());
 
-            c_make_log(CMakeLogLevelInfo, "compile 'shape_compile'\n");
-            c_make_command_run_and_reset(&command);
+        c_make_log(CMakeLogLevelInfo, "compile 'shape_compile'\n");
+        c_make_command_run_and_reset(&command);
 
-            switch (c_make_get_target_platform())
+        switch (c_make_get_target_platform())
+        {
+            case CMakePlatformAndroid:
             {
-                case CMakePlatformAndroid:
-                {
-                    cui_c_make_build_static_library("cui", c_make_get_target_architecture());
-                } break;
+                cui_c_make_build_static_library("cui", c_make_get_target_architecture());
+            } break;
 
-                case CMakePlatformFreeBsd:
-                {
-                } break;
+            case CMakePlatformFreeBsd:
+            {
+            } break;
 
-                case CMakePlatformWindows:
-                {
-                    // cui_c_make_build_shared_library("cui", c_make_get_target_architecture());
-                    cui_c_make_build_static_library("cui", c_make_get_target_architecture());
-                } break;
+            case CMakePlatformWindows:
+            {
+                // cui_c_make_build_shared_library("cui", c_make_get_target_architecture());
+                cui_c_make_build_static_library("cui", c_make_get_target_architecture());
+            } break;
 
-                case CMakePlatformLinux:
+            case CMakePlatformLinux:
+            {
+                cui_c_make_build_shared_library("cui", c_make_get_target_architecture());
+                cui_c_make_build_static_library("cui", c_make_get_target_architecture());
+            } break;
+
+            case CMakePlatformMacOs:
+            {
+                if (c_make_get_host_architecture() == CMakeArchitectureAarch64)
                 {
+                    cui_c_make_build_shared_library("cui-arm64" , CMakeArchitectureAarch64);
+                    cui_c_make_build_shared_library("cui-x86_64", CMakeArchitectureAmd64);
+                    cui_c_make_build_static_library("cui-arm64" , CMakeArchitectureAarch64);
+                    cui_c_make_build_static_library("cui-x86_64", CMakeArchitectureAmd64);
+
+                    c_make_process_wait_for_all();
+
+                    CMakeCommand command = { 0 };
+
+                    c_make_command_append(&command, "lipo", "-create", "-output",
+                                          c_make_c_string_path_concat(c_make_get_build_path(), "libcui.so"),
+                                          c_make_c_string_path_concat(c_make_get_build_path(), "libcui-arm64.so"),
+                                          c_make_c_string_path_concat(c_make_get_build_path(), "libcui-x86_64.so"));
+
+                    c_make_log(CMakeLogLevelInfo, "generate 'libcui.so'\n");
+                    c_make_command_run_and_reset(&command);
+
+                    c_make_command_append(&command, "lipo", "-create", "-output",
+                                          c_make_c_string_path_concat(c_make_get_build_path(), "libcui.a"),
+                                          c_make_c_string_path_concat(c_make_get_build_path(), "libcui-arm64.a"),
+                                          c_make_c_string_path_concat(c_make_get_build_path(), "libcui-x86_64.a"));
+
+                    c_make_log(CMakeLogLevelInfo, "generate 'libcui.a'\n");
+                    c_make_command_run_and_reset(&command);
+                }
+                else
+                {
+                    c_make_log(CMakeLogLevelWarning, "This machine can't compile for aarch64\n");
                     cui_c_make_build_shared_library("cui", c_make_get_target_architecture());
                     cui_c_make_build_static_library("cui", c_make_get_target_architecture());
-                } break;
+                }
+            } break;
 
-                case CMakePlatformMacOs:
-                {
-                    if (c_make_get_host_architecture() == CMakeArchitectureAarch64)
-                    {
-                        cui_c_make_build_shared_library("cui-arm64" , CMakeArchitectureAarch64);
-                        cui_c_make_build_shared_library("cui-x86_64", CMakeArchitectureAmd64);
-                        cui_c_make_build_static_library("cui-arm64" , CMakeArchitectureAarch64);
-                        cui_c_make_build_static_library("cui-x86_64", CMakeArchitectureAmd64);
+            case CMakePlatformWeb:
+            {
+            } break;
+        }
 
-                        c_make_process_wait_for_all();
+        c_make_process_wait_for_all();
 
-                        CMakeCommand command = { 0 };
-
-                        c_make_command_append(&command, "lipo", "-create", "-output", 
-                                              c_make_c_string_path_concat(c_make_get_build_path(), "libcui.so"),
-                                              c_make_c_string_path_concat(c_make_get_build_path(), "libcui-arm64.so"),
-                                              c_make_c_string_path_concat(c_make_get_build_path(), "libcui-x86_64.so"));
-
-                        c_make_log(CMakeLogLevelInfo, "generate 'libcui.so'\n");
-                        c_make_command_run_and_reset(&command);
-
-                        c_make_command_append(&command, "lipo", "-create", "-output", 
-                                              c_make_c_string_path_concat(c_make_get_build_path(), "libcui.a"),
-                                              c_make_c_string_path_concat(c_make_get_build_path(), "libcui-arm64.a"),
-                                              c_make_c_string_path_concat(c_make_get_build_path(), "libcui-x86_64.a"));
-
-                        c_make_log(CMakeLogLevelInfo, "generate 'libcui.a'\n");
-                        c_make_command_run_and_reset(&command);
-                    }
-                    else
-                    {
-                        c_make_log(CMakeLogLevelWarning, "This machine can't compile for aarch64\n");
-                        cui_c_make_build_shared_library("cui", c_make_get_target_architecture());
-                        cui_c_make_build_static_library("cui", c_make_get_target_architecture());
-                    }
-                } break;
-
-                case CMakePlatformWeb:
-                {
-                } break;
-            }
-
-            c_make_process_wait_for_all();
-
-            cui_c_make_build_example("Interface Browser", "interface_browser");
-            cui_c_make_build_example("Image Viewer", "image_viewer");
-            cui_c_make_build_example("File Search", "file_search");
-            cui_c_make_build_example("Color Tool", "color_tool");
-        } break;
-
-        case CMakeTargetInstall:
-        {
-        } break;
+        cui_c_make_build_example("Interface Browser", "interface_browser");
+        cui_c_make_build_example("Image Viewer", "image_viewer");
+        cui_c_make_build_example("File Search", "file_search");
+        cui_c_make_build_example("Color Tool", "color_tool");
+    }
+    else
+    {
+        c_make_handle_default_commands(command, argument_count, arguments);
     }
 }

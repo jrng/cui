@@ -58,7 +58,10 @@
 #      define C_MAKE_ARCHITECTURE_RISCV64 1
 #    endif
 #  else
-#    if defined(_M_AMD64)
+#    if defined(_M_ARM64)
+#      undef C_MAKE_ARCHITECTURE_AARCH64
+#      define C_MAKE_ARCHITECTURE_AARCH64 1
+#    elif defined(_M_AMD64)
 #      undef C_MAKE_ARCHITECTURE_AMD64
 #      define C_MAKE_ARCHITECTURE_AMD64 1
 #    endif
@@ -84,6 +87,14 @@
 #  endif
 #endif
 
+#if defined(__clang__)
+#  define CMakePrintfFormat(format_string_index, argument_start_index) __attribute__ ((format (printf, format_string_index, argument_start_index)))
+#elif defined(__GNUC__)
+#  define CMakePrintfFormat(format_string_index, argument_start_index) __attribute__ ((format (gnu_printf, format_string_index, argument_start_index)))
+#else
+#  define CMakePrintfFormat(format_string_index, argument_start_index)
+#endif
+
 #define _CMakeStr(str) #str
 #define CMakeStr(str) _CMakeStr(str)
 
@@ -93,8 +104,12 @@
 #define __CMakeNArgs(x) x
 #define _CMakeNArgs(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, n, ...) n
 
+#define CMakeStringConstant(str) { sizeof(str) - 1, (char *) (str) }
 #define CMakeStringLiteral(str) c_make_make_string((char *) (str), sizeof(str) - 1)
 #define CMakeCString(str) c_make_make_string((char *) (str), c_make_get_c_string_length(str))
+
+#define c_make_string_formated(format, ...) c_make_string_formated_with_memory(&_c_make_context.public_memory, format, __VA_ARGS__)
+#define c_make_c_string_formated(format, ...) c_make_c_string_formated_with_memory(&_c_make_context.public_memory, format, __VA_ARGS__)
 
 #define c_make_string_replace_all(str, pattern, replace) c_make_string_replace_all_with_memory(&_c_make_context.public_memory, str, pattern, replace)
 #define c_make_string_to_c_string(str) c_make_string_to_c_string_with_memory(&_c_make_context.public_memory, str)
@@ -154,20 +169,8 @@ extern "C" {
 #  include <stdbool.h>
 #endif
 
-typedef enum CMakeTarget
-{
-    CMakeTargetSetup   = 0,
-    CMakeTargetBuild   = 1,
-    CMakeTargetInstall = 2,
-} CMakeTarget;
-
-#if !defined(C_MAKE_NO_ENTRY_POINT)
-
-#  define C_MAKE_ENTRY(__target_name__) void _c_make_entry_(CMakeTarget __target_name__)
-
-C_MAKE_ENTRY(target);
-
-#endif // !defined(C_MAKE_NO_ENTRY_POINT)
+#define C_MAKE_COMMAND_SETUP CMakeStringLiteral("setup")
+#define C_MAKE_COMMAND_BUILD CMakeStringLiteral("build")
 
 typedef enum CMakeLogLevel
 {
@@ -225,6 +228,20 @@ typedef struct CMakeString
 
 #define CMakeStringFmt ".*s"
 #define CMakeStringArg(str) (int) (str).count, (str).data
+
+typedef struct CMakeInfo
+{
+    CMakeString name;
+    CMakeString desc;
+} CMakeInfo;
+
+typedef struct CMakeInfoArray
+{
+    size_t count;
+    size_t allocated;
+    CMakeInfo *items;
+    CMakeMemory *memory;
+} CMakeInfoArray;
 
 typedef struct CMakeStringArray
 {
@@ -310,6 +327,8 @@ typedef struct CMakeContext
     CMakeArchitecture target_architecture;
     CMakeBuildType build_type;
 
+    const char *program_name;
+
     const char *build_path;
     const char *source_path;
 
@@ -353,6 +372,20 @@ typedef struct CMakeAndroidSdk
     CMakeSoftwarePackage platforms;
     CMakeSoftwarePackage build_tools;
 } CMakeAndroidSdk;
+
+#if !defined(C_MAKE_NO_ENTRY_POINT)
+
+#  define C_MAKE_INFO(__commands_info_name__, __configs_info_name__) \
+        void _c_make_info_(CMakeInfoArray *__commands_info_name__, CMakeInfoArray *__configs_info_name__)
+#  define C_MAKE_ENTRY(__command_name__, __argument_count_name__, __arguments_name__) \
+        void _c_make_entry_(CMakeString __command_name__, size_t __argument_count_name__, CMakeString *__arguments_name__)
+
+C_MAKE_INFO(commands_info, configs_info);
+C_MAKE_ENTRY(command, argument_count, arguments);
+
+#  define C_MAKE_INFO_DEFAULT() C_MAKE_INFO(commands_info, configs_info) { (void) commands_info; (void) configs_info; }
+
+#endif // !defined(C_MAKE_NO_ENTRY_POINT)
 
 static inline CMakeString
 c_make_make_string(void *data, size_t count)
@@ -448,7 +481,10 @@ c_make_get_architecture_name(CMakeArchitecture architecture)
 
 C_MAKE_DEF void c_make_set_failed(bool failed);
 C_MAKE_DEF bool c_make_get_failed(void);
-C_MAKE_DEF void c_make_log(CMakeLogLevel log_level, const char *format, ...);
+C_MAKE_DEF void c_make_log(CMakeLogLevel log_level, const char *format, ...) CMakePrintfFormat(2, 3);
+
+C_MAKE_DEF CMakeString c_make_string_formated_with_memory(CMakeMemory *memory, const char *format, ...) CMakePrintfFormat(2, 3);
+C_MAKE_DEF const char *c_make_c_string_formated_with_memory(CMakeMemory *memory, const char *format, ...) CMakePrintfFormat(2, 3);
 
 C_MAKE_DEF void *c_make_memory_allocate(CMakeMemory *memory, size_t size);
 C_MAKE_DEF void *c_make_memory_reallocate(CMakeMemory *memory, void *old_ptr, size_t old_size, size_t new_size);
@@ -461,6 +497,8 @@ C_MAKE_DEF void c_make_memory_restore(size_t saved);
 
 C_MAKE_DEF CMakeTemporaryMemory c_make_begin_temporary_memory(size_t conflict_count, CMakeMemory **conflicts);
 C_MAKE_DEF void c_make_end_temporary_memory(CMakeTemporaryMemory temp_memory);
+
+C_MAKE_DEF void c_make_add_info(CMakeInfoArray *info_array, CMakeString name, CMakeString desc);
 
 C_MAKE_DEF void c_make_command_append_va(CMakeCommand *command, size_t count, ...);
 C_MAKE_DEF void c_make_command_append_slice(CMakeCommand *command, size_t count, const char **items);
@@ -481,6 +519,7 @@ C_MAKE_DEF CMakeString c_make_string_split_left(CMakeString *str, char c);
 C_MAKE_DEF CMakeString c_make_string_split_right(CMakeString *str, char c);
 C_MAKE_DEF CMakeString c_make_string_split_right_path_separator(CMakeString *str);
 C_MAKE_DEF CMakeString c_make_string_trim(CMakeString str);
+C_MAKE_DEF CMakeString c_make_string_trim_characters(CMakeString str, CMakeString chars);
 C_MAKE_DEF size_t c_make_string_find(CMakeString str, CMakeString pattern);
 C_MAKE_DEF CMakeString c_make_string_replace_all_with_memory(CMakeMemory *memory, CMakeString str, CMakeString pattern, CMakeString replace);
 C_MAKE_DEF char *c_make_string_to_c_string_with_memory(CMakeMemory *memory, CMakeString str);
@@ -537,6 +576,7 @@ C_MAKE_DEF bool c_make_setup_java(bool logging);
 
 C_MAKE_DEF void c_make_config_set(const char *key, const char *value);
 C_MAKE_DEF CMakeConfigValue c_make_config_get(const char *key);
+C_MAKE_DEF void c_make_print_config(void);
 
 C_MAKE_DEF bool c_make_store_config(const char *file_name);
 C_MAKE_DEF bool c_make_load_config(const char *file_name);
@@ -558,6 +598,8 @@ C_MAKE_DEF bool c_make_write_entire_file(const char *file_name, CMakeString cont
 C_MAKE_DEF bool c_make_copy_file(const char *src_file, const char *dst_file);
 C_MAKE_DEF bool c_make_rename_file(const char *old_file_name, const char *new_file_name);
 C_MAKE_DEF bool c_make_delete_file(const char *file_name);
+C_MAKE_DEF bool c_make_delete_directory(const char *directory_name);
+C_MAKE_DEF bool c_make_delete_directory_recursively(const char *directory_name);
 
 C_MAKE_DEF bool c_make_has_slash_or_backslash(const char *path);
 C_MAKE_DEF CMakeString c_make_get_environment_variable(CMakeMemory *memory, const char *variable_name);
@@ -577,6 +619,9 @@ C_MAKE_DEF bool c_make_command_run_and_reset_and_wait(CMakeCommand *command);
 C_MAKE_DEF bool c_make_command_run_and_wait(CMakeCommand command);
 C_MAKE_DEF bool c_make_command_run_output_with_memory(CMakeMemory *memory, CMakeCommand command, CMakeString *stdout_str, CMakeString *stderr_str);
 C_MAKE_DEF bool c_make_process_wait_for_all(void);
+
+C_MAKE_DEF void c_make_add_default_info(CMakeInfoArray *commands_info, CMakeInfoArray *configs_info);
+C_MAKE_DEF void c_make_handle_default_commands(CMakeString command, size_t argument_count, CMakeString *arguments);
 
 static inline bool
 c_make_is_msvc_library_manager(const char *cmd)
@@ -623,9 +668,7 @@ c_make_config_is_enabled(const char *key, bool fallback)
 
     if (config_value.is_valid)
     {
-        const char *val = config_value.val;
-
-        if (val && (val[0] == 'o') && (val[1] == 'n') && (val[2] == 0))
+        if (c_make_strings_are_equal(CMakeCString(config_value.val), CMakeStringLiteral("on")))
         {
             result = true;
         }
@@ -642,6 +685,12 @@ c_make_config_is_enabled(const char *key, bool fallback)
 }
 #endif
 
+#endif // __C_MAKE_INCLUDE__
+
+#if defined(C_MAKE_IMPLEMENTATION)
+
+static CMakeContext _c_make_context;
+
 #include <stdio.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -652,25 +701,13 @@ c_make_config_is_enabled(const char *key, bool fallback)
 #  include <time.h>
 #  include <errno.h>
 #  include <fcntl.h>
+#  include <string.h>
 #  include <unistd.h>
 #  include <sys/stat.h>
 
 #endif
 
-#endif // __C_MAKE_INCLUDE__
-
-#if defined(C_MAKE_IMPLEMENTATION)
-
-static CMakeContext _c_make_context;
-
-#if !defined(c_make_strlen)
-#  include <string.h>
-#  define c_make_strcmp(a, b) strcmp(a, b)
-#  define c_make_strdup(a) strdup(a)
-#endif
-
 #if !defined(c_make_malloc)
-#  include <stdlib.h>
 #  define c_make_malloc(a) malloc(a)
 #endif
 
@@ -961,6 +998,54 @@ c_make_log(CMakeLogLevel log_level, const char *format, ...)
     va_end(args);
 }
 
+C_MAKE_DEF CMakeString
+c_make_string_formated_with_memory(CMakeMemory *memory, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    int ret = vsnprintf(0, 0, format, args);
+
+    va_end(args);
+
+    assert(ret >= 0);
+
+    CMakeString result;
+    result.count = ret;
+    result.data = (char *) c_make_memory_allocate(memory, result.count + 1);
+
+    va_start(args, format);
+
+    vsnprintf(result.data, result.count + 1, format, args);
+
+    va_end(args);
+
+    return result;
+}
+
+C_MAKE_DEF const char *
+c_make_c_string_formated_with_memory(CMakeMemory *memory, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    int ret = vsnprintf(0, 0, format, args);
+
+    va_end(args);
+
+    assert(ret >= 0);
+
+    char *result = (char *) c_make_memory_allocate(memory, ret + 1);
+
+    va_start(args, format);
+
+    vsnprintf(result, ret + 1, format, args);
+
+    va_end(args);
+
+    return result;
+}
+
 C_MAKE_DEF void *
 c_make_memory_allocate(CMakeMemory *memory, size_t size)
 {
@@ -1105,6 +1190,26 @@ c_make_end_temporary_memory(CMakeTemporaryMemory temp_memory)
 }
 
 C_MAKE_DEF void
+c_make_add_info(CMakeInfoArray *info_array, CMakeString name, CMakeString desc)
+{
+    if (info_array->count == info_array->allocated)
+    {
+        size_t old_count = info_array->allocated;
+        info_array->allocated += 8;
+        info_array->items =
+            (CMakeInfo *) c_make_memory_reallocate(info_array->memory, info_array->items,
+                                                   old_count * sizeof(*info_array->items),
+                                                   info_array->allocated * sizeof(*info_array->items));
+    }
+
+    CMakeInfo *info = info_array->items + info_array->count;
+    info_array->count += 1;
+
+    info->name = name;
+    info->desc = desc;
+}
+
+C_MAKE_DEF void
 c_make_command_append_va(CMakeCommand *command, size_t count, ...)
 {
     if ((command->count + count) > command->allocated)
@@ -1246,6 +1351,10 @@ c_make_command_append_output_executable(CMakeCommand *command, const char *outpu
             if (platform == CMakePlatformWindows)
             {
                 arguments[1] = c_make_c_string_concat(output_path, ".exe");
+            }
+            else if (platform == CMakePlatformWeb)
+            {
+                arguments[1] = c_make_c_string_concat(output_path, ".wasm");
             }
         }
 
@@ -1616,16 +1725,32 @@ c_make_string_split_right_path_separator(CMakeString *str)
 C_MAKE_DEF CMakeString
 c_make_string_trim(CMakeString str)
 {
-    while (str.count && ((str.data[str.count - 1] == ' ') ||
-                         (str.data[str.count - 1] == '\t') ||
-                         (str.data[str.count - 1] == '\r') ||
-                         (str.data[str.count - 1] == '\n')))
+    return c_make_string_trim_characters(str, CMakeStringLiteral(" \t\r\n"));
+}
+
+static bool
+__c_make_string_contains_character(CMakeString str, char c)
+{
+    for (size_t i = 0; i < str.count; i += 1)
+    {
+        if (str.data[i] == c)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+C_MAKE_DEF CMakeString
+c_make_string_trim_characters(CMakeString str, CMakeString chars)
+{
+    while (str.count && __c_make_string_contains_character(chars, str.data[str.count - 1]))
     {
         str.count -= 1;
     }
 
-    while (str.count && ((str.data[0] == ' ') || (str.data[0] == '\t') ||
-                         (str.data[0] == '\r') || (str.data[0] == '\n')))
+    while (str.count && __c_make_string_contains_character(chars, str.data[0]))
     {
         str.count -= 1;
         str.data += 1;
@@ -2503,8 +2628,13 @@ c_make_get_msvc_library_manager(CMakeArchitecture target_architecture)
             arch = "arm64";
         }
 
+#if C_MAKE_ARCHITECTURE_AARCH64
+        result = c_make_c_string_path_concat(visual_studio_install.root_path, "VC", "Tools", "MSVC",
+                                             visual_studio_install.version, "bin", "Hostarm64", arch, "lib.exe");
+#else
         result = c_make_c_string_path_concat(visual_studio_install.root_path, "VC", "Tools", "MSVC",
                                              visual_studio_install.version, "bin", "Hostx64", arch, "lib.exe");
+#endif
     }
 
     return result;
@@ -2525,8 +2655,13 @@ c_make_get_msvc_compiler(CMakeArchitecture target_architecture)
             arch = "arm64";
         }
 
+#if C_MAKE_ARCHITECTURE_AARCH64
+        result = c_make_c_string_path_concat(visual_studio_install.root_path, "VC", "Tools", "MSVC",
+                                             visual_studio_install.version, "bin", "Hostarm64", arch, "cl.exe");
+#else
         result = c_make_c_string_path_concat(visual_studio_install.root_path, "VC", "Tools", "MSVC",
                                              visual_studio_install.version, "bin", "Hostx64", arch, "cl.exe");
+#endif
     }
 
     return result;
@@ -3917,6 +4052,7 @@ c_make_delete_file(const char *file_name)
 #elif C_MAKE_PLATFORM_ANDROID || C_MAKE_PLATFORM_FREEBSD || C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
     if (unlink(file_name))
     {
+        // TODO: also handle ENOTDIR?
         if (errno == ENOENT)
         {
             return true;
@@ -3927,6 +4063,98 @@ c_make_delete_file(const char *file_name)
 
     return true;
 #endif
+}
+
+C_MAKE_DEF bool
+c_make_delete_directory(const char *directory_name)
+{
+#if C_MAKE_PLATFORM_WINDOWS
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+    LPWSTR utf16_directory_name = c_make_c_string_utf8_to_utf16(temp_memory.memory, directory_name);
+
+    bool result = RemoveDirectory(utf16_directory_name) ? true : false;
+
+    // TODO: ERROR_PATH_NOT_FOUND
+    if (!result && (GetLastError() == ERROR_FILE_NOT_FOUND))
+    {
+        result = true;
+    }
+
+    c_make_end_temporary_memory(temp_memory);
+
+    return result;
+#elif C_MAKE_PLATFORM_ANDROID || C_MAKE_PLATFORM_FREEBSD || C_MAKE_PLATFORM_LINUX || C_MAKE_PLATFORM_MACOS
+    if (rmdir(directory_name))
+    {
+        // TODO: also handle ENOTDIR?
+        if (errno == ENOENT)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    return true;
+#endif
+}
+
+C_MAKE_DEF bool
+c_make_delete_directory_recursively(const char *directory_name)
+{
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+    bool result = false;
+
+    CMakeDirectory *dir = c_make_directory_open(temp_memory.memory, directory_name);
+
+    if (dir)
+    {
+        result = true;
+
+        CMakeDirectoryEntry *entry;
+
+        while ((entry = c_make_directory_get_next_entry(temp_memory.memory, dir)))
+        {
+            size_t memory_used = c_make_memory_get_used(temp_memory.memory);
+
+            switch (entry->type)
+            {
+                case CMakeFileTypeDirectory:
+                {
+                    if (!c_make_strings_are_equal(entry->name, CMakeStringLiteral(".")) &&
+                        !c_make_strings_are_equal(entry->name, CMakeStringLiteral("..")))
+                    {
+                        if (!c_make_delete_directory_recursively(c_make_c_string_path_concat_with_memory(temp_memory.memory, directory_name, c_make_string_to_c_string_with_memory(temp_memory.memory, entry->name))))
+                        {
+                            result = false;
+                        }
+                    }
+                } break;
+
+                case CMakeFileTypeRegular:
+                case CMakeFileTypeOther:
+                {
+                    if (!c_make_delete_file(c_make_c_string_path_concat_with_memory(temp_memory.memory, directory_name, c_make_string_to_c_string_with_memory(temp_memory.memory, entry->name))))
+                    {
+                        result = false;
+                    }
+                } break;
+            }
+
+            c_make_memory_set_used(temp_memory.memory, memory_used);
+        }
+    }
+
+    c_make_end_temporary_memory(temp_memory);
+
+    if (result)
+    {
+        result = c_make_delete_directory(directory_name);
+    }
+
+    return result;
 }
 
 C_MAKE_DEF bool
@@ -4291,7 +4519,12 @@ __c_make_command_run(CMakeMemory *memory, CMakeCommand command, CMakeString *std
     {
         if (!command.items[i])
         {
-            c_make_log(CMakeLogLevelError, "[command_run] command has a NULL argument at index %zu\n", i);
+            CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+            CMakeString command_string = c_make_command_to_string(temp_memory.memory, command);
+            c_make_log(CMakeLogLevelError, "[command_run] command has a NULL argument at index %zu: %" CMakeStringFmt "\n", i, CMakeStringArg(command_string));
+
+            c_make_end_temporary_memory(temp_memory);
             return CMakeInvalidProcessId;
         }
     }
@@ -4548,9 +4781,9 @@ __c_make_command_run(CMakeMemory *memory, CMakeCommand command, CMakeString *std
 
     if (pid < 0)
     {
+        CMakeString command_string = c_make_command_to_string(temp_memory.memory, command);
+        c_make_log(CMakeLogLevelError, "[command_run.fork] %s: %" CMakeStringFmt "\n", strerror(errno), CMakeStringArg(command_string));
         c_make_end_temporary_memory(temp_memory);
-        // TODO: log error
-        fprintf(stderr, "Could not fork\n");
 
         if (stdout_str)
         {
@@ -4585,8 +4818,8 @@ __c_make_command_run(CMakeMemory *memory, CMakeCommand command, CMakeString *std
 
         if (ret < 0)
         {
-            // TODO: log error
-            fprintf(stderr, "Could not execvp: %s\n", strerror(errno));
+            CMakeString command_string = c_make_command_to_string(temp_memory.memory, command);
+            c_make_log(CMakeLogLevelError, "[command_run.execvp] %s: %" CMakeStringFmt "\n", strerror(errno), CMakeStringArg(command_string));
             exit(1);
         }
 
@@ -4773,18 +5006,85 @@ c_make_process_wait_for_all(void)
     return result;
 }
 
-#if !defined(C_MAKE_NO_ENTRY_POINT)
+#if defined(C_MAKE_NO_ENTRY_POINT)
+
+C_MAKE_DEF void
+c_make_add_default_info(CMakeInfoArray *commands_info, CMakeInfoArray *configs_info)
+{
+    (void) commands_info;
+    (void) configs_info;
+}
+
+C_MAKE_DEF void
+c_make_handle_default_commands(CMakeString command, size_t argument_count, CMakeString *arguments)
+{
+    (void) command;
+    (void) argument_count;
+    (void) arguments;
+}
+
+#else
+
+static const CMakeString known_config_keys[] = {
+    CMakeStringConstant("android_aapt_executable"),
+    CMakeStringConstant("android_apksigner_executable"),
+    CMakeStringConstant("android_d8_executable"),
+    CMakeStringConstant("android_platform_jar"),
+    CMakeStringConstant("android_zipalign_executable"),
+    CMakeStringConstant("build_type"),
+    CMakeStringConstant("host_ar"),
+    CMakeStringConstant("host_c_compiler"),
+    CMakeStringConstant("host_cpp_compiler"),
+    CMakeStringConstant("install_prefix"),
+    CMakeStringConstant("java_jar_executable"),
+    CMakeStringConstant("java_jarsigner_executable"),
+    CMakeStringConstant("java_javac_executable"),
+    CMakeStringConstant("java_keytool_executable"),
+    CMakeStringConstant("pkg_config_executable"),
+    CMakeStringConstant("target_architecture"),
+    CMakeStringConstant("target_ar"),
+    CMakeStringConstant("target_c_compiler"),
+    CMakeStringConstant("target_c_flags"),
+    CMakeStringConstant("target_cpp_compiler"),
+    CMakeStringConstant("target_cpp_flags"),
+    CMakeStringConstant("target_platform"),
+    CMakeStringConstant("visual_studio_root_path"),
+    CMakeStringConstant("visual_studio_version"),
+    CMakeStringConstant("windows_rc_executable"),
+    CMakeStringConstant("windows_sdk_root_path"),
+    CMakeStringConstant("windows_sdk_version"),
+};
 
 static void
-print_help(const char *program_name)
+__c_make_print_help(CMakeInfoArray *commands_info, CMakeInfoArray *configs_info)
 {
-    fprintf(stderr, "usage: %s <command> <build-directory> [--verbose] [--sequential] [<key>=\"<value>\" ...]\n", program_name);
+    fprintf(stderr, "usage: %s <command> <build-directory> [--verbose] [--sequential] [<key>=\"<value>\" ...]\n", _c_make_context.program_name);
     fprintf(stderr, "\n");
     fprintf(stderr, "commands:\n");
     fprintf(stderr, "    setup                Create and configure a new build directory.\n");
     fprintf(stderr, "    build                Run the build target on the given build directory.\n");
-    fprintf(stderr, "    install              Run the install target on the given build directory.\n");
     fprintf(stderr, "\n");
+
+    if (commands_info->count > 0)
+    {
+        fprintf(stderr, "project commands:\n");
+        for (size_t i = 0; i < commands_info->count; i += 1)
+        {
+            CMakeInfo *info = commands_info->items + i;
+            CMakeString desc = info->desc;
+            CMakeString line = c_make_string_split_left(&desc, '\n');
+
+            fprintf(stderr, "    %-21.*s%" CMakeStringFmt "\n", CMakeStringArg(info->name), CMakeStringArg(line));
+
+            while (desc.count)
+            {
+                line = c_make_string_split_left(&desc, '\n');
+                fprintf(stderr, "                         %" CMakeStringFmt "\n", CMakeStringArg(line));
+            }
+        }
+        fprintf(stderr, "\n");
+    }
+
     fprintf(stderr, "options:\n");
     fprintf(stderr, "    --verbose            This will print out the configuration and all the\n");
     fprintf(stderr, "                         command lines that are executed.\n");
@@ -4834,15 +5134,223 @@ print_help(const char *program_name)
     fprintf(stderr, "                                  in which you find 'bin', 'Include' and 'Lib'.\n");
     fprintf(stderr, "    windows_sdk_version           The version of the windows sdk.\n");
     fprintf(stderr, "\n");
+
+    if (configs_info->count > 0)
+    {
+        fprintf(stderr, "project configs:\n");
+        for (size_t i = 0; i < configs_info->count; i += 1)
+        {
+            CMakeInfo *info = configs_info->items + i;
+            CMakeString desc = info->desc;
+            CMakeString line = c_make_string_split_left(&desc, '\n');
+
+            fprintf(stderr, "    %-30.*s%" CMakeStringFmt "\n", CMakeStringArg(info->name), CMakeStringArg(line));
+
+            while (desc.count)
+            {
+                line = c_make_string_split_left(&desc, '\n');
+                fprintf(stderr, "                                  %" CMakeStringFmt "\n", CMakeStringArg(line));
+            }
+        }
+        fprintf(stderr, "\n");
+    }
+
     fprintf(stderr, "host platform: %s\n", c_make_get_platform_name(c_make_get_host_platform()));
     fprintf(stderr, "host architecture: %s\n", c_make_get_architecture_name(c_make_get_host_architecture()));
 }
 
+static size_t
+__c_make_string_get_levenshtein_distance(CMakeString a, CMakeString b)
+{
+    size_t n = a.count + 1;
+    size_t m = b.count + 1;
+
+    CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+    size_t *d0 = (size_t *) c_make_memory_allocate(temp_memory.memory, 2 * n * sizeof(*d0));
+    size_t *d1 = d0 + n;
+
+    for (size_t j = 0; j < n; j += 1)
+    {
+        d0[j] = j;
+    }
+
+    for (size_t i = 1; i < m; i += 1)
+    {
+        d1[0] = i;
+
+        for (size_t j = 1; j < n; j += 1)
+        {
+            d1[j] = d0[j - 1];
+
+            if (a.data[j - 1] != b.data[i - 1])
+            {
+                if (d0[j]     < d1[j]) d1[j] = d0[j];
+                if (d1[j - 1] < d1[j]) d1[j] = d1[j - 1];
+                d1[j] += 1;
+            }
+        }
+
+        size_t *tmp = d1;
+        d1 = d0;
+        d0 = tmp;
+    }
+
+    size_t result = d0[a.count];
+
+    c_make_end_temporary_memory(temp_memory);
+
+    return result;
+}
+
+static bool
+__c_make_string_levenshtein_distance_is_in_1_to_n(CMakeString a, CMakeString b, size_t n)
+{
+    size_t distance;
+
+    if (a.count < b.count)
+    {
+        distance = b.count - a.count;
+    }
+    else
+    {
+        distance = a.count - b.count;
+    }
+
+    if (distance <= n)
+    {
+        distance = __c_make_string_get_levenshtein_distance(a, b);
+
+        if ((distance > 0) && (distance <= n))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+C_MAKE_DEF void
+c_make_add_default_info(CMakeInfoArray *commands_info, CMakeInfoArray *configs_info)
+{
+    (void) configs_info;
+
+    c_make_add_info(commands_info, CMakeStringLiteral("config"), CMakeStringLiteral("Print the configuration for the given build directory."));
+    c_make_add_info(commands_info, CMakeStringLiteral("clean") , CMakeStringLiteral("Clean the build directory, while keeping the configuration."));
+}
+
+C_MAKE_DEF void
+c_make_handle_default_commands(CMakeString command, size_t argument_count, CMakeString *arguments)
+{
+    (void) argument_count;
+    (void) arguments;
+
+    if (c_make_strings_are_equal(command, C_MAKE_COMMAND_SETUP) ||
+        c_make_strings_are_equal(command, C_MAKE_COMMAND_BUILD))
+    {
+    }
+    else if (c_make_strings_are_equal(command, CMakeStringLiteral("config")))
+    {
+        c_make_print_config();
+    }
+    else if (c_make_strings_are_equal(command, CMakeStringLiteral("clean")))
+    {
+        const char *build_path = c_make_get_build_path();
+        c_make_log(CMakeLogLevelInfo, "clean '%s'\n", build_path);
+
+        CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+        CMakeDirectory *dir = c_make_directory_open(temp_memory.memory, build_path);
+
+        if (dir)
+        {
+            CMakeDirectoryEntry *entry;
+
+            while ((entry = c_make_directory_get_next_entry(temp_memory.memory, dir)))
+            {
+                size_t memory_used = c_make_memory_get_used(temp_memory.memory);
+
+                switch (entry->type)
+                {
+                    case CMakeFileTypeDirectory:
+                    {
+                        if (!c_make_strings_are_equal(entry->name, CMakeStringLiteral(".")) &&
+                            !c_make_strings_are_equal(entry->name, CMakeStringLiteral("..")))
+                        {
+                            c_make_delete_directory_recursively(c_make_c_string_path_concat_with_memory(temp_memory.memory, build_path, c_make_string_to_c_string_with_memory(temp_memory.memory, entry->name)));
+                        }
+                    } break;
+
+                    case CMakeFileTypeRegular:
+                    case CMakeFileTypeOther:
+                    {
+                        if (!c_make_strings_are_equal(entry->name, CMakeStringLiteral("c_make.txt")) &&
+                            !c_make_strings_are_equal(entry->name, CMakeStringLiteral(".gitignore")))
+                        {
+                            c_make_delete_file(c_make_c_string_path_concat_with_memory(temp_memory.memory, build_path, c_make_string_to_c_string_with_memory(temp_memory.memory, entry->name)));
+                        }
+                    } break;
+                }
+
+                c_make_memory_set_used(temp_memory.memory, memory_used);
+            }
+        }
+
+        c_make_end_temporary_memory(temp_memory);
+    }
+    else
+    {
+        c_make_log(CMakeLogLevelWarning, "unknown command '%" CMakeStringFmt "'\n", CMakeStringArg(command));
+
+        CMakeString default_commands[] = {
+            CMakeStringConstant("setup"),
+            CMakeStringConstant("build"),
+        };
+
+        for (size_t i = 0; i < CMakeArrayCount(default_commands); i += 1)
+        {
+            if (__c_make_string_levenshtein_distance_is_in_1_to_n(command, default_commands[i], 3))
+            {
+                c_make_log(CMakeLogLevelWarning, "   did you mean '%" CMakeStringFmt "'\n", CMakeStringArg(default_commands[i]));
+            }
+        }
+
+        CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+        CMakeInfoArray commands_info = { 0, 0, 0, temp_memory.memory };
+        CMakeInfoArray configs_info = { 0, 0, 0, temp_memory.memory };
+
+        _c_make_info_(&commands_info, &configs_info);
+
+        for (size_t i = 0; i < commands_info.count; i += 1)
+        {
+            if (__c_make_string_levenshtein_distance_is_in_1_to_n(command, commands_info.items[i].name, 3))
+            {
+                c_make_log(CMakeLogLevelWarning, "   did you mean '%" CMakeStringFmt "'\n", CMakeStringArg(commands_info.items[i].name));
+            }
+        }
+
+        __c_make_print_help(&commands_info, &configs_info);
+
+        c_make_end_temporary_memory(temp_memory);
+    }
+}
+
 int main(int argument_count, char **arguments)
 {
+    _c_make_context.program_name = arguments[0];
+
     if (argument_count < 3)
     {
-        print_help(arguments[0]);
+        CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+        CMakeInfoArray commands_info = { 0, 0, 0, temp_memory.memory };
+        CMakeInfoArray configs_info = { 0, 0, 0, temp_memory.memory };
+
+        _c_make_info_(&commands_info, &configs_info);
+        __c_make_print_help(&commands_info, &configs_info);
+
+        c_make_end_temporary_memory(temp_memory);
         return 2;
     }
 
@@ -5187,6 +5695,12 @@ int main(int argument_count, char **arguments)
 #endif
 
         CMakeTemporaryMemory temp_memory = c_make_begin_temporary_memory(0, 0);
+
+        CMakeInfoArray commands_info = { 0, 0, 0, temp_memory.memory };
+        CMakeInfoArray configs_info = { 0, 0, 0, temp_memory.memory };
+
+        _c_make_info_(&commands_info, &configs_info);
+
         size_t memory_used = c_make_memory_get_used(temp_memory.memory);
 
         for (int i = 3; i < argument_count; i += 1)
@@ -5198,6 +5712,24 @@ int main(int argument_count, char **arguments)
 
             if (key.count && value.count)
             {
+                for (size_t i = 0; i < CMakeArrayCount(known_config_keys); i += 1)
+                {
+                    if (__c_make_string_levenshtein_distance_is_in_1_to_n(key, known_config_keys[i], 4))
+                    {
+                        c_make_log(CMakeLogLevelWarning, "setting config key '%" CMakeStringFmt "'; did you mean '%" CMakeStringFmt "'\n",
+                                                         CMakeStringArg(key), CMakeStringArg(known_config_keys[i]));
+                    }
+                }
+
+                for (size_t i = 0; i < configs_info.count; i += 1)
+                {
+                    if (__c_make_string_levenshtein_distance_is_in_1_to_n(key, configs_info.items[i].name, 4))
+                    {
+                        c_make_log(CMakeLogLevelWarning, "setting config key '%" CMakeStringFmt "'; did you mean '%" CMakeStringFmt "'\n",
+                                                         CMakeStringArg(key), CMakeStringArg(configs_info.items[i].name));
+                    }
+                }
+
                 if (value.data[0] == '"')
                 {
                     value.count -= 1;
@@ -5333,7 +5865,7 @@ int main(int argument_count, char **arguments)
         }
 #endif
 
-        _c_make_entry_(CMakeTargetSetup);
+        _c_make_entry_(command, 0, 0);
 
         c_make_process_wait_for_all();
 
@@ -5352,8 +5884,7 @@ int main(int argument_count, char **arguments)
 
         c_make_memory_set_used(&_c_make_context.public_memory, public_used);
     }
-    else if (c_make_strings_are_equal(command, CMakeStringLiteral("build")) ||
-             c_make_strings_are_equal(command, CMakeStringLiteral("install")))
+    else
     {
         if (!c_make_directory_exists(build_directory))
         {
@@ -5378,14 +5909,15 @@ int main(int argument_count, char **arguments)
             c_make_print_config();
         }
 
-        if (c_make_strings_are_equal(command, CMakeStringLiteral("build")))
+        size_t command_argument_count = argument_count - 3;
+        CMakeString *command_arguments = (CMakeString *) c_make_memory_allocate(&_c_make_context.permanent_memory, command_argument_count * sizeof(*command_arguments));
+
+        for (int i = 3; i < argument_count; i += 1)
         {
-            _c_make_entry_(CMakeTargetBuild);
+            command_arguments[i - 3] = CMakeCString(arguments[i]);
         }
-        else
-        {
-            _c_make_entry_(CMakeTargetInstall);
-        }
+
+        _c_make_entry_(command, command_argument_count, command_arguments);
 
         c_make_process_wait_for_all();
     }
@@ -5413,11 +5945,15 @@ int main(int argument_count, char **arguments)
 #    define ARCHITECTURE_RISCV64 C_MAKE_ARCHITECTURE_RISCV64
 #    define ARCHITECTURE_WASM32 C_MAKE_ARCHITECTURE_WASM32
 #    define ARCHITECTURE_WASM64 C_MAKE_ARCHITECTURE_WASM64
+#    define COMMAND_SETUP C_MAKE_COMMAND_SETUP
+#    define COMMAND_BUILD C_MAKE_COMMAND_BUILD
 #    define Str CMakeStr
 #    define ArrayCount CMakeArrayCount
 #    define String CMakeString
 #    define StringFmt CMakeStringFmt
 #    define StringArg CMakeStringArg
+#    define Info CMakeInfo
+#    define InfoArray CMakeInfoArray
 #    define Command CMakeCommand
 #    define ConfigValue CMakeConfigValue
 #    define FileType CMakeFileType
@@ -5430,6 +5966,10 @@ int main(int argument_count, char **arguments)
 #    define AndroidSdk CMakeAndroidSdk
 #    define StringLiteral CMakeStringLiteral
 #    define CString CMakeCString
+#    define string_formated c_make_string_formated
+#    define string_formated_with_memory c_make_string_formated_with_memory
+#    define c_string_formated c_make_c_string_formated
+#    define c_string_formated_with_memory c_make_c_string_formated_with_memory
 #    define string_replace_all c_make_string_replace_all
 #    define string_to_c_string c_make_string_to_c_string
 #    define string_concat c_make_string_concat
@@ -5444,10 +5984,6 @@ int main(int argument_count, char **arguments)
 #    define command_run_output c_make_command_run_output
 #    define ProcessId CMakeProcessId
 #    define InvalidProcessId CMakeInvalidProcessId
-#    define Target CMakeTarget
-#    define TargetSetup CMakeTargetSetup
-#    define TargetBuild CMakeTargetBuild
-#    define TargetInstall CMakeTargetInstall
 #    define LogLevel CMakeLogLevel
 #    define LogLevelRaw CMakeLogLevelRaw
 #    define LogLevelInfo CMakeLogLevelInfo
@@ -5484,6 +6020,7 @@ int main(int argument_count, char **arguments)
 #    define memory_restore c_make_memory_restore
 #    define begin_temporary_memory c_make_begin_temporary_memory
 #    define end_temporary_memory c_make_end_temporary_memory
+#    define add_info c_make_add_info
 #    define command_append_va c_make_command_append_va
 #    define command_append_slice c_make_command_append_slice
 #    define command_append_command_line c_make_command_append_command_line
@@ -5502,6 +6039,7 @@ int main(int argument_count, char **arguments)
 #    define string_split_right c_make_string_split_right
 #    define string_split_right_path_separator c_make_string_split_right_path_separator
 #    define string_trim c_make_string_trim
+#    define string_trim_characters c_make_string_trim_characters
 #    define string_find c_make_string_find
 #    define string_replace_all_with_memory c_make_string_replace_all_with_memory
 #    define string_to_c_string_with_memory c_make_string_to_c_string_with_memory
@@ -5551,6 +6089,7 @@ int main(int argument_count, char **arguments)
 #    define setup_java c_make_setup_java
 #    define config_set c_make_config_set
 #    define config_get c_make_config_get
+#    define print_config c_make_print_config
 #    define store_config c_make_store_config
 #    define load_config c_make_load_config
 #    define needs_rebuild c_make_needs_rebuild
@@ -5568,6 +6107,8 @@ int main(int argument_count, char **arguments)
 #    define copy_file c_make_copy_file
 #    define rename_file c_make_rename_file
 #    define delete_file c_make_delete_file
+#    define delete_directory c_make_delete_directory
+#    define delete_directory_recursively c_make_delete_directory_recursively
 #    define has_slash_or_backslash c_make_has_slash_or_backslash
 #    define get_environment_variable c_make_get_environment_variable
 #    define find_program c_make_find_program
@@ -5579,6 +6120,8 @@ int main(int argument_count, char **arguments)
 #    define command_run_and_wait c_make_command_run_and_wait
 #    define command_run_output_with_memory c_make_command_run_output_with_memory
 #    define process_wait_for_all c_make_process_wait_for_all
+#    define add_default_info c_make_add_default_info
+#    define handle_default_commands c_make_handle_default_commands
 #    define is_msvc_library_manager c_make_is_msvc_library_manager
 #    define compiler_is_msvc c_make_compiler_is_msvc
 #    define config_set_if_not_exists c_make_config_set_if_not_exists
