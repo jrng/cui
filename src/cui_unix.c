@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <stdlib.h>
