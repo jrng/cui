@@ -26,8 +26,8 @@
 #  define CUI_FRAMEBUFFER_SCREENSHOT_ENABLED 0
 #endif
 
-#if !defined(CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED)
-#  define CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED 0
+#if !defined(CUI_RENDERER_RENDER_TIMES_ENABLED)
+#  define CUI_RENDERER_RENDER_TIMES_ENABLED 0
 #endif
 
 #if !CUI_PLATFORM_WINDOWS
@@ -493,6 +493,15 @@ typedef struct CuiRendererSoftware
     CuiCommandBuffer command_buffer;
     CuiBitmap bitmaps[CUI_MAX_TEXTURE_COUNT];
 
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
+    uint64_t platform_performance_frequency;
+
+    float min_render_time;
+    float max_render_time;
+    double sum_render_time;
+    int32_t frame_count;
+#endif
+
     uint64_t allocation_size;
 } CuiRendererSoftware;
 
@@ -531,7 +540,7 @@ typedef struct CuiRendererOpengles2
 
     CuiCommandBuffer command_buffer;
 
-#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
     uint64_t platform_performance_frequency;
 
     float min_render_time;

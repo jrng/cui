@@ -21,6 +21,12 @@ _cui_renderer_software_create(void)
     renderer->base.type = CUI_RENDERER_TYPE_SOFTWARE;
     renderer->allocation_size = allocation_size;
 
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
+    renderer->platform_performance_frequency = cui_platform_get_performance_frequency();
+    renderer->min_render_time = 1000.0f;
+    renderer->max_render_time = 0.0f;
+#endif
+
     CuiCommandBuffer *command_buffer = &renderer->command_buffer;
 
     command_buffer->max_texture_width  = 32768;
@@ -170,6 +176,10 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiFramebuffer *fra
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
+    uint64_t render_start = cui_platform_get_performance_counter();
+#endif
+
     for (uint32_t index = 0; index < command_buffer->texture_operation_count; index += 1)
     {
         CuiTextureOperation *texture_op = command_buffer->texture_operations + index;
@@ -250,6 +260,36 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiFramebuffer *fra
     {
         *(uint32_t *) ((uint8_t *) render_target->pixels + (y * render_target->stride) + (0 * 4)) = 0xFFFF0000;
         *(uint32_t *) ((uint8_t *) render_target->pixels + (y * render_target->stride) + ((render_target->width - 1) * 4)) = 0xFFFF0000;
+    }
+#endif
+
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
+    uint64_t render_end = cui_platform_get_performance_counter();
+    double render_time = (1000.0 * (double) (render_end - render_start)) / (double) renderer->platform_performance_frequency;
+    float render_time_ms = render_time;
+
+    if (render_time_ms < renderer->min_render_time)
+    {
+        renderer->min_render_time = render_time_ms;
+    }
+
+    if (render_time_ms > renderer->max_render_time)
+    {
+        renderer->max_render_time = render_time_ms;
+    }
+
+    renderer->sum_render_time += render_time;
+    renderer->frame_count += 1;
+
+    if (renderer->frame_count == 300)
+    {
+        printf("render time:  min=%fms  max=%fms  avg=%fms\n", renderer->min_render_time, renderer->max_render_time,
+               renderer->sum_render_time * (1.0 / 300.0));
+
+        renderer->min_render_time = 1000.0f;
+        renderer->max_render_time = 0.0f;
+        renderer->sum_render_time = 0.0;
+        renderer->frame_count = 0;
     }
 #endif
 }

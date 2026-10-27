@@ -132,7 +132,7 @@ _cui_renderer_opengles2_create(void)
     renderer->base.type = CUI_RENDERER_TYPE_OPENGLES2;
     renderer->allocation_size = allocation_size;
 
-#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
     renderer->platform_performance_frequency = cui_platform_get_performance_frequency();
     renderer->min_render_time = 1000.0f;
     renderer->max_render_time = 0.0f;
@@ -308,7 +308,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
 {
     CuiAssert(&renderer->command_buffer == command_buffer);
 
-#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
     uint64_t render_start = cui_platform_get_performance_counter();
 #endif
 
@@ -528,7 +528,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glUseProgram(0);
 
-#if CUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED
+#if CUI_RENDERER_RENDER_TIMES_ENABLED
     uint64_t render_end = cui_platform_get_performance_counter();
     double render_time = (1000.0 * (double) (render_end - render_start)) / (double) renderer->platform_performance_frequency;
     float render_time_ms = render_time;

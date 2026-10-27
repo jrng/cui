@@ -212,8 +212,8 @@ cui_c_make_append_defines(CMakeCommand *command)
     bool cui_renderer_metal_enabled      = c_make_config_is_enabled("cui_renderer_metal"     , true);
     bool cui_renderer_direct3d11_enabled = c_make_config_is_enabled("cui_renderer_direct3d11", true);
 
+    bool cui_renderer_render_times_enabled = c_make_config_is_enabled("cui_renderer_render_times", false);
     bool cui_framebuffer_screenshot_enabled = c_make_config_is_enabled("cui_framebuffer_screenshot", false);
-    bool cui_renderer_opengles2_render_times_enabled = c_make_config_is_enabled("cui_renderer_opengles2_render_times", false);
 
     switch (c_make_get_target_platform())
     {
@@ -222,11 +222,6 @@ cui_c_make_append_defines(CMakeCommand *command)
             if (cui_renderer_opengles2_enabled)
             {
                 c_make_command_append(command, "-DCUI_RENDERER_OPENGLES2_ENABLED=1");
-
-                if (cui_renderer_opengles2_render_times_enabled)
-                {
-                    c_make_command_append(command, "-DCUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED=1");
-                }
             }
         } break;
 
@@ -267,11 +262,6 @@ cui_c_make_append_defines(CMakeCommand *command)
             if (cui_renderer_opengles2_enabled)
             {
                 c_make_command_append(command, "-DCUI_RENDERER_OPENGLES2_ENABLED=1");
-
-                if (cui_renderer_opengles2_render_times_enabled)
-                {
-                    c_make_command_append(command, "-DCUI_RENDERER_OPENGLES2_RENDER_TIMES_ENABLED=1");
-                }
             }
         } break;
 
@@ -291,6 +281,11 @@ cui_c_make_append_defines(CMakeCommand *command)
         case CMakePlatformWeb:
         {
         } break;
+    }
+
+    if (cui_renderer_render_times_enabled)
+    {
+        c_make_command_append(command, "-DCUI_RENDERER_RENDER_TIMES_ENABLED=1");
     }
 
     if (cui_framebuffer_screenshot_enabled)
@@ -697,8 +692,8 @@ C_MAKE_ENTRY(command, argument_count, arguments)
         c_make_config_set_if_not_exists("cui_renderer_metal"     , "on");
         c_make_config_set_if_not_exists("cui_renderer_direct3d11", "on");
 
+        c_make_config_set_if_not_exists("cui_renderer_render_times", "off");
         c_make_config_set_if_not_exists("cui_framebuffer_screenshot", "off");
-        c_make_config_set_if_not_exists("cui_renderer_opengles2_render_times", "off");
 
         if (!cui_c_make_configuration_is_valid(CMakeLogLevelWarning))
         {
