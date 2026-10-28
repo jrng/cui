@@ -64,6 +64,147 @@ _cui_renderer_software_begin_command_buffer(CuiRendererSoftware *renderer)
     return command_buffer;
 }
 
+#if CUI_ARCH_ARM64
+
+static void
+_cui_renderer_software_render_tile(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer,
+                                   CuiRect tile_rect, CuiColor clear_color)
+{
+    CuiBitmap clear_bitmap = *framebuffer;
+    clear_bitmap.width  = cui_rect_get_width(tile_rect);
+    clear_bitmap.height = cui_rect_get_height(tile_rect);
+    clear_bitmap.pixels = (uint8_t *) clear_bitmap.pixels + (tile_rect.min.y * clear_bitmap.stride) + (tile_rect.min.x * 4);
+
+    cui_bitmap_clear(&clear_bitmap, clear_color);
+
+    float32x4_t half    = { 0.5f, 0.5f, 0.5f, 0.5f };
+    float32x4_t one     = { 1.0f, 1.0f, 1.0f, 1.0f };
+    int32x4_t four      = { 4, 4, 4, 4 };
+    float32x4_t offset  = { 0.0f, 1.0f, 2.0f, 3.0f };
+    float32x4_t one_255 = vdupq_n_f32(255.0f);
+    float32x4_t inv_255 = vdupq_n_f32(1.0f / 255.0f);
+    uint32x4_t mask_ff  = { 0xFF, 0xFF, 0xFF, 0xFF };
+
+    for (uint32_t i = 0; i < command_buffer->index_buffer_count; i += 1)
+    {
+        uint32_t rect_offset = command_buffer->index_buffer[i];
+
+        CuiTexturedRect *textured_rect = (CuiTexturedRect *) (command_buffer->push_buffer + rect_offset);
+        CuiBitmap *texture = renderer->bitmaps + textured_rect->texture_id;
+
+        CuiRect clip_rect;
+
+        if (textured_rect->clip_rect)
+        {
+            CuiClipRect *rect = (CuiClipRect *) (command_buffer->push_buffer + textured_rect->clip_rect - 1);
+            clip_rect = cui_make_rect(rect->x_min, rect->y_min, rect->x_max, rect->y_max);
+            clip_rect = cui_rect_get_intersection(tile_rect, clip_rect);
+        }
+        else
+        {
+            clip_rect = tile_rect;
+        }
+
+        float32x4_t x0 = vdupq_n_f32((float) textured_rect->x0);
+        float32x4_t u0 = vdupq_n_f32((float) textured_rect->u0);
+        float v0 = (float) textured_rect->v0;
+
+        float32x4_t color_r = vdupq_n_f32(textured_rect->color.r);
+        float32x4_t color_g = vdupq_n_f32(textured_rect->color.g);
+        float32x4_t color_b = vdupq_n_f32(textured_rect->color.b);
+        float32x4_t color_a = vdupq_n_f32(textured_rect->color.a);
+
+        float32x4_t inv_dx = vdupq_n_f32(1.0f / (textured_rect->x1 - textured_rect->x0));
+        float inv_dy = 1.0f / (textured_rect->y1 - textured_rect->y0);
+        float32x4_t du = vdupq_n_f32((float) (textured_rect->u1 - textured_rect->u0));
+        float dv = (float) (textured_rect->v1 - textured_rect->v0);
+
+        int32_t x_min = textured_rect->x0;
+        int32_t y_min = textured_rect->y0;
+        int32_t x_max = textured_rect->x1;
+        int32_t y_max = textured_rect->y1;
+
+        if (x_min < clip_rect.min.x) x_min = clip_rect.min.x;
+        if (y_min < clip_rect.min.y) y_min = clip_rect.min.y;
+        if (x_max > clip_rect.max.x) x_max = clip_rect.max.x;
+        if (y_max > clip_rect.max.y) y_max = clip_rect.max.y;
+
+        float32x4_t x_min_wide = vdupq_n_f32(x_min);
+        float32x4_t x_max_wide = vdupq_n_f32(x_max);
+
+        int32_t x_start = x_min & ~3;
+
+        uint8_t *row = (uint8_t *) framebuffer->pixels + (framebuffer->stride * y_min) + (4 * x_start);
+
+        for (int32_t y = y_min; y < y_max; y += 1)
+        {
+            uint32_t *pixel = (uint32_t *) row;
+
+            float wy = ((float) (y - textured_rect->y0) + 0.5f) * inv_dy;
+            int32_t v = (int32_t) (v0 + dv * wy);
+
+            uint8_t *src_pixel = (uint8_t *) texture->pixels + (texture->stride * v);
+
+            for (int32_t x_ = x_start; x_ < x_max; x_ += 4)
+            {
+                float32x4_t x = vaddq_f32(vdupq_n_f32((float) x_), offset);
+
+                float32x4_t wx = vmulq_f32(vaddq_f32(vsubq_f32(x, x0), half), inv_dx);
+                int32x4_t u_four = vmulq_s32(vcvtq_s32_f32(vmlaq_f32(u0, du, wx)), four);
+
+                uint32x4_t original = vld1q_u32(pixel);
+
+                float32x4_t dst_r = vmulq_f32(vcvtq_f32_u32(vandq_u32(vshrq_n_u32(original, 16), mask_ff)), inv_255);
+                float32x4_t dst_g = vmulq_f32(vcvtq_f32_u32(vandq_u32(vshrq_n_u32(original,  8), mask_ff)), inv_255);
+                float32x4_t dst_b = vmulq_f32(vcvtq_f32_u32(vandq_u32(            original     , mask_ff)), inv_255);
+                float32x4_t dst_a = vmulq_f32(vcvtq_f32_u32(vandq_u32(vshrq_n_u32(original, 24), mask_ff)), inv_255);
+
+                uint32x4_t texture_pixel;
+
+                texture_pixel[0] = *(uint32_t *) (src_pixel + u_four[0]);
+                texture_pixel[1] = *(uint32_t *) (src_pixel + u_four[1]);
+                texture_pixel[2] = *(uint32_t *) (src_pixel + u_four[2]);
+                texture_pixel[3] = *(uint32_t *) (src_pixel + u_four[3]);
+
+                float32x4_t src_r = vmulq_f32(vcvtq_f32_u32(vandq_u32(vshrq_n_u32(texture_pixel, 16), mask_ff)), inv_255);
+                float32x4_t src_g = vmulq_f32(vcvtq_f32_u32(vandq_u32(vshrq_n_u32(texture_pixel,  8), mask_ff)), inv_255);
+                float32x4_t src_b = vmulq_f32(vcvtq_f32_u32(vandq_u32(            texture_pixel     , mask_ff)), inv_255);
+                float32x4_t src_a = vmulq_f32(vcvtq_f32_u32(vandq_u32(vshrq_n_u32(texture_pixel, 24), mask_ff)), inv_255);
+
+                src_r = vmulq_f32(src_r, color_r);
+                src_g = vmulq_f32(src_g, color_g);
+                src_b = vmulq_f32(src_b, color_b);
+                src_a = vmulq_f32(src_a, color_a);
+
+                dst_r = vmlaq_f32(src_r, dst_r, vsubq_f32(one, src_a));
+                dst_g = vmlaq_f32(src_g, dst_g, vsubq_f32(one, src_a));
+                dst_b = vmlaq_f32(src_b, dst_b, vsubq_f32(one, src_a));
+                dst_a = vmlaq_f32(src_a, dst_a, vsubq_f32(one, src_a));
+
+                uint32x4_t r = vcvtnq_u32_f32(vmulq_f32(dst_r, one_255));
+                uint32x4_t g = vcvtnq_u32_f32(vmulq_f32(dst_g, one_255));
+                uint32x4_t b = vcvtnq_u32_f32(vmulq_f32(dst_b, one_255));
+                uint32x4_t a = vcvtnq_u32_f32(vmulq_f32(dst_a, one_255));
+
+                uint32x4_t output = vorrq_u32(vorrq_u32(vshlq_n_u32(a, 24), vshlq_n_u32(r, 16)),
+                                              vorrq_u32(vshlq_n_u32(g,  8), b));
+
+                uint32x4_t clip_mask = vandq_u32(vcgeq_f32(x, x_min_wide), vcltq_f32(x, x_max_wide));
+
+                uint32x4_t masked_output = vbslq_u32(clip_mask, output, original);
+
+                vst1q_u32(pixel, masked_output);
+
+                pixel += 4;
+            }
+
+            row += framebuffer->stride;
+        }
+    }
+}
+
+#else
+
 static void
 _cui_renderer_software_render_tile(CuiRendererSoftware *renderer, CuiBitmap *framebuffer, CuiCommandBuffer *command_buffer,
                                    CuiRect tile_rect, CuiColor clear_color)
@@ -154,6 +295,8 @@ _cui_renderer_software_render_tile(CuiRendererSoftware *renderer, CuiBitmap *fra
         }
     }
 }
+
+#endif
 
 typedef struct CuiRenderWork
 {
@@ -283,7 +426,7 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiFramebuffer *fra
 
     if (renderer->frame_count == 300)
     {
-        printf("render time:  min=%fms  max=%fms  avg=%fms\n", renderer->min_render_time, renderer->max_render_time,
+        printf("[software] render time:  min=%fms  max=%fms  avg=%fms\n", renderer->min_render_time, renderer->max_render_time,
                renderer->sum_render_time * (1.0 / 300.0));
 
         renderer->min_render_time = 1000.0f;

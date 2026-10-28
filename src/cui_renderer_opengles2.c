@@ -548,7 +548,7 @@ _cui_renderer_opengles2_render(CuiRendererOpengles2 *renderer, CuiFramebuffer *f
 
     if (renderer->frame_count == 300)
     {
-        printf("render time:  min=%fms  max=%fms  avg=%fms\n", renderer->min_render_time, renderer->max_render_time,
+        printf("[opengles2] render time:  min=%fms  max=%fms  avg=%fms\n", renderer->min_render_time, renderer->max_render_time,
                renderer->sum_render_time * (1.0 / 300.0));
 
         renderer->min_render_time = 1000.0f;
