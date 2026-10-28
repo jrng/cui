@@ -314,7 +314,7 @@ _cui_x11_allocate_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width, i
 
     framebuffer->base.bitmap.width  = width;
     framebuffer->base.bitmap.height = height;
-    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, CUI_CACHE_LINE_SIZE);
 
     framebuffer->shared_memory_size = CuiAlign((int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height, CuiMiB(4));
 
@@ -341,7 +341,7 @@ _cui_x11_resize_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width, int
 
     framebuffer->base.bitmap.width  = width;
     framebuffer->base.bitmap.height = height;
-    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, CUI_CACHE_LINE_SIZE);
 
     int64_t needed_size = (int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height;
 
@@ -963,7 +963,7 @@ _cui_wayland_allocate_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t widt
 
     framebuffer->base.bitmap.width  = width;
     framebuffer->base.bitmap.height = height;
-    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, CUI_CACHE_LINE_SIZE);
 
     framebuffer->shared_memory_size = CuiAlign((int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height, CuiMiB(4));
 
@@ -992,7 +992,7 @@ _cui_wayland_resize_framebuffer(CuiLinuxFramebuffer *framebuffer, int32_t width,
 
     framebuffer->base.bitmap.width  = width;
     framebuffer->base.bitmap.height = height;
-    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, 64);
+    framebuffer->base.bitmap.stride = CuiAlign(framebuffer->base.bitmap.width * 4, CUI_CACHE_LINE_SIZE);
 
     int64_t needed_size = (int64_t) framebuffer->base.bitmap.stride * (int64_t) framebuffer->base.bitmap.height;
 

@@ -50,7 +50,7 @@ _cui_window_resize_backbuffer(CuiWindow *window, int32_t width, int32_t height)
 
     window->renderer.software.backbuffer.width  = width;
     window->renderer.software.backbuffer.height = height;
-    window->renderer.software.backbuffer.stride = CuiAlign(window->renderer.software.backbuffer.width * 4, 64);
+    window->renderer.software.backbuffer.stride = CuiAlign(window->renderer.software.backbuffer.width * 4, CUI_CACHE_LINE_SIZE);
 
     int64_t needed_size = (int64_t) window->renderer.software.backbuffer.stride *
                           (int64_t) window->renderer.software.backbuffer.height;

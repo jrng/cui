@@ -216,7 +216,7 @@ _cui_renderer_software_render(CuiRendererSoftware *renderer, CuiFramebuffer *fra
     uint32_t tile_height = (render_target->height + (CUI_SOFTWARE_RENDERER_TILE_COUNT_Y - 1)) /
                            CUI_SOFTWARE_RENDERER_TILE_COUNT_Y;
 
-    tile_width = CuiAlign(tile_width, 16); // align to cache-line
+    tile_width = CuiAlign(tile_width, CUI_CACHE_LINE_SIZE / 4);
 
     CuiRect framebuffer_rect = cui_make_rect(0, 0, render_target->width, render_target->height);
 

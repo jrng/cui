@@ -34,6 +34,8 @@
 #include <pthread.h>
 #endif
 
+#define CUI_CACHE_LINE_SIZE 128
+
 typedef enum CuiJpegMode
 {
     CUI_JPEG_MODE_UNKNOWN     = 0,
